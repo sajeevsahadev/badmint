@@ -10,6 +10,7 @@ const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
+const showIOSGuide = ref(false)
 
 const topClubs    = ref([])
 const topPlayers  = ref([])
@@ -282,48 +283,125 @@ onMounted(load)
         </h2>
         <div class="grid grid-cols-2 gap-2">
 
-          <!-- Android -->
-          <div class="card p-4 flex flex-col gap-2.5" :class="canInstall ? 'card-neon' : ''">
-            <div class="flex items-center gap-2">
-              <span class="text-xl">🤖</span>
-              <div class="text-xs font-bold text-slate-100">Android</div>
+          <!-- Android: whole card is the install button -->
+          <button v-if="canInstall"
+            class="card card-neon p-4 flex flex-col gap-2.5 text-left w-full
+                   hover:border-cyan-400/40 active:scale-[0.98] transition-all duration-150"
+            @click="promptInstall">
+            <div class="flex items-center justify-between">
+              <span class="text-2xl">🤖</span>
+              <span class="text-[9px] text-neon font-bold uppercase tracking-wide">Tap to Install</span>
             </div>
-            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
-              Works offline · No Play Store · Installs from Chrome
+            <div class="text-xs font-bold text-slate-100">Android</div>
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Works offline · No Play Store needed
             </p>
-            <button v-if="canInstall"
-              class="btn-primary text-xs py-2 w-full" @click="promptInstall">
-              Install Now
-            </button>
-            <p v-else class="text-[10px] text-slate-500">
-              Open in Chrome on Android to install
+            <div class="btn-primary text-xs py-1.5 text-center rounded-xl mt-auto">
+              Install Now →
+            </div>
+          </button>
+
+          <!-- Android: informational when prompt not ready -->
+          <div v-else class="card p-4 flex flex-col gap-2.5 opacity-70">
+            <span class="text-2xl">🤖</span>
+            <div class="text-xs font-bold text-slate-100">Android</div>
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Open this page in <strong class="text-slate-300">Chrome</strong> on Android, then tap Install.
             </p>
           </div>
 
-          <!-- iPhone / iPad -->
-          <div class="card p-4 flex flex-col gap-2.5" :class="isIOS ? 'card-violet' : ''">
-            <div class="flex items-center gap-2">
-              <span class="text-xl">🍎</span>
-              <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
+          <!-- iPhone / iPad: tapping opens the step-by-step guide -->
+          <button class="card p-4 flex flex-col gap-2.5 text-left w-full
+                         hover:border-violet-400/40 active:scale-[0.98] transition-all duration-150"
+            :class="isIOS ? 'card-violet' : 'opacity-70'"
+            @click="showIOSGuide = true">
+            <div class="flex items-center justify-between">
+              <span class="text-2xl">🍎</span>
+              <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Tap for Guide</span>
             </div>
-            <ol class="text-[10px] text-slate-400 space-y-1.5 leading-relaxed flex-1">
-              <li class="flex items-start gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">1</span>
-                Tap <strong class="text-slate-300 mx-0.5">Share ↑</strong> in Safari
-              </li>
-              <li class="flex items-start gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">2</span>
-                <span>Tap <strong class="text-slate-300">"Add to Home Screen"</strong></span>
-              </li>
-              <li class="flex items-start gap-1.5">
-                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">3</span>
-                Tap <strong class="text-slate-300 mx-0.5">Add</strong> to confirm
-              </li>
-            </ol>
-          </div>
+            <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Add via Safari's Share menu — no App Store needed.
+            </p>
+            <div class="text-[10px] text-center text-violet py-1.5 border border-violet/30
+                        rounded-xl mt-auto bg-violet/5">
+              Show me how →
+            </div>
+          </button>
 
         </div>
       </div>
+
+      <!-- ── iOS Install Guide (bottom sheet) ── -->
+      <Teleport to="body">
+        <div v-if="showIOSGuide"
+          class="fixed inset-0 z-50 flex items-end"
+          style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
+          @click.self="showIOSGuide = false">
+          <div class="w-full rounded-t-3xl px-6 pt-6 pb-10"
+            style="background:#0d1a2e; border-top:1px solid rgba(168,85,247,.3);
+                   box-shadow:0 -8px 40px rgba(168,85,247,.15);">
+
+            <!-- Handle bar -->
+            <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
+
+            <div class="text-center mb-6">
+              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(168,85,247,.5))">🍎</div>
+              <h3 class="font-display text-lg font-bold text-slate-100">Add to iPhone / iPad</h3>
+              <p class="text-[11px] text-slate-400 mt-1">Follow these 3 steps in Safari</p>
+            </div>
+
+            <div class="space-y-4 mb-6">
+              <!-- Step 1 -->
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                  style="background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3)">
+                  ↑
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">Tap the Share button</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">
+                    The <strong class="text-slate-300">↑</strong> icon at the bottom of Safari
+                    (iPad: top-right toolbar)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 2 -->
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                  style="background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3)">
+                  ➕
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">"Add to Home Screen"</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">
+                    Scroll down in the share sheet and tap this option
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 3 -->
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                  style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.3)">
+                  ✓
+                </div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">Tap Add</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">
+                    Badmint appears on your home screen — tap it to open the app
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn-ghost w-full py-3 text-sm" @click="showIOSGuide = false">
+              Got it — close
+            </button>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── Top Clubs ── -->
       <div class="mb-5 fade-up">
