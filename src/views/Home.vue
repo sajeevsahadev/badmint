@@ -86,6 +86,23 @@ onMounted(load)
       <div class="absolute inset-0"
         style="background:linear-gradient(160deg,#03081a 0%,#06112a 35%,#071a18 65%,#08150a 100%);" />
 
+      <!-- UAE flag waving animation — 12 vertical strips phased to simulate cloth movement -->
+      <div class="absolute inset-0 flex overflow-hidden pointer-events-none" style="opacity:0.09" aria-hidden="true">
+        <div v-for="i in 12" :key="i"
+          class="relative flex-1 h-full"
+          style="will-change:transform"
+          :style="{ animation: 'flagWave 3.6s ease-in-out infinite', animationDelay: ((i - 1) * -0.28) + 's' }">
+          <!-- Red stripe: first 3 strips ≈ 25% of flag width -->
+          <div v-if="i <= 3" class="absolute inset-0" style="background:#FF0000"/>
+          <!-- Green / White / Black bands: remaining 9 strips ≈ 75% -->
+          <template v-else>
+            <div class="absolute top-0 left-0 right-0" style="height:33.33%;background:#009B3A"/>
+            <div class="absolute left-0 right-0" style="top:33.33%;height:33.34%;background:#FFFFFF;opacity:0.85"/>
+            <div class="absolute bottom-0 left-0 right-0" style="height:33.33%;background:#1a1a1a"/>
+          </template>
+        </div>
+      </div>
+
       <!-- UAE flag colour bands — full-width at top (green / white / black + red left stripe) -->
       <div class="absolute top-0 left-0 right-0 flex overflow-hidden" style="height:6px">
         <div class="w-3 shrink-0" style="background:#ff0000"/>

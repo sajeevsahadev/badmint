@@ -106,7 +106,7 @@ async function make() {
 
 // ── Ranking config ──
 async function saveCfg() {
-  const { elo_weight, participation_weight, k_factor } = cfg.value
+  const { elo_weight, participation_weight } = cfg.value
   const sum = Number(elo_weight) + Number(participation_weight)
   if (Math.abs(sum - 1) > 0.01) {
     cfgNote.value = { ok: false, t: `Skill + Attendance must total 1.0 (currently ${sum.toFixed(2)}).` }
@@ -114,7 +114,7 @@ async function saveCfg() {
   }
   busy.value = true; cfgNote.value = null
   const { error } = await supabase.from('ranking_config')
-    .update({ elo_weight, participation_weight, k_factor })
+    .update({ elo_weight, participation_weight, k_factor: 24 })
     .eq('club_id', currentClub.value.club_id)
   busy.value = false
   cfgNote.value = error
@@ -370,8 +370,8 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
       </div>
       <div>
         <label class="label">K-factor</label>
-        <input v-model.number="cfg.k_factor" type="number" min="8" max="64" step="4" class="input text-center" />
-        <div class="text-[10px] text-slate-500 mt-1">Elo swing/match</div>
+        <div class="input text-center text-slate-500 bg-white/[0.02] cursor-not-allowed select-none">24</div>
+        <div class="text-[10px] text-slate-600 mt-1">Fixed · not editable</div>
       </div>
     </div>
 
