@@ -16,8 +16,9 @@ const invite   = ref(null)   // { link, email } after successful add-with-email
 async function load() {
   if (!currentClub.value) return
   const { data } = await supabase.from('players')
-    .select('id, display_name, elo, created_at, user_id')
+    .select('id, display_name, elo, created_at, user_id, is_active')
     .eq('club_id', currentClub.value.club_id)
+    .order('is_active', { ascending: false })   // active first
     .order('elo', { ascending: false })
   players.value = data ?? []
 }
@@ -56,9 +57,24 @@ async function add() {
 }
 
 async function remove(id, name) {
-  if (!confirm(`Remove "${name}" from the roster?\n\nMatch history and stats will be preserved.`)) return
+  // Block deletion if player has match history
+  const { count } = await supabase
+    .from('match_participants')
+    .select('*', { count: 'exact', head: true })
+    .eq('player_id', id)
+  if (count > 0) {
+    msg.value = `Cannot remove ${name} — they have ${count} recorded match${count !== 1 ? 'es' : ''}. Deactivate them instead using the toggle button.`
+    return
+  }
+  if (!confirm(`Remove "${name}" from the roster? This cannot be undone.`)) return
   await supabase.from('players').delete().eq('id', id)
+  msg.value = null
   load()
+}
+
+async function toggleActive(p) {
+  const { data, error } = await supabase.rpc('toggle_player_active', { p_player_id: p.id })
+  if (!error) p.is_active = data
 }
 
 function copyLink() {
@@ -145,29 +161,52 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
     </div>
 
     <div v-for="(p, i) in players" :key="p.id"
-      class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0
-             hover:bg-white/[0.02] transition-colors duration-150">
+      class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0 transition-colors duration-150"
+      :class="p.is_active ? 'hover:bg-white/[0.02]' : 'opacity-50'">
+
       <RouterLink :to="'/player/' + p.id" class="flex items-center gap-3 flex-1 min-w-0">
-        <!-- Rank circle -->
-        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 text-slate-950"
-          :style="i < 3
-            ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)'
-            : 'background:rgba(255,255,255,0.08); color:#94a3b8'">
-          {{ i + 1 }}
+        <!-- Rank circle / inactive indicator -->
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
+          :style="!p.is_active
+            ? 'background:rgba(255,255,255,0.05); color:#64748b'
+            : i < 3
+              ? 'background:linear-gradient(135deg,#00e5ff,#0099cc); color:#0a0a0a'
+              : 'background:rgba(255,255,255,0.08); color:#94a3b8'">
+          {{ p.is_active ? (i + 1) : '—' }}
         </div>
         <div class="min-w-0">
-          <div class="font-semibold text-sm text-slate-100 truncate hover:text-neon transition-colors">
-            {{ p.display_name }}
+          <div class="flex items-center gap-1.5">
+            <span class="font-semibold text-sm truncate hover:text-neon transition-colors"
+              :class="p.is_active ? 'text-slate-100' : 'text-slate-500'">
+              {{ p.display_name }}
+            </span>
+            <span v-if="!p.is_active"
+              class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
+              style="background:rgba(100,116,139,.2); color:#64748b; border:1px solid rgba(100,116,139,.25)">
+              Inactive
+            </span>
           </div>
-          <div class="text-[11px] mt-0.5" :class="eloColor(Math.round(p.elo))">
-            Elo {{ Math.round(p.elo) }} · {{ eloLabel(Math.round(p.elo)) }}
+          <div class="text-[11px] mt-0.5" :class="p.is_active ? eloColor(Math.round(p.elo)) : 'text-slate-600'">
+            Elo {{ Math.round(p.elo) }}{{ p.is_active ? ' · ' + eloLabel(Math.round(p.elo)) : '' }}
           </div>
         </div>
       </RouterLink>
 
-      <button v-if="isManager()"
-        class="text-[11px] text-slate-600 hover:text-rose-400 transition px-2 py-1 shrink-0 ml-2"
-        @click="remove(p.id, p.display_name)">Remove</button>
+      <!-- Manager actions -->
+      <div v-if="isManager()" class="flex items-center gap-1 shrink-0 ml-2">
+        <!-- Active / Inactive toggle -->
+        <button class="text-[10px] font-semibold px-2 py-1 rounded-lg transition border"
+          :class="p.is_active
+            ? 'text-slate-500 border-white/10 hover:text-amber-400 hover:border-amber-500/30'
+            : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'"
+          :title="p.is_active ? 'Deactivate player' : 'Reactivate player'"
+          @click.prevent="toggleActive(p)">
+          {{ p.is_active ? 'Deactivate' : 'Reactivate' }}
+        </button>
+        <!-- Remove (only if no match history) -->
+        <button class="text-[11px] text-slate-600 hover:text-rose-400 transition px-1.5 py-1"
+          @click.prevent="remove(p.id, p.display_name)">✕</button>
+      </div>
     </div>
   </div>
 

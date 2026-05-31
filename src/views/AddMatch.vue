@@ -17,7 +17,9 @@ const saving   = ref(false)
 async function loadPlayers() {
   if (!currentClub.value) return
   const { data } = await supabase.from('players')
-    .select('id, display_name, elo').eq('club_id', currentClub.value.club_id)
+    .select('id, display_name, elo')
+    .eq('club_id', currentClub.value.club_id)
+    .eq('is_active', true)
     .order('display_name')
   players.value = data ?? []
 }

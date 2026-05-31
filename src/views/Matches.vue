@@ -10,9 +10,10 @@ const { currentClub, isManager } = useClub()
 
 const matches   = ref([])
 const loading   = ref(true)
-const expanded  = ref(null)   // match id currently expanded
-const renaming  = ref(null)   // match id being renamed
+const expanded  = ref(null)
+const renaming  = ref(null)
 const renameVal = ref('')
+const deleting  = ref(null)   // match id currently being deleted
 
 async function load() {
   if (!currentClub.value) return
@@ -82,10 +83,18 @@ async function saveRename(m) {
   const { error } = await supabase.rpc('rename_match', {
     p_match_id: m.id, p_name: renameVal.value.trim()
   })
-  if (!error) {
-    m.name = renameVal.value.trim()
-  }
+  if (!error) m.name = renameVal.value.trim()
   renaming.value = null
+}
+
+async function deleteMatch(m) {
+  if (!confirm(`Delete "${m.name}"?\n\nAll player Elo ratings will be recalculated from scratch based on remaining matches.\n\nThis cannot be undone.`)) return
+  deleting.value = m.id
+  const { error } = await supabase.rpc('delete_match', { p_match_id: m.id })
+  deleting.value = null
+  if (error) { alert('Delete failed: ' + error.message); return }
+  expanded.value = null
+  await load()
 }
 
 const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short', year:'numeric' })
@@ -204,10 +213,15 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
           </div>
         </div>
 
-        <!-- Rename button (managers) -->
-        <div v-if="isManager() && renaming !== m.id" class="mt-2 flex justify-end">
+        <!-- Manager actions -->
+        <div v-if="isManager() && renaming !== m.id" class="mt-2 flex justify-between items-center">
           <button class="text-[11px] text-slate-500 hover:text-neon transition px-2 py-1"
-            @click="startRename(m)">✏️ Rename match</button>
+            @click="startRename(m)">✏️ Rename</button>
+          <button class="text-[11px] text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
+            :disabled="deleting === m.id"
+            @click="deleteMatch(m)">
+            {{ deleting === m.id ? '⏳ Deleting…' : '🗑️ Delete match' }}
+          </button>
         </div>
       </div>
     </div>
