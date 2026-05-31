@@ -4,10 +4,12 @@ import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { useInstall } from '../composables/useInstall'
 
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
+const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 
 const topClubs    = ref([])
 const topPlayers  = ref([])
@@ -270,6 +272,56 @@ onMounted(load)
           <p class="font-bold gradient-text text-lg mb-1">Join your UAE badminton team</p>
           <p class="text-slate-400 text-sm mb-4">Free Elo rankings, match history, and club stats for every court.</p>
           <RouterLink to="/login" class="btn-primary px-8">Sign in with Google — Free</RouterLink>
+        </div>
+      </div>
+
+      <!-- ── Install App (hidden once installed) ── -->
+      <div v-if="!isInstalled" class="mb-5 fade-up">
+        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+          📲 Get the App — Free, No App Store
+        </h2>
+        <div class="grid grid-cols-2 gap-2">
+
+          <!-- Android -->
+          <div class="card p-4 flex flex-col gap-2.5" :class="canInstall ? 'card-neon' : ''">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🤖</span>
+              <div class="text-xs font-bold text-slate-100">Android</div>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
+              Works offline · No Play Store · Installs from Chrome
+            </p>
+            <button v-if="canInstall"
+              class="btn-primary text-xs py-2 w-full" @click="promptInstall">
+              Install Now
+            </button>
+            <p v-else class="text-[10px] text-slate-500">
+              Open in Chrome on Android to install
+            </p>
+          </div>
+
+          <!-- iPhone / iPad -->
+          <div class="card p-4 flex flex-col gap-2.5" :class="isIOS ? 'card-violet' : ''">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🍎</span>
+              <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
+            </div>
+            <ol class="text-[10px] text-slate-400 space-y-1.5 leading-relaxed flex-1">
+              <li class="flex items-start gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">1</span>
+                Tap <strong class="text-slate-300 mx-0.5">Share ↑</strong> in Safari
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">2</span>
+                <span>Tap <strong class="text-slate-300">"Add to Home Screen"</strong></span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">3</span>
+                Tap <strong class="text-slate-300 mx-0.5">Add</strong> to confirm
+              </li>
+            </ol>
+          </div>
+
         </div>
       </div>
 
