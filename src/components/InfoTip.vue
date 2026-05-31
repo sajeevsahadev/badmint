@@ -1,0 +1,20 @@
+<script setup>
+import { ref } from 'vue'
+defineProps({ text: String })
+const show = ref(false)
+</script>
+
+<template>
+  <span class="relative inline-block">
+    <button @click="show = !show"
+      class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white/20 text-[10px] text-slate-400 hover:border-teal-400 hover:text-teal-400 transition align-middle">
+      ?
+    </button>
+    <span v-if="show"
+      class="absolute left-5 top-0 z-50 w-56 rounded-xl border border-white/15 bg-slate-900 p-3 text-xs text-slate-300 shadow-2xl leading-relaxed"
+      @click.stop>
+      {{ text }}
+      <button @click="show = false" class="mt-2 block text-teal-400 text-[10px]">Got it ✕</button>
+    </span>
+  </span>
+</template>

@@ -1,0 +1,33 @@
+<script setup>
+defineProps({
+  icon: String,
+  title: String,
+  subtitle: String,
+  help: String          // optional collapsible help text
+})
+import { ref } from 'vue'
+const showHelp = ref(false)
+</script>
+
+<template>
+  <div class="mb-4">
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">{{ icon }}</span>
+        <div>
+          <h2 class="font-display text-xl font-bold tracking-tight leading-tight">{{ title }}</h2>
+          <p class="text-xs text-slate-400">{{ subtitle }}</p>
+        </div>
+      </div>
+      <button v-if="help" @click="showHelp = !showHelp"
+        class="shrink-0 rounded-xl border border-white/15 px-2.5 py-1 text-xs text-slate-400 hover:text-teal-400 hover:border-teal-500/40 transition">
+        {{ showHelp ? 'Hide help' : '? Help' }}
+      </button>
+    </div>
+
+    <div v-if="help && showHelp"
+      class="mt-3 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4 text-sm text-slate-300 leading-relaxed">
+      <slot name="help">{{ help }}</slot>
+    </div>
+  </div>
+</template>
