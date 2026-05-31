@@ -112,8 +112,9 @@ async function loadData() {
 onMounted(loadData)
 
 // ── Actions ──
-const busy = ref(false)
-const note = ref(null)
+const busy        = ref(false)
+const note        = ref(null)
+const confirmClub = ref(null)   // club being confirmed for join request
 
 // ── Create Facility (inline modal) ──
 const showCreateFacility = ref(false)
@@ -144,8 +145,19 @@ async function createFacility() {
   showCreateFacility.value = false
 }
 
-async function requestJoin(clubId) {
+function confirmJoin(club) {
   if (!user.value) { router.push('/login'); return }
+  const memberCount  = clubs.value.length
+  const pendingCount = myRequests.value.filter(r => r.status === 'pending').length
+  if (memberCount + pendingCount >= 5) {
+    note.value = { ok: false, t: 'You can join or send requests to a maximum of 5 clubs. Leave a club or revoke a pending request first.' }
+    return
+  }
+  confirmClub.value = club
+}
+
+async function requestJoin(clubId) {
+  confirmClub.value = null
   busy.value = true; note.value = null
   const { error } = await supabase.rpc('request_join', { p_club_id: clubId })
   if (error) { note.value = { ok: false, t: error.message } }
@@ -153,6 +165,17 @@ async function requestJoin(clubId) {
     myRequests.value = myRequests.value.filter(r => r.club_id !== clubId)
     myRequests.value.push({ club_id: clubId, status: 'pending' })
     note.value = { ok: true, t: 'Request sent! The manager will review shortly.' }
+  }
+  busy.value = false
+}
+
+async function revokeRequest(clubId) {
+  busy.value = true; note.value = null
+  const { error } = await supabase.rpc('revoke_join_request', { p_club_id: clubId })
+  if (error) { note.value = { ok: false, t: error.message } }
+  else {
+    myRequests.value = myRequests.value.filter(r => r.club_id !== clubId)
+    note.value = { ok: true, t: 'Join request cancelled.' }
   }
   busy.value = false
 }
@@ -241,13 +264,18 @@ const activityColor = (m30) =>
           </div>
         </div>
         <!-- Action button -->
-        <div class="shrink-0">
+        <div class="shrink-0 flex flex-col items-end gap-1">
           <span v-if="requestMap[club.id] === 'member'" class="badge-member">✓ My Club</span>
           <span v-else-if="requestMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
           <span v-else-if="requestMap[club.id] === 'approved'" class="badge-approved">Approved</span>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
-            @click="requestJoin(club.id)">
+            @click="confirmJoin(club)">
             Join
+          </button>
+          <button v-if="requestMap[club.id] === 'pending'"
+            class="text-[10px] text-rose-400 hover:text-rose-300 transition-colors leading-none mt-0.5"
+            :disabled="busy" @click="revokeRequest(club.id)">
+            ✕ Revoke
           </button>
         </div>
       </div>
@@ -402,6 +430,31 @@ const activityColor = (m30) =>
       </div>
     </div>
   </div>
+
+  <!-- ── Join Confirmation modal ── -->
+  <Teleport to="body">
+    <div v-if="confirmClub"
+      class="fixed inset-0 z-50 flex items-center justify-center px-5"
+      style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)"
+      @click.self="confirmClub = null">
+      <div class="w-full max-w-sm rounded-2xl p-6"
+        style="background:#0d1a2e; border:1px solid rgba(0,229,255,.2); box-shadow:0 8px 40px rgba(0,0,0,.6)">
+        <div class="text-3xl text-center mb-3">🏸</div>
+        <h3 class="font-display text-lg font-bold text-center text-slate-100 mb-1">Send Join Request?</h3>
+        <p class="text-sm text-slate-400 text-center mb-5">
+          Request to join <span class="text-neon font-semibold">{{ confirmClub.name }}</span>.
+          The manager will review and approve your request.
+        </p>
+        <div class="flex gap-3">
+          <button class="btn-ghost flex-1 py-3 text-sm" @click="confirmClub = null">Cancel</button>
+          <button class="btn-primary flex-1 py-3 text-sm" :disabled="busy"
+            @click="requestJoin(confirmClub.id)">
+            {{ busy ? 'Sending…' : 'Send Request' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- ── Create Facility modal ── -->
   <Teleport to="body">

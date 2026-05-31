@@ -1,7 +1,7 @@
 # CLAUDE.md — Badmint Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v7 and all UI work through session 3.
+> Last updated: June 2026 — reflects all migrations v1–v8 and all UI work through session 4.
 
 ---
 
@@ -73,7 +73,8 @@ badmint/
 │   ├── v4_schema.sql               # v4: is_active, delete_match, toggle_player_active
 │   ├── v5_schema.sql               # v5: app_sessions, activity_log, online status
 │   ├── v6_schema.sql               # v6: facilities, facility_schedule, facility_bookings
-│   └── v7_schema.sql               # v7: leave_club() RPC
+│   ├── v7_schema.sql               # v7: leave_club() RPC
+│   └── v8_schema.sql               # v8: 10-club limit (request_join update) + revoke_join_request
 └── src/
     ├── main.js
     ├── App.vue                     # Shell: top bar, nav, PWA banners, session tracking
@@ -147,7 +148,8 @@ badmint/
 5. `supabase/v4_schema.sql` — active/inactive, delete match
 6. `supabase/v5_schema.sql` — sessions, activity log, online status
 7. `supabase/v6_schema.sql` — facility master
-8. `supabase/v7_schema.sql` — leave_club RPC (**run this if not yet applied**)
+8. `supabase/v7_schema.sql` — leave_club RPC
+9. `supabase/v8_schema.sql` — 10-club limit + revoke_join_request RPC (**run this if not yet applied**)
 
 ---
 
@@ -363,6 +365,7 @@ elo_score, part_score, composite, club_rank
 | `delete_match(p_match_id)` | Manager | Delete + full Elo recalculation |
 | `create_club(p_name)` | Any auth | Creates club + owner membership + ranking_config |
 | `leave_club(p_club_id)` | Own user | Leave a club (blocks owner/match-history; cleans join_requests) |
+| `revoke_join_request(p_club_id)` | Own user | Cancel a pending join request (so Explore shows Join again) |
 | `create_session(p_user_agent)` | Any auth | Creates session record; returns session UUID |
 | `log_activity(p_session_id, p_event_type, p_event_data)` | Any auth | Logs a page view or action |
 | `end_session(p_session_id)` | Any auth | Marks logout timestamp |
