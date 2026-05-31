@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 const routes = [
   { path: '/login',     component: () => import('../views/Login.vue'),        meta: { public: true } },
   { path: '/explore',   component: () => import('../views/Explore.vue'),      meta: { public: true } },
-  { path: '/',          redirect: '/dashboard' },
+  { path: '/',          component: () => import('../views/Home.vue'),          meta: { public: true } },
   { path: '/dashboard', component: () => import('../views/Dashboard.vue') },
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },

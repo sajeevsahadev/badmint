@@ -115,13 +115,13 @@ const needsClub = computed(() =>
 
       <!-- ── Top bar ── -->
       <header class="mb-5 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2.5">
+        <RouterLink to="/" class="flex items-center gap-2.5 hover:opacity-80 transition">
           <span class="text-2xl leading-none" style="filter:drop-shadow(0 0 12px rgba(0,229,255,.5));">🏸</span>
           <div>
             <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badmint</h1>
             <div class="text-[9px] text-slate-500 tracking-[0.2em] uppercase">UAE Badminton Rankings</div>
           </div>
-        </div>
+        </RouterLink>
 
         <div class="flex items-center gap-2">
           <!-- iOS install hint trigger -->

@@ -17,7 +17,17 @@ export function useClub() {
       .eq('user_id', user.id)          // ← only THIS user's memberships
 
     if (error) throw error
-    clubs.value = data ?? []
+
+    // Deduplicate by club_id — RLS can return multiple rows when the manager
+    // has approved members, because the policy allows reading all member rows
+    // for any club you belong to. The user_id filter above should handle this,
+    // but we guard defensively here in case of any query/caching edge cases.
+    const seen = new Set()
+    clubs.value = (data ?? []).filter(c => {
+      if (seen.has(c.club_id)) return false
+      seen.add(c.club_id)
+      return true
+    })
     if (!currentClub.value && clubs.value.length) {
       const saved = localStorage.getItem('clubId')
       currentClub.value = clubs.value.find(c => c.club_id === saved) || clubs.value[0]
