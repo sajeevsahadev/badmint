@@ -14,6 +14,7 @@ const routes = [
   { path: '/manage',    component: () => import('../views/Manage.vue') },
   { path: '/join',      component: () => import('../views/JoinClub.vue') },
   { path: '/profile',   component: () => import('../views/Profile.vue') },
+  { path: '/player/:id', component: () => import('../views/PlayerProfile.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

@@ -54,6 +54,9 @@ create trigger trg_auto_match_number
   before insert on matches
   for each row execute function fn_auto_match_number();
 
+-- Drop old 6-param overload so the 7-param version (with default) is unambiguous
+drop function if exists record_match(uuid, date, uuid[], uuid[], integer, integer);
+
 -- ── Updated record_match — adds optional p_display_name ──
 create or replace function record_match(
   p_club_id      uuid,
