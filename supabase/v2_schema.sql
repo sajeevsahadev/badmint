@@ -234,6 +234,10 @@ where coalesce(vl.games, 0) >= 3;
 
 -- ── Security-definer RPCs (bypass RLS for public endpoints) ──
 
+-- Drop old versions whose signatures changed
+drop function if exists get_public_clubs();
+drop function if exists get_top_scorers(int);
+
 -- Browse all clubs with ranking info (public — any authenticated user)
 create or replace function get_public_clubs()
 returns table(
