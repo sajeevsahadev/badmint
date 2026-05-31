@@ -36,16 +36,35 @@ const pendingRequests = computed(() => requests.value.filter(r => r.status === '
 async function load() {
   if (!currentClub.value) return
   const cid = currentClub.value.club_id
-  const [{ data: c }, { data: m }, { data: r }] = await Promise.all([
+  const [{ data: c }, { data: m }, { data: r }, { data: playerNames }] = await Promise.all([
     supabase.from('ranking_config').select('*').eq('club_id', cid).single(),
     supabase.from('club_members').select('user_id, role').eq('club_id', cid),
     isManager()
       ? supabase.from('join_requests').select('*').eq('club_id', cid).order('created_at', { ascending: false })
       : { data: [] },
+    // player display_names for this club (linked accounts only)
+    supabase.from('players').select('user_id, display_name').eq('club_id', cid).not('user_id', 'is', null),
   ])
-  cfg.value     = c
-  members.value = m ?? []
+  cfg.value      = c
   requests.value = r ?? []
+
+  // Enrich members with names from user_profiles (nickname > full_name) then players fallback
+  const memberIds = (m ?? []).map(x => x.user_id)
+  const { data: profiles } = memberIds.length
+    ? await supabase.from('user_profiles').select('user_id, nickname, full_name').in('user_id', memberIds)
+    : { data: [] }
+
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p]))
+  const playerMap  = Object.fromEntries((playerNames ?? []).map(p => [p.user_id, p]))
+
+  members.value = (m ?? []).map(member => ({
+    ...member,
+    display:
+      profileMap[member.user_id]?.nickname ||
+      profileMap[member.user_id]?.full_name ||
+      playerMap[member.user_id]?.display_name ||
+      '—',
+  }))
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
@@ -380,7 +399,10 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
     <div class="label">Members — {{ currentClub.clubs?.name }}</div>
     <div v-for="m in members" :key="m.user_id"
       class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0 gap-2">
-      <span class="text-slate-400 text-xs font-mono truncate flex-1">{{ m.user_id.slice(0, 14) }}…</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
+        <div class="text-[10px] text-slate-600 font-mono">{{ m.user_id.slice(0, 8) }}…</div>
+      </div>
       <select
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
         :value="m.role"

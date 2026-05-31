@@ -110,6 +110,35 @@ onMounted(loadData)
 const busy = ref(false)
 const note = ref(null)
 
+// ── Create Facility (inline modal) ──
+const showCreateFacility = ref(false)
+const facBusy  = ref(false)
+const facNote  = ref(null)
+const newFac   = ref({ name:'', address:'', emirate:'', maps_url:'', image_url:'', phone:'', website:'', description:'' })
+
+async function createFacility() {
+  if (!newFac.value.name.trim()) return
+  facBusy.value = true; facNote.value = null
+  const { data: fId, error } = await supabase.rpc('create_facility', {
+    p_name:        newFac.value.name.trim(),
+    p_address:     newFac.value.address     || null,
+    p_emirate:     newFac.value.emirate     || null,
+    p_maps_url:    newFac.value.maps_url    || null,
+    p_image_url:   newFac.value.image_url   || null,
+    p_phone:       newFac.value.phone       || null,
+    p_website:     newFac.value.website     || null,
+    p_description: newFac.value.description || null,
+  })
+  facBusy.value = false
+  if (error) { facNote.value = { ok: false, t: error.message }; return }
+  // Reload facilities and close modal
+  const { data } = await supabase.rpc('get_facilities')
+  allFacilities.value = data ?? []
+  newFac.value = { name:'', address:'', emirate:'', maps_url:'', image_url:'', phone:'', website:'', description:'' }
+  facNote.value = null
+  showCreateFacility.value = false
+}
+
 async function requestJoin(clubId) {
   if (!user.value) { router.push('/login'); return }
   busy.value = true; note.value = null
@@ -267,8 +296,9 @@ const activityColor = (m30) =>
     <div v-else-if="!filteredFacilities.length" class="card p-8 text-center">
       <div class="text-3xl mb-3">🏟️</div>
       <p class="text-slate-400 text-sm mb-4">No facilities listed yet.</p>
-      <RouterLink v-if="user" to="/manage"
-        class="btn-primary px-6 text-sm">+ Add Your Facility</RouterLink>
+      <button v-if="user" class="btn-primary px-6 text-sm"
+        @click="showCreateFacility = true">+ Add Your Facility</button>
+      <RouterLink v-else to="/login" class="btn-primary px-6 text-sm">Sign in to Add</RouterLink>
     </div>
 
     <div v-else class="space-y-3">
@@ -302,11 +332,12 @@ const activityColor = (m30) =>
       </RouterLink>
 
       <!-- Add facility CTA -->
-      <RouterLink v-if="user" to="/manage"
-        class="card p-4 flex items-center justify-center gap-2 text-sm text-slate-500
-               hover:text-neon hover:border-white/15 transition-all duration-200">
+      <button v-if="user"
+        class="card p-4 w-full flex items-center justify-center gap-2 text-sm text-slate-500
+               hover:text-neon hover:border-white/15 transition-all duration-200"
+        @click="showCreateFacility = true">
         + Add Your Facility
-      </RouterLink>
+      </button>
     </div>
   </div>
 
@@ -365,4 +396,84 @@ const activityColor = (m30) =>
       </div>
     </div>
   </div>
+
+  <!-- ── Create Facility modal ── -->
+  <Teleport to="body">
+    <div v-if="showCreateFacility"
+      class="fixed inset-0 z-50 flex items-end"
+      style="background:rgba(0,0,0,.65); backdrop-filter:blur(4px)"
+      @click.self="showCreateFacility = false">
+      <div class="w-full max-h-[90vh] overflow-y-auto rounded-t-3xl px-5 pt-5 pb-10"
+        style="background:#0d1a2e; border-top:1px solid rgba(0,229,255,.25);
+               box-shadow:0 -8px 40px rgba(0,229,255,.12);">
+
+        <!-- Handle -->
+        <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
+
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h3 class="font-display text-lg font-bold text-slate-100">Add a Facility</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">Listed publicly · any club can link to it</p>
+          </div>
+          <button class="text-slate-500 hover:text-slate-200 text-xl leading-none transition"
+            @click="showCreateFacility = false">✕</button>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="label">Facility Name <span class="text-rose-400">*</span></label>
+            <input v-model="newFac.name" class="input" placeholder="e.g. Dubai Sports City, GEMS School Courts"
+              maxlength="80" />
+          </div>
+          <div>
+            <label class="label">Address</label>
+            <input v-model="newFac.address" class="input" placeholder="e.g. Al Barsha, Dubai" maxlength="120" />
+          </div>
+          <div>
+            <label class="label">Emirates</label>
+            <select v-model="newFac.emirate" class="input">
+              <option value="">— Select —</option>
+              <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Phone <span class="text-slate-600">(optional)</span></label>
+              <input v-model="newFac.phone" class="input" placeholder="+971 …" />
+            </div>
+            <div>
+              <label class="label">Website <span class="text-slate-600">(optional)</span></label>
+              <input v-model="newFac.website" class="input" placeholder="https://…" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Google Maps URL <span class="text-slate-600">(optional)</span></label>
+            <input v-model="newFac.maps_url" class="input" placeholder="https://maps.app.goo.gl/…" />
+          </div>
+          <div>
+            <label class="label">Photo URL <span class="text-slate-600">(optional)</span></label>
+            <input v-model="newFac.image_url" class="input" placeholder="Paste any image link" />
+          </div>
+          <div>
+            <label class="label">Description <span class="text-slate-600">(optional)</span></label>
+            <textarea v-model="newFac.description" class="input resize-none" rows="2"
+              placeholder="Courts available, parking, access notes…" maxlength="300" />
+          </div>
+        </div>
+
+        <p v-if="facNote" class="mt-3 text-xs rounded-xl px-3 py-2"
+          :class="facNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
+          {{ facNote.t }}
+        </p>
+
+        <div class="flex gap-2 mt-5">
+          <button class="btn-ghost flex-1 py-3 text-sm" @click="showCreateFacility = false">Cancel</button>
+          <button class="btn-primary flex-1 py-3 text-sm" :disabled="facBusy || !newFac.name.trim()"
+            @click="createFacility">
+            {{ facBusy ? 'Creating…' : '🏟️ Create Facility' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
