@@ -10,7 +10,8 @@ const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
-const showIOSGuide = ref(false)
+const showIOSGuide     = ref(false)
+const showAndroidGuide = ref(false)
 
 const topClubs    = ref([])
 const topPlayers  = ref([])
@@ -85,124 +86,39 @@ onMounted(load)
       <div class="absolute inset-0"
         style="background:linear-gradient(160deg,#03081a 0%,#06112a 35%,#071a18 65%,#08150a 100%);" />
 
-      <!-- UAE Map SVG
-           Coordinate system: viewBox 0 0 420 220
-           x = (longitude − 51°E) × 70   [range 51–57°E → 0–420]
-           y = (27°N − latitude)  × 44   [range 27–22°N → 0–220]
-           Points derived from official UAE boundary coordinates. -->
-      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 420 220"
-           preserveAspectRatio="xMidYMid slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <!-- UAE flag colour bands — full-width at top (green / white / black + red left stripe) -->
+      <div class="absolute top-0 left-0 right-0 flex overflow-hidden" style="height:6px">
+        <div class="w-3 shrink-0" style="background:#ff0000"/>
+        <div class="flex-1 flex flex-col">
+          <div class="flex-1" style="background:#00732f"/>
+          <div class="flex-1" style="background:#ffffff; opacity:.9"/>
+          <div class="flex-1" style="background:#000000"/>
+        </div>
+      </div>
 
-        <!-- Persian Gulf water fill (above the coast) -->
-        <path d="M0,0 L420,0 L420,50 L364,40 L347,54 L318,64 L310,70 L307,73 L298,80
-                 L290,87 L273,95 L238,111 L196,125 L147,130 L112,124 L42,128 L0,128 Z"
-              fill="rgba(0,229,255,0.04)"/>
-        <!-- Gulf wave lines -->
-        <line x1="0" y1="22" x2="380" y2="4"  stroke="rgba(0,229,255,0.05)" stroke-width="0.5"/>
-        <line x1="0" y1="50" x2="340" y2="25" stroke="rgba(0,229,255,0.04)" stroke-width="0.5"/>
-        <line x1="0" y1="80" x2="270" y2="55" stroke="rgba(0,229,255,0.03)" stroke-width="0.5"/>
-
-        <!-- ═══ MAIN UAE BODY ═══
-             Gulf coast: Qatar border → RAK northern tip
-             Oman border: east/south through Hajar mountains → Saudi junction
-             Saudi border: west back to Qatar/UAE corner -->
-        <path d="
-          M42,128
-          L112,124 L147,130 L196,125 L238,111
-          L273,95 L290,87 L298,80 L307,73 L310,70 L318,64
-          L347,54 L364,40
-          L374,45 L376,65 L372,73
-          L362,89 L344,97 L336,108 L335,119 L337,128
-          L327,140 L317,150 L306,163 L292,176
-          L240,189 L133,191 L63,187 L42,171
-          Z"
-          fill="rgba(0,229,255,0.08)" stroke="rgba(0,229,255,0.5)" stroke-width="1.5"
-          stroke-linejoin="round"/>
-
-        <!-- ═══ FUJAIRAH ═══
-             Separate coastal strip on the Gulf of Oman (east) side.
-             Oman territory lies between it and the main UAE body. -->
-        <path d="M372,73 L393,71 L396,77 L395,84 L386,89 L371,89 L364,86 L365,80 Z"
-              fill="rgba(0,229,255,0.06)" stroke="rgba(0,229,255,0.32)" stroke-width="1.2"
-              stroke-linejoin="round"/>
-
-        <!-- Subtle territory grid clipped to UAE shape -->
-        <clipPath id="uaeClip">
-          <path d="M42,128 L112,124 L147,130 L196,125 L238,111 L273,95 L290,87
-                   L298,80 L307,73 L310,70 L318,64 L347,54 L364,40
-                   L374,45 L376,65 L372,73 L362,89 L344,97 L336,108
-                   L335,119 L337,128 L327,140 L317,150 L306,163 L292,176
-                   L240,189 L133,191 L63,187 L42,171 Z"/>
-        </clipPath>
-        <g clip-path="url(#uaeClip)" opacity="0.055">
-          <line x1="0" y1="115" x2="420" y2="115" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="0" y1="135" x2="420" y2="135" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="0" y1="155" x2="420" y2="155" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="0" y1="175" x2="420" y2="175" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="130" y1="0" x2="130" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="210" y1="0" x2="210" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="290" y1="0" x2="290" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="360" y1="0" x2="360" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
-        </g>
-
-        <!-- ── Emirate capital dots ── -->
-        <!-- Abu Dhabi (capital ★) — pulse ring -->
-        <circle cx="228" cy="116" r="10" fill="rgba(0,229,255,0.08)"/>
-        <circle cx="228" cy="116" r="5"  fill="rgba(0,229,255,0.2)" stroke="#00e5ff" stroke-width="1.8"/>
-
-        <!-- Dubai -->
-        <circle cx="298" cy="80" r="4"   fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
-
-        <!-- Sharjah -->
-        <circle cx="307" cy="73" r="3"   fill="rgba(168,85,247,0.2)" stroke="#a855f7" stroke-width="1.5"/>
-
-        <!-- Ajman -->
-        <circle cx="310" cy="70" r="2"   fill="rgba(251,191,36,0.3)" stroke="#fbbf24" stroke-width="1"/>
-
-        <!-- Umm Al Quwain -->
-        <circle cx="318" cy="64" r="2.5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
-
-        <!-- Ras Al Khaimah -->
-        <circle cx="347" cy="54" r="3.5" fill="rgba(168,85,247,0.15)" stroke="#a855f7" stroke-width="1.5"/>
-
-        <!-- Fujairah -->
-        <circle cx="383" cy="79" r="3"   fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
-
-        <!-- ── Labels ── -->
-        <text x="200" y="145" text-anchor="middle" fill="rgba(0,229,255,0.85)"
-              font-size="7.5" font-weight="bold" font-family="system-ui,sans-serif">Abu Dhabi ★</text>
-        <text x="292" y="73"  text-anchor="end"    fill="rgba(0,229,255,0.75)"
-              font-size="7"   font-family="system-ui,sans-serif">Dubai</text>
-        <text x="300" y="66"  text-anchor="end"    fill="rgba(168,85,247,0.7)"
-              font-size="6"   font-family="system-ui,sans-serif">SHJ</text>
-        <text x="349" y="46"  text-anchor="middle" fill="rgba(168,85,247,0.7)"
-              font-size="6"   font-family="system-ui,sans-serif">RAK</text>
-        <text x="398" y="79"  text-anchor="start"  fill="rgba(0,229,255,0.65)"
-              font-size="6"   font-family="system-ui,sans-serif">FUJ</text>
-
-        <!-- Neighbour / water labels -->
-        <text x="62"  y="55"  fill="rgba(0,229,255,0.18)" font-size="9"
-              font-family="system-ui,sans-serif" font-style="italic">Persian Gulf</text>
-        <text x="155" y="207" fill="rgba(255,255,255,0.09)" font-size="7.5" text-anchor="middle"
-              font-family="system-ui,sans-serif" font-style="italic">Saudi Arabia</text>
-        <text x="405" y="145" fill="rgba(255,255,255,0.08)" font-size="7"
-              font-family="system-ui,sans-serif" font-style="italic">Oman</text>
-      </svg>
-
-      <!-- UAE flag accent strip -->
-      <div class="absolute top-0 right-0 bottom-0 w-1.5"
-        style="background:linear-gradient(to bottom,#00732f 33%,#fff 33%,#fff 66%,#ff0000 66%);"/>
-
-      <!-- Faint dot grid overlay -->
-      <div class="absolute inset-0 opacity-[0.025]"
-        style="background-image:radial-gradient(circle,rgba(0,229,255,.8) 1px,transparent 1px);
-               background-size:24px 24px;"/>
-
-      <!-- Glow orbs -->
-      <div class="absolute top-4 right-12 w-32 h-32 rounded-full opacity-[0.12]"
+      <!-- UAE flag colour glow orbs -->
+      <div class="absolute top-8 right-8 w-40 h-40 rounded-full opacity-[0.08]"
+        style="background:radial-gradient(circle,#00732f,transparent);"/>
+      <div class="absolute bottom-4 left-4 w-32 h-32 rounded-full opacity-[0.07]"
+        style="background:radial-gradient(circle,#ff0000,transparent);"/>
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full opacity-[0.04]"
+        style="background:radial-gradient(circle,#ffffff,transparent);"/>
+      <!-- Cyan accent (app brand) -->
+      <div class="absolute top-4 left-8 w-28 h-28 rounded-full opacity-[0.09]"
         style="background:radial-gradient(circle,#00e5ff,transparent);"/>
-      <div class="absolute bottom-2 left-6 w-24 h-24 rounded-full opacity-[0.08]"
-        style="background:radial-gradient(circle,#fbbf24,transparent);"/>
+
+      <!-- UAE flag full-height strip on right -->
+      <div class="absolute top-0 right-0 bottom-0 w-2 flex flex-col" aria-hidden="true">
+        <div class="flex-1" style="background:#00732f; opacity:.7"/>
+        <div class="flex-1" style="background:#ffffff; opacity:.6"/>
+        <div class="flex-1" style="background:#000000; opacity:.7"/>
+      </div>
+      <div class="absolute top-0 right-2 bottom-0 w-1" style="background:#ff0000; opacity:.65;"/>
+
+      <!-- Faint dot grid -->
+      <div class="absolute inset-0 opacity-[0.02]"
+        style="background-image:radial-gradient(circle,rgba(0,229,255,.8) 1px,transparent 1px);
+               background-size:28px 28px;"/>
 
       <!-- Hero text + search (overlaid on map) -->
       <div class="relative px-4 pt-5 pb-7 mx-auto max-w-2xl">
@@ -307,32 +223,30 @@ onMounted(load)
         </h2>
         <div class="grid grid-cols-2 gap-2">
 
-          <!-- Android: whole card is the install button -->
-          <button v-if="canInstall"
-            class="card card-neon p-4 flex flex-col gap-2.5 text-left w-full
-                   hover:border-cyan-400/40 active:scale-[0.98] transition-all duration-150"
-            @click="promptInstall">
+          <!-- Android: tapping either triggers native install (if ready) or opens guide -->
+          <button
+            class="card p-4 flex flex-col gap-2.5 text-left w-full
+                   active:scale-[0.98] transition-all duration-150"
+            :class="canInstall ? 'card-neon hover:border-cyan-400/40' : 'hover:border-white/20'"
+            @click="canInstall ? promptInstall() : (showAndroidGuide = true)">
             <div class="flex items-center justify-between">
               <span class="text-2xl">🤖</span>
-              <span class="text-[9px] text-neon font-bold uppercase tracking-wide">Tap to Install</span>
+              <span class="text-[9px] font-bold uppercase tracking-wide"
+                :class="canInstall ? 'text-neon' : 'text-slate-500'">
+                {{ canInstall ? 'Tap to Install' : 'Tap for Guide' }}
+              </span>
             </div>
             <div class="text-xs font-bold text-slate-100">Android</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Works offline · No Play Store needed
+            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
+              {{ canInstall ? 'Works offline · No Play Store needed' : 'Open in Chrome on Android to install' }}
             </p>
-            <div class="btn-primary text-xs py-1.5 text-center rounded-xl mt-auto">
-              Install Now →
+            <div class="text-xs text-center py-1.5 border rounded-xl mt-auto transition-colors"
+              :class="canInstall
+                ? 'btn-primary border-transparent'
+                : 'border-white/15 text-slate-400 hover:text-neon hover:border-neon/30'">
+              {{ canInstall ? 'Install Now →' : 'Show me how →' }}
             </div>
           </button>
-
-          <!-- Android: informational when prompt not ready -->
-          <div v-else class="card p-4 flex flex-col gap-2.5 opacity-70">
-            <span class="text-2xl">🤖</span>
-            <div class="text-xs font-bold text-slate-100">Android</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Open this page in <strong class="text-slate-300">Chrome</strong> on Android, then tap Install.
-            </p>
-          </div>
 
           <!-- iPhone / iPad: tapping opens the step-by-step guide -->
           <button class="card p-4 flex flex-col gap-2.5 text-left w-full
@@ -355,6 +269,62 @@ onMounted(load)
 
         </div>
       </div>
+
+      <!-- ── Android Install Guide ── -->
+      <Teleport to="body">
+        <div v-if="showAndroidGuide"
+          class="fixed inset-0 z-50 flex items-end"
+          style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
+          @click.self="showAndroidGuide = false">
+          <div class="w-full rounded-t-3xl px-6 pt-6 pb-10"
+            style="background:#0d1a2e; border-top:1px solid rgba(0,229,255,.25);
+                   box-shadow:0 -8px 40px rgba(0,229,255,.12);">
+            <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
+            <div class="text-center mb-6">
+              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🤖</div>
+              <h3 class="font-display text-lg font-bold text-slate-100">Add to Android Home Screen</h3>
+              <p class="text-[11px] text-slate-400 mt-1">Follow these steps in Chrome on Android</p>
+            </div>
+            <div class="space-y-3 mb-6">
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">🌐</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">Open in Chrome</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Must be Chrome browser — not Samsung Internet or Firefox</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">⋮</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">Tap ⋮ (three-dot menu)</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Top-right corner of Chrome</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">➕</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">"Add to Home screen"</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Or "Install app" — scroll down in the menu to find it</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-4 card p-3.5">
+                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
+                  style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.25)">✓</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-100">Tap Add to confirm</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Badmint appears on your home screen — tap to launch the app</div>
+                </div>
+              </div>
+            </div>
+            <button class="btn-ghost w-full py-3 text-sm" @click="showAndroidGuide = false">
+              Got it — close
+            </button>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ── iOS Install Guide (bottom sheet) ── -->
       <Teleport to="body">

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
@@ -48,6 +48,7 @@ async function load() {
         score: sA?.score ?? 0,
         winner: sA?.is_winner ?? false,
         players: (sA?.match_participants ?? []).map(mp => ({
+          id: mp.players?.id,
           name: mp.players?.display_name,
           delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
           elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
@@ -203,8 +204,10 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
               :class="m.sideA.winner ? 'text-neon' : 'text-slate-400'">
               {{ m.sideA.score }}
             </div>
-            <div v-for="p in m.sideA.players" :key="p.name" class="flex justify-between items-center py-1">
-              <span class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+            <div v-for="p in m.sideA.players" :key="p.id ?? p.name" class="flex justify-between items-center py-1">
+              <RouterLink v-if="p.id" :to="'/player/' + p.id"
+                class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
+              <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
               <span v-if="p.delta != null" class="text-[11px] font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}
@@ -222,8 +225,10 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
               :class="m.sideB.winner ? 'text-neon' : 'text-slate-400'">
               {{ m.sideB.score }}
             </div>
-            <div v-for="p in m.sideB.players" :key="p.name" class="flex justify-between items-center py-1">
-              <span class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+            <div v-for="p in m.sideB.players" :key="p.id ?? p.name" class="flex justify-between items-center py-1">
+              <RouterLink v-if="p.id" :to="'/player/' + p.id"
+                class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
+              <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
               <span v-if="p.delta != null" class="text-[11px] font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}

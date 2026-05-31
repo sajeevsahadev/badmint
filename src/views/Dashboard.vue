@@ -79,7 +79,10 @@ const trendColor = elo =>
         <div class="text-2xl mb-1" :style="i === 0 ? 'filter:drop-shadow(0 0 12px rgba(251,191,36,.7))' : ''">
           {{ medals[i] }}
         </div>
-        <div class="text-xs font-bold truncate w-full text-center text-slate-100">{{ p.display_name }}</div>
+        <RouterLink :to="'/player/' + p.id"
+          class="text-xs font-bold truncate w-full text-center text-slate-100 hover:text-neon transition-colors">
+          {{ p.display_name }}
+        </RouterLink>
         <div class="text-[12px] font-extrabold mt-0.5"
           :class="i === 0 ? 'text-gold' : 'text-neon'">
           {{ p.composite }} pts
@@ -122,10 +125,11 @@ const trendColor = elo =>
         </thead>
         <tbody>
           <tr v-for="(p, i) in board" :key="p.id"
-            class="border-b border-white/[0.04] transition-colors duration-150"
-            :class="i === 0 ? 'bg-amber-500/[0.04]' : 'hover:bg-white/[0.02]'">
+            class="border-b border-white/[0.04] transition-colors duration-150 cursor-pointer"
+            :class="i === 0 ? 'bg-amber-500/[0.04] hover:bg-amber-500/[0.07]' : 'hover:bg-white/[0.02]'"
+            @click="router.push('/player/' + p.id)">
             <td class="px-4 py-3 font-bold text-slate-300">{{ medals[i] ?? (i + 1) }}</td>
-            <td class="px-4 py-3 font-semibold text-slate-100">{{ p.display_name }}</td>
+            <td class="px-4 py-3 font-semibold text-slate-100 hover:text-neon transition-colors">{{ p.display_name }}</td>
             <td class="px-4 py-3 text-right font-extrabold text-neon">{{ p.composite }}</td>
             <td class="px-4 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
             <td class="px-4 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>

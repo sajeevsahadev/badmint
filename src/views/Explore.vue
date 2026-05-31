@@ -372,20 +372,21 @@ const activityColor = (m30) =>
           <span class="col-span-2 text-right">W%</span>
         </div>
 
-        <div v-for="(p, i) in filteredPlayers" :key="p.player_id"
+        <RouterLink v-for="(p, i) in filteredPlayers" :key="p.player_id"
+          :to="'/player/' + p.player_id"
           class="grid grid-cols-12 items-center px-4 py-2.5 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02]"
           :class="i < 3 ? 'bg-white/[0.01]' : ''">
           <span class="col-span-1 text-sm font-bold" :class="i < 3 ? 'text-gold' : 'text-slate-500'">
             {{ ['🥇','🥈','🥉'][i] ?? p.global_rank }}
           </span>
           <div class="col-span-5">
-            <div class="text-sm font-semibold text-slate-100 truncate">{{ p.public_name }}</div>
+            <div class="text-sm font-semibold text-slate-100 truncate hover:text-neon transition-colors">{{ p.public_name }}</div>
             <div class="text-[10px] text-slate-600">{{ p.emirates }}</div>
           </div>
           <div class="col-span-3 text-right text-[11px] text-slate-400 truncate pl-1">{{ p.club_name }}</div>
           <div class="col-span-1 text-right text-sm font-bold text-neon">{{ p.elo }}</div>
           <div class="col-span-2 text-right text-xs text-slate-400">{{ p.win_pct }}%</div>
-        </div>
+        </RouterLink>
       </div>
 
       <!-- Show all button -->

@@ -71,6 +71,25 @@ const initials = computed(() => {
 })
 
 const clubName = (clubId) => clubs.value.find(c => c.club_id === clubId)?.clubs?.name ?? clubId
+const clubRole = (clubId) => clubs.value.find(c => c.club_id === clubId)?.role ?? 'player'
+
+const leaving     = ref(null)   // club_id being left
+const leaveError  = ref(null)
+const leaveNote   = ref(null)
+
+async function leaveClub(clubId) {
+  if (!confirm(`Leave "${clubName(clubId)}"?\n\nYou will be removed from this club. You can rejoin later by requesting again.`)) return
+  leaving.value = clubId; leaveError.value = null; leaveNote.value = null
+  const { error } = await supabase.rpc('leave_club', { p_club_id: clubId })
+  leaving.value = null
+  if (error) {
+    leaveError.value = error.message
+  } else {
+    // Reload so the club disappears from the list
+    await load()
+    leaveNote.value = 'You have left the club.'
+  }
+}
 </script>
 
 <template>
@@ -123,23 +142,33 @@ const clubName = (clubId) => clubs.value.find(c => c.club_id === clubId)?.clubs?
       </button>
     </div>
 
-    <!-- Club stats -->
+    <!-- Club stats + leave -->
     <div v-if="myStats.length" class="card overflow-hidden mb-4 fade-up">
       <div class="px-4 py-3 border-b border-white/[0.06]">
         <div class="text-xs font-bold text-slate-200">My Club Rankings</div>
       </div>
       <div v-for="s in myStats" :key="s.id"
-        class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0">
-        <div>
+        class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0 gap-2">
+        <div class="flex-1 min-w-0">
           <div class="text-sm font-semibold text-slate-100">{{ s.display_name }}</div>
           <div class="text-[11px] text-slate-500">{{ clubName(s.club_id) }}</div>
         </div>
-        <div class="text-right">
+        <div class="text-right shrink-0">
           <div class="text-sm font-extrabold text-neon">Rank #{{ s.club_rank }}</div>
           <div class="text-[11px] text-slate-500">Elo {{ s.elo }} · {{ s.games }}G · {{ s.win_pct }}% W</div>
         </div>
+        <!-- Leave club button — hidden for owners or players with match history -->
+        <button v-if="clubRole(s.club_id) !== 'owner' && s.games === 0"
+          class="text-[10px] text-rose-500/60 hover:text-rose-400 transition shrink-0 px-1 py-0.5"
+          :disabled="leaving === s.club_id"
+          @click="leaveClub(s.club_id)">
+          {{ leaving === s.club_id ? '…' : 'Leave' }}
+        </button>
       </div>
     </div>
+
+    <p v-if="leaveNote" class="text-xs text-emerald-400 mb-3 px-1">✅ {{ leaveNote }}</p>
+    <p v-if="leaveError" class="text-xs text-rose-400 mb-3 px-1">{{ leaveError }}</p>
 
     <!-- No stats yet -->
     <div v-else class="card p-6 text-center text-slate-400 text-sm fade-up">
