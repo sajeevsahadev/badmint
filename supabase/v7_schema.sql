@@ -43,5 +43,8 @@ begin
 
   -- Remove club membership
   delete from club_members where club_id = p_club_id and user_id = auth.uid();
+
+  -- Clean up any join_request so Explore shows "Join" again (not "Approved")
+  delete from join_requests where club_id = p_club_id and user_id = auth.uid();
 end;
 $$;

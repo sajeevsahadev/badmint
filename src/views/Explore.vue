@@ -32,8 +32,13 @@ const myClubIds = computed(() => clubs.value.map(c => c.club_id))
 
 const requestMap = computed(() => {
   const m = {}
+  // First: mark clubs the user currently belongs to
   myClubIds.value.forEach(id => { m[id] = 'member' })
-  myRequests.value.forEach(r => { if (!m[r.club_id]) m[r.club_id] = r.status })
+  // Second: mark ONLY pending requests — 'approved' requests where the user
+  // is no longer a member (they left) should fall through to the Join button.
+  myRequests.value.forEach(r => {
+    if (!m[r.club_id] && r.status === 'pending') m[r.club_id] = 'pending'
+  })
   return m
 })
 
