@@ -1,11 +1,12 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
 const router = useRouter()
+const route  = useRoute()
 const { currentClub, isManager } = useClub()
 
 const matches   = ref([])
@@ -65,7 +66,17 @@ async function load() {
   })
   loading.value = false
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  // Auto-expand match if arriving from a profile/deep-link
+  const openId = route.query.open
+  if (openId) {
+    expanded.value = openId
+    await nextTick()
+    document.getElementById('match-' + openId)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+})
 watch(currentClub, load)
 
 function toggle(id) {
@@ -103,6 +114,13 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 </script>
 
 <template>
+  <!-- Back button when arriving via deep-link from a profile -->
+  <button v-if="route.query.open"
+    class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4 fade-up"
+    @click="router.back()">
+    ← Back to Profile
+  </button>
+
   <!-- Add match button (managers) -->
   <div class="flex items-center justify-between mb-4 fade-up">
     <div>
@@ -133,6 +151,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
   <!-- Match list -->
   <div v-else class="space-y-2 fade-up">
     <div v-for="m in matches" :key="m.id"
+      :id="'match-' + m.id"
       class="card overflow-hidden transition-all duration-200"
       :class="expanded === m.id ? 'card-neon' : 'hover:border-white/15'">
 

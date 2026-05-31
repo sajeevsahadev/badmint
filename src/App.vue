@@ -5,10 +5,12 @@ import { supabase } from './lib/supabase'
 import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
 import { useInstall } from './composables/useInstall'
+import { useSession } from './composables/useSession'
 
 const { user, ready, signOut } = useAuth()
 const { clubs, currentClub, loadClubs, selectClub } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
+const { startSession, trackPage, endSession } = useSession()
 const route  = useRoute()
 const router = useRouter()
 
@@ -17,7 +19,11 @@ const showIOSHint  = ref(false)
 
 async function init() {
   if (!user.value) return
-  try { await loadClubs(); await refreshPending() } catch {}
+  try {
+    await loadClubs()
+    await refreshPending()
+    await startSession()   // create session record on login
+  } catch {}
 }
 
 async function refreshPending() {
@@ -35,9 +41,16 @@ async function refreshPending() {
 
 onMounted(init)
 watch(user, init)
-watch(() => route.path, refreshPending)
+watch(() => route.path, (path) => {
+  refreshPending()
+  if (user.value) trackPage(path)   // log every screen navigation
+})
 
-async function logout() { await signOut(); router.push('/login') }
+async function logout() {
+  await endSession()
+  await signOut()
+  router.push('/login')
+}
 function onSwitch(e) {
   const c = clubs.value.find(x => x.club_id === e.target.value)
   if (c) selectClub(c)

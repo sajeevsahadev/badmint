@@ -201,10 +201,12 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
         No matches recorded yet.
       </div>
 
-      <div v-for="m in matches" :key="m.id"
-        class="px-4 py-3 border-b border-white/[0.04] last:border-0">
+      <button v-for="m in matches" :key="m.id"
+        class="w-full text-left px-4 py-3 border-b border-white/[0.04] last:border-0
+               hover:bg-white/[0.03] transition-colors duration-150 group"
+        @click="router.push('/matches?open=' + m.id)">
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs text-slate-500">{{ fmt(m.date) }}</span>
+          <span class="text-xs text-slate-500">{{ fmt(m.date) }} · {{ m.name }}</span>
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold"
               :class="m.won ? 'text-neon' : 'text-rose-400'">
@@ -214,6 +216,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
               :class="deltaColor(m.eloDelta)">
               {{ deltaText(m.eloDelta) }}
             </span>
+            <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
           </div>
         </div>
         <div class="text-xs text-slate-400">
@@ -221,7 +224,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
           <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
           <span>{{ m.oppTeam.join(' + ') }}</span>
         </div>
-      </div>
+      </button>
     </div>
 
   </template>

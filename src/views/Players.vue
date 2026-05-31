@@ -15,11 +15,9 @@ const invite   = ref(null)   // { link, email } after successful add-with-email
 
 async function load() {
   if (!currentClub.value) return
-  const { data } = await supabase.from('players')
-    .select('id, display_name, elo, created_at, user_id, is_active')
-    .eq('club_id', currentClub.value.club_id)
-    .order('is_active', { ascending: false })   // active first
-    .order('elo', { ascending: false })
+  const { data } = await supabase.rpc('get_club_players', {
+    p_club_id: currentClub.value.club_id
+  })
   players.value = data ?? []
 }
 onMounted(load)
@@ -180,6 +178,19 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
               :class="p.is_active ? 'text-slate-100' : 'text-slate-500'">
               {{ p.display_name }}
             </span>
+            <!-- Online status dot (only for linked accounts) -->
+            <template v-if="p.user_id && p.is_active">
+              <span v-if="p.online_status === 'online'"
+                class="w-2 h-2 rounded-full shrink-0 animate-pulse"
+                style="background:#10b981; box-shadow:0 0 6px #10b981" title="Online now" />
+              <span v-else-if="p.online_status === 'recent'"
+                class="w-2 h-2 rounded-full shrink-0"
+                style="background:#f59e0b" title="Active recently" />
+              <span v-else
+                class="w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[8px] font-black"
+                style="background:rgba(100,116,139,.2); color:#64748b; border:1px solid rgba(100,116,139,.3)"
+                title="Not seen in over 1 month">✕</span>
+            </template>
             <span v-if="!p.is_active"
               class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
               style="background:rgba(100,116,139,.2); color:#64748b; border:1px solid rgba(100,116,139,.25)">
