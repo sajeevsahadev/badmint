@@ -83,7 +83,7 @@ const router = useRouter()
       </div>
 
       <p class="text-center text-xs text-slate-600">
-        Free forever · Works offline · 🇦🇪 Built for UAE courts
+        Works offline · 🇦🇪 Built for UAE courts
       </p>
     </div>
   </div>

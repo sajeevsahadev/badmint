@@ -85,83 +85,107 @@ onMounted(load)
       <div class="absolute inset-0"
         style="background:linear-gradient(160deg,#03081a 0%,#06112a 35%,#071a18 65%,#08150a 100%);" />
 
-      <!-- UAE Map SVG -->
-      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 380 210"
+      <!-- UAE Map SVG
+           Coordinate system: viewBox 0 0 420 220
+           x = (longitude − 51°E) × 70   [range 51–57°E → 0–420]
+           y = (27°N − latitude)  × 44   [range 27–22°N → 0–220]
+           Points derived from official UAE boundary coordinates. -->
+      <svg class="absolute inset-0 w-full h-full" viewBox="0 0 420 220"
            preserveAspectRatio="xMidYMid slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
 
-        <!-- Persian Gulf water shading -->
-        <path d="M0,0 L380,0 L380,75 L328,38 L258,80 L160,100 L40,118 L0,130 Z"
-              fill="rgba(0,229,255,0.035)"/>
-        <line x1="0" y1="25" x2="350" y2="5"  stroke="rgba(0,229,255,0.05)" stroke-width="0.5"/>
-        <line x1="0" y1="50" x2="310" y2="22" stroke="rgba(0,229,255,0.04)" stroke-width="0.5"/>
-        <line x1="0" y1="75" x2="260" y2="48" stroke="rgba(0,229,255,0.03)" stroke-width="0.5"/>
+        <!-- Persian Gulf water fill (above the coast) -->
+        <path d="M0,0 L420,0 L420,50 L364,40 L347,54 L318,64 L310,70 L307,73 L298,80
+                 L290,87 L273,95 L238,111 L196,125 L147,130 L112,124 L42,128 L0,128 Z"
+              fill="rgba(0,229,255,0.04)"/>
+        <!-- Gulf wave lines -->
+        <line x1="0" y1="22" x2="380" y2="4"  stroke="rgba(0,229,255,0.05)" stroke-width="0.5"/>
+        <line x1="0" y1="50" x2="340" y2="25" stroke="rgba(0,229,255,0.04)" stroke-width="0.5"/>
+        <line x1="0" y1="80" x2="270" y2="55" stroke="rgba(0,229,255,0.03)" stroke-width="0.5"/>
 
-        <!-- Main UAE body (coast → Oman border → Saudi border → back) -->
-        <path d="M40,118 L95,105 L160,100 L222,96 L258,80 L271,72 L278,66 L281,64 L288,58 L313,48 L328,38
-                 L338,43 L316,60 L303,80 L295,105 L283,128 L264,162 L220,162 L125,162 L62,170 L40,140 Z"
-              fill="rgba(0,229,255,0.07)" stroke="rgba(0,229,255,0.45)" stroke-width="1.5"
+        <!-- ═══ MAIN UAE BODY ═══
+             Gulf coast: Qatar border → RAK northern tip
+             Oman border: east/south through Hajar mountains → Saudi junction
+             Saudi border: west back to Qatar/UAE corner -->
+        <path d="
+          M42,128
+          L112,124 L147,130 L196,125 L238,111
+          L273,95 L290,87 L298,80 L307,73 L310,70 L318,64
+          L347,54 L364,40
+          L374,45 L376,65 L372,73
+          L362,89 L344,97 L336,108 L335,119 L337,128
+          L327,140 L317,150 L306,163 L292,176
+          L240,189 L133,191 L63,187 L42,171
+          Z"
+          fill="rgba(0,229,255,0.08)" stroke="rgba(0,229,255,0.5)" stroke-width="1.5"
+          stroke-linejoin="round"/>
+
+        <!-- ═══ FUJAIRAH ═══
+             Separate coastal strip on the Gulf of Oman (east) side.
+             Oman territory lies between it and the main UAE body. -->
+        <path d="M372,73 L393,71 L396,77 L395,84 L386,89 L371,89 L364,86 L365,80 Z"
+              fill="rgba(0,229,255,0.06)" stroke="rgba(0,229,255,0.32)" stroke-width="1.2"
               stroke-linejoin="round"/>
 
-        <!-- Fujairah exclave (Indian Ocean coast, separated by Oman) -->
-        <path d="M330,62 L350,69 L357,82 L349,92 L334,88 L318,80 L316,66 Z"
-              fill="rgba(0,229,255,0.05)" stroke="rgba(0,229,255,0.28)" stroke-width="1"
-              stroke-linejoin="round"/>
-
-        <!-- Subtle grid over UAE territory -->
+        <!-- Subtle territory grid clipped to UAE shape -->
         <clipPath id="uaeClip">
-          <path d="M40,118 L95,105 L160,100 L222,96 L258,80 L271,72 L278,66 L281,64 L288,58 L313,48 L328,38
-                   L338,43 L316,60 L303,80 L295,105 L283,128 L264,162 L220,162 L125,162 L62,170 L40,140 Z"/>
+          <path d="M42,128 L112,124 L147,130 L196,125 L238,111 L273,95 L290,87
+                   L298,80 L307,73 L310,70 L318,64 L347,54 L364,40
+                   L374,45 L376,65 L372,73 L362,89 L344,97 L336,108
+                   L335,119 L337,128 L327,140 L317,150 L306,163 L292,176
+                   L240,189 L133,191 L63,187 L42,171 Z"/>
         </clipPath>
-        <g clip-path="url(#uaeClip)" opacity="0.06">
-          <line x1="0" y1="120" x2="400" y2="120" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="0" y1="140" x2="400" y2="140" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="0" y1="160" x2="400" y2="160" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="120" y1="0" x2="120" y2="200" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="200" y1="0" x2="200" y2="200" stroke="#00e5ff" stroke-width="0.5"/>
-          <line x1="280" y1="0" x2="280" y2="200" stroke="#00e5ff" stroke-width="0.5"/>
+        <g clip-path="url(#uaeClip)" opacity="0.055">
+          <line x1="0" y1="115" x2="420" y2="115" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="0" y1="135" x2="420" y2="135" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="0" y1="155" x2="420" y2="155" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="0" y1="175" x2="420" y2="175" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="130" y1="0" x2="130" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="210" y1="0" x2="210" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="290" y1="0" x2="290" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
+          <line x1="360" y1="0" x2="360" y2="220" stroke="#00e5ff" stroke-width="0.5"/>
         </g>
 
-        <!-- ── Emirate dots ── -->
-        <!-- Abu Dhabi (capital — larger dot with pulse ring) -->
-        <circle cx="205" cy="132" r="9" fill="rgba(0,229,255,0.1)" opacity="0.6"/>
-        <circle cx="205" cy="132" r="5" fill="rgba(0,229,255,0.2)" stroke="#00e5ff" stroke-width="1.8"/>
+        <!-- ── Emirate capital dots ── -->
+        <!-- Abu Dhabi (capital ★) — pulse ring -->
+        <circle cx="228" cy="116" r="10" fill="rgba(0,229,255,0.08)"/>
+        <circle cx="228" cy="116" r="5"  fill="rgba(0,229,255,0.2)" stroke="#00e5ff" stroke-width="1.8"/>
 
         <!-- Dubai -->
-        <circle cx="271" cy="72" r="4" fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
+        <circle cx="298" cy="80" r="4"   fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
 
         <!-- Sharjah -->
-        <circle cx="278" cy="66" r="3" fill="rgba(168,85,247,0.2)" stroke="#a855f7" stroke-width="1.5"/>
+        <circle cx="307" cy="73" r="3"   fill="rgba(168,85,247,0.2)" stroke="#a855f7" stroke-width="1.5"/>
 
-        <!-- Ajman (tiny) -->
-        <circle cx="283" cy="61" r="2" fill="rgba(251,191,36,0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <!-- Ajman -->
+        <circle cx="310" cy="70" r="2"   fill="rgba(251,191,36,0.3)" stroke="#fbbf24" stroke-width="1"/>
 
-        <!-- UAQ -->
-        <circle cx="290" cy="56" r="2.5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
+        <!-- Umm Al Quwain -->
+        <circle cx="318" cy="64" r="2.5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
 
-        <!-- RAK -->
-        <circle cx="313" cy="48" r="3.5" fill="rgba(168,85,247,0.15)" stroke="#a855f7" stroke-width="1.5"/>
+        <!-- Ras Al Khaimah -->
+        <circle cx="347" cy="54" r="3.5" fill="rgba(168,85,247,0.15)" stroke="#a855f7" stroke-width="1.5"/>
 
         <!-- Fujairah -->
-        <circle cx="336" cy="77" r="3" fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
+        <circle cx="383" cy="79" r="3"   fill="rgba(0,229,255,0.15)" stroke="#00e5ff" stroke-width="1.5"/>
 
         <!-- ── Labels ── -->
-        <text x="205" y="148" text-anchor="middle" fill="rgba(0,229,255,0.8)"
+        <text x="200" y="145" text-anchor="middle" fill="rgba(0,229,255,0.85)"
               font-size="7.5" font-weight="bold" font-family="system-ui,sans-serif">Abu Dhabi ★</text>
-        <text x="266" y="64" text-anchor="end" fill="rgba(0,229,255,0.75)"
-              font-size="7" font-family="system-ui,sans-serif">Dubai</text>
-        <text x="270" y="57" text-anchor="end" fill="rgba(168,85,247,0.7)"
-              font-size="6" font-family="system-ui,sans-serif">SHJ</text>
-        <text x="315" y="40" text-anchor="middle" fill="rgba(168,85,247,0.7)"
-              font-size="6" font-family="system-ui,sans-serif">RAK</text>
-        <text x="359" y="76" text-anchor="start" fill="rgba(0,229,255,0.65)"
-              font-size="6" font-family="system-ui,sans-serif">FUJ</text>
+        <text x="292" y="73"  text-anchor="end"    fill="rgba(0,229,255,0.75)"
+              font-size="7"   font-family="system-ui,sans-serif">Dubai</text>
+        <text x="300" y="66"  text-anchor="end"    fill="rgba(168,85,247,0.7)"
+              font-size="6"   font-family="system-ui,sans-serif">SHJ</text>
+        <text x="349" y="46"  text-anchor="middle" fill="rgba(168,85,247,0.7)"
+              font-size="6"   font-family="system-ui,sans-serif">RAK</text>
+        <text x="398" y="79"  text-anchor="start"  fill="rgba(0,229,255,0.65)"
+              font-size="6"   font-family="system-ui,sans-serif">FUJ</text>
 
-        <!-- Water / neighbour labels -->
-        <text x="65" y="55" fill="rgba(0,229,255,0.18)" font-size="9"
+        <!-- Neighbour / water labels -->
+        <text x="62"  y="55"  fill="rgba(0,229,255,0.18)" font-size="9"
               font-family="system-ui,sans-serif" font-style="italic">Persian Gulf</text>
-        <text x="145" y="195" fill="rgba(255,255,255,0.09)" font-size="7.5" text-anchor="middle"
+        <text x="155" y="207" fill="rgba(255,255,255,0.09)" font-size="7.5" text-anchor="middle"
               font-family="system-ui,sans-serif" font-style="italic">Saudi Arabia</text>
-        <text x="360" y="148" fill="rgba(255,255,255,0.09)" font-size="7"
+        <text x="405" y="145" fill="rgba(255,255,255,0.08)" font-size="7"
               font-family="system-ui,sans-serif" font-style="italic">Oman</text>
       </svg>
 
@@ -189,7 +213,7 @@ onMounted(load)
             <p class="text-[10px] text-slate-500 tracking-[0.2em] uppercase mt-0.5">UAE Badminton Rankings</p>
           </div>
         </div>
-        <p class="text-slate-400 text-xs mb-4 mt-2">All 7 Emirates · Elo Rankings · Free Forever 🇦🇪</p>
+        <p class="text-slate-400 text-xs mb-4 mt-2">All 7 Emirates · Elo Rankings 🇦🇪</p>
 
         <!-- Search -->
         <div class="relative">
@@ -279,7 +303,7 @@ onMounted(load)
       <!-- ── Install App (hidden once installed) ── -->
       <div v-if="!isInstalled" class="mb-5 fade-up">
         <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
-          📲 Get the App — Free, No App Store
+          📲 Get the App — No App Store Needed
         </h2>
         <div class="grid grid-cols-2 gap-2">
 
