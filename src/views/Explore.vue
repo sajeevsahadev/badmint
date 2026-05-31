@@ -10,18 +10,20 @@ const { user } = useAuth()
 const { clubs, currentClub } = useClub()
 
 // ── Data ──
-const allClubs    = ref([])
-const topPlayers  = ref([])
-const myRequests  = ref([])
+const allClubs       = ref([])
+const topPlayers     = ref([])
+const allFacilities  = ref([])
+const myRequests     = ref([])
 const loadingClubs   = ref(true)
 const loadingPlayers = ref(true)
+const loadingFac     = ref(true)
 const playersError   = ref(null)
 const showAllPlayers = ref(false)
 
 // ── Filters ──
 const searchQ       = ref('')
 const emirateFilter = ref('')
-const activeTab     = ref('clubs')   // 'clubs' | 'players'
+const activeTab     = ref('clubs')   // 'clubs' | 'players' | 'facilities'
 
 const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
@@ -70,20 +72,36 @@ const filteredPlayers = computed(() => {
   return showAllPlayers.value ? list : list.slice(0, 15)
 })
 
+// ── Facilities filtered ──
+const filteredFacilities = computed(() => {
+  let list = allFacilities.value
+  if (emirateFilter.value) list = list.filter(f => f.emirate === emirateFilter.value)
+  if (searchQ.value.trim()) {
+    const q = searchQ.value.trim().toLowerCase()
+    list = list.filter(f =>
+      f.name.toLowerCase().includes(q) ||
+      (f.address || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
 // ── Load ──
 async function loadData() {
-  loadingClubs.value = true; loadingPlayers.value = true
+  loadingClubs.value = true; loadingPlayers.value = true; loadingFac.value = true
   const tasks = [
     supabase.rpc('get_public_clubs'),
     supabase.rpc('get_top_scorers', { p_limit: 200 }),
+    supabase.rpc('get_facilities'),
   ]
   if (user.value) tasks.push(supabase.from('join_requests').select('club_id, status'))
-  const [clubsRes, playersRes, reqsRes] = await Promise.all(tasks)
-  allClubs.value   = clubsRes.data    ?? []
-  topPlayers.value = playersRes.data  ?? []
-  myRequests.value = reqsRes?.data    ?? []
+  const [clubsRes, playersRes, facRes, reqsRes] = await Promise.all(tasks)
+  allClubs.value      = clubsRes.data   ?? []
+  topPlayers.value    = playersRes.data ?? []
+  allFacilities.value = facRes.data     ?? []
+  myRequests.value    = reqsRes?.data   ?? []
   if (playersRes.error) playersError.value = playersRes.error.message
-  loadingClubs.value = false; loadingPlayers.value = false
+  loadingClubs.value = false; loadingPlayers.value = false; loadingFac.value = false
 }
 
 onMounted(loadData)
@@ -136,12 +154,14 @@ const activityColor = (m30) =>
 
   <!-- Tab switcher -->
   <div class="flex gap-1 mb-5 p-1 rounded-xl fade-up" style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07)">
-    <button v-for="tab in [{id:'clubs',label:'🏢 Clubs'},{id:'players',label:'🏆 Top Players'}]"
+    <button v-for="tab in [
+        { id:'clubs',      label:'🏢 Clubs'      },
+        { id:'facilities', label:'🏟️ Facilities' },
+        { id:'players',    label:'🏆 Players'    },
+      ]"
       :key="tab.id"
-      class="flex-1 text-sm font-semibold py-2 rounded-lg transition-all duration-200"
-      :class="activeTab === tab.id
-        ? 'text-slate-950 shadow-sm'
-        : 'text-slate-400 hover:text-slate-300'"
+      class="flex-1 text-xs font-semibold py-2 rounded-lg transition-all duration-200"
+      :class="activeTab === tab.id ? 'text-slate-950 shadow-sm' : 'text-slate-400 hover:text-slate-300'"
       :style="activeTab === tab.id ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''"
       @click="activeTab = tab.id">
       {{ tab.label }}
@@ -237,8 +257,61 @@ const activityColor = (m30) =>
     </div>
   </div>
 
+  <!-- ══════════════ FACILITIES TAB ══════════════ -->
+  <div v-else-if="activeTab === 'facilities'" class="fade-up">
+
+    <div v-if="loadingFac" class="space-y-3">
+      <div v-for="i in 4" :key="i" class="h-20 shimmer rounded-2xl" />
+    </div>
+
+    <div v-else-if="!filteredFacilities.length" class="card p-8 text-center">
+      <div class="text-3xl mb-3">🏟️</div>
+      <p class="text-slate-400 text-sm mb-4">No facilities listed yet.</p>
+      <RouterLink v-if="user" to="/manage"
+        class="btn-primary px-6 text-sm">+ Add Your Facility</RouterLink>
+    </div>
+
+    <div v-else class="space-y-3">
+      <RouterLink v-for="f in filteredFacilities" :key="f.id" :to="'/facility/' + f.id"
+        class="card p-4 flex gap-3 transition-all duration-200 hover:border-white/20 hover:card-neon">
+
+        <!-- Thumbnail -->
+        <div class="w-14 h-14 rounded-xl overflow-hidden shrink-0">
+          <img v-if="f.image_url" :src="f.image_url" :alt="f.name" class="w-full h-full object-cover" />
+          <div v-else class="w-full h-full flex items-center justify-center font-black text-slate-950 text-sm"
+            style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
+            {{ (f.name ?? '?').slice(0, 2).toUpperCase() }}
+          </div>
+        </div>
+
+        <!-- Info -->
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-slate-100 truncate">{{ f.name }}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5 truncate">
+            {{ [f.address, f.emirate].filter(Boolean).join(' · ') }}
+          </div>
+          <div class="flex items-center gap-3 mt-1.5">
+            <span class="text-[10px] text-neon font-semibold">{{ f.club_count }} club{{ f.club_count !== 1 ? 's' : '' }}</span>
+            <span v-if="f.upcoming_count > 0" class="text-[10px] text-amber-400">
+              {{ f.upcoming_count }} upcoming session{{ f.upcoming_count !== 1 ? 's' : '' }}
+            </span>
+          </div>
+        </div>
+
+        <span class="text-slate-700 text-sm self-center shrink-0">›</span>
+      </RouterLink>
+
+      <!-- Add facility CTA -->
+      <RouterLink v-if="user" to="/manage"
+        class="card p-4 flex items-center justify-center gap-2 text-sm text-slate-500
+               hover:text-neon hover:border-white/15 transition-all duration-200">
+        + Add Your Facility
+      </RouterLink>
+    </div>
+  </div>
+
   <!-- ══════════════ TOP PLAYERS TAB ══════════════ -->
-  <div v-else class="fade-up">
+  <div v-else-if="activeTab === 'players'" class="fade-up">
 
     <div v-if="loadingPlayers" class="space-y-2">
       <div v-for="i in 8" :key="i" class="h-12 shimmer rounded-xl" />

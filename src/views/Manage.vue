@@ -21,8 +21,15 @@ const inviteNote   = ref(null)
 const facNote      = ref(null)
 const busy         = ref(false)
 
-// Facility form
+// Existing facility info (club's own fields)
 const facility = ref({ emirates: '', facility_name: '', facility_address: '', maps_url: '', description: '' })
+
+// Facility Master
+const linkedFacility = ref(null)
+const facSearch      = ref('')
+const facResults     = ref([])
+const newFac         = ref({ name:'', address:'', emirate:'', maps_url:'', image_url:'', phone:'', website:'', description:'' })
+const newFacNote     = ref(null)
 
 const pendingRequests = computed(() => requests.value.filter(r => r.status === 'pending'))
 
@@ -42,7 +49,7 @@ async function load() {
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
-    .select('emirates, facility_name, facility_address, maps_url, description')
+    .select('emirates, facility_name, facility_address, maps_url, description, facility_id')
     .eq('id', cid).single()
   if (clubInfo) {
     facility.value.emirates         = clubInfo.emirates         ?? ''
@@ -50,6 +57,14 @@ async function load() {
     facility.value.facility_address = clubInfo.facility_address ?? ''
     facility.value.maps_url         = clubInfo.maps_url         ?? ''
     facility.value.description      = clubInfo.description      ?? ''
+    // Load linked facility master
+    if (clubInfo.facility_id) {
+      const { data: fac } = await supabase.from('facilities')
+        .select('id, name, address, emirate').eq('id', clubInfo.facility_id).single()
+      linkedFacility.value = fac ?? null
+    } else {
+      linkedFacility.value = null
+    }
   }
 }
 
@@ -147,6 +162,55 @@ async function saveFacility() {
   facNote.value = error
     ? { ok: false, t: error.message }
     : { ok: true, t: '✅ Facility info saved. Visible on the Explore page.' }
+}
+
+// ── Facility Master functions ──
+async function searchFacilities() {
+  if (!facSearch.value.trim()) { facResults.value = []; return }
+  const { data } = await supabase.rpc('get_facilities', { p_search: facSearch.value.trim() })
+  facResults.value = (data ?? []).slice(0, 5)
+}
+
+async function linkFacility(f) {
+  busy.value = true
+  await supabase.rpc('set_club_facility', {
+    p_club_id: currentClub.value.club_id,
+    p_facility_id: f.id
+  })
+  linkedFacility.value = f
+  facResults.value = []; facSearch.value = ''
+  busy.value = false
+}
+
+async function unlinkFacility() {
+  busy.value = true
+  await supabase.rpc('set_club_facility', {
+    p_club_id: currentClub.value.club_id,
+    p_facility_id: null
+  })
+  linkedFacility.value = null
+  busy.value = false
+}
+
+async function createAndLinkFacility() {
+  if (!newFac.value.name.trim()) return
+  busy.value = true; newFacNote.value = null
+  const { data: fId, error } = await supabase.rpc('create_facility', {
+    p_name:        newFac.value.name.trim(),
+    p_address:     newFac.value.address     || null,
+    p_emirate:     newFac.value.emirate     || null,
+    p_maps_url:    newFac.value.maps_url    || null,
+    p_image_url:   newFac.value.image_url   || null,
+    p_phone:       newFac.value.phone       || null,
+    p_website:     newFac.value.website     || null,
+    p_description: newFac.value.description || null,
+  })
+  if (error) { newFacNote.value = { ok: false, t: error.message }; busy.value = false; return }
+  await supabase.rpc('set_club_facility', { p_club_id: currentClub.value.club_id, p_facility_id: fId })
+  linkedFacility.value = { id: fId, name: newFac.value.name, address: newFac.value.address }
+  newFac.value = { name:'', address:'', emirate:'', maps_url:'', image_url:'', phone:'', website:'', description:'' }
+  newFacNote.value = { ok: true, t: '✅ Facility created and linked!' }
+  busy.value = false
 }
 
 async function changeRole(userId, newRole) {
@@ -372,6 +436,76 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
     <button class="btn-ghost w-full mt-3" :disabled="busy" @click="saveFacility">
       Save Facility Info
     </button>
+  </div>
+
+  <!-- ── Facility Master: Create or link ── -->
+  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
+    <div class="label">🏟️ Facility Master — {{ currentClub.clubs?.name }}</div>
+    <p class="text-[11px] text-slate-500 mb-3">
+      Create a facility profile that any club can link to. Once linked, matches automatically
+      show as bookings on the facility's public page.
+    </p>
+
+    <!-- Linked facility status -->
+    <div v-if="linkedFacility" class="flex items-center justify-between mb-3 p-3 rounded-xl"
+      style="background:rgba(0,229,255,.07); border:1px solid rgba(0,229,255,.2)">
+      <div>
+        <div class="text-sm font-semibold text-neon">{{ linkedFacility.name }}</div>
+        <div class="text-[10px] text-slate-500">{{ linkedFacility.address }}</div>
+      </div>
+      <div class="flex gap-2">
+        <RouterLink :to="'/facility/' + linkedFacility.id"
+          class="text-xs text-neon hover:opacity-75 transition">View →</RouterLink>
+        <button class="text-xs text-slate-500 hover:text-rose-400 transition"
+          @click="unlinkFacility">Unlink</button>
+      </div>
+    </div>
+
+    <!-- Search + link existing facility -->
+    <div class="mb-3">
+      <label class="label">Search &amp; Link Existing Facility</label>
+      <div class="flex gap-2">
+        <input v-model="facSearch" class="input text-sm" placeholder="Type facility name…"
+          @input="searchFacilities" />
+        <button class="btn-ghost shrink-0 px-3 text-sm" @click="searchFacilities">Search</button>
+      </div>
+      <div v-if="facResults.length" class="mt-2 space-y-1">
+        <button v-for="f in facResults" :key="f.id"
+          class="w-full text-left text-sm px-3 py-2 rounded-xl border border-white/10 hover:border-cyan-500/30 hover:bg-white/[0.03] transition"
+          @click="linkFacility(f)">
+          <span class="font-medium text-slate-200">{{ f.name }}</span>
+          <span v-if="f.address" class="text-slate-500 ml-2 text-xs">{{ f.address }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Create new facility -->
+    <details class="group">
+      <summary class="text-xs text-neon cursor-pointer hover:opacity-75 transition list-none flex items-center gap-1">
+        <span class="group-open:rotate-90 transition-transform inline-block">▶</span>
+        Create a New Facility Profile
+      </summary>
+      <div class="mt-3 space-y-2">
+        <input v-model="newFac.name" class="input text-sm" placeholder="Facility name *" />
+        <input v-model="newFac.address" class="input text-sm" placeholder="Address" />
+        <select v-model="newFac.emirate" class="input text-sm">
+          <option value="">— Emirates —</option>
+          <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
+        </select>
+        <input v-model="newFac.maps_url" class="input text-sm" placeholder="Google Maps URL" />
+        <input v-model="newFac.image_url" class="input text-sm" placeholder="Facility photo URL (paste image link)" />
+        <input v-model="newFac.phone" class="input text-sm" placeholder="Phone" />
+        <input v-model="newFac.website" class="input text-sm" placeholder="Website" />
+        <textarea v-model="newFac.description" class="input resize-none text-sm" rows="2"
+          placeholder="Description (courts available, parking, etc.)" />
+        <p v-if="newFacNote" class="text-xs"
+          :class="newFacNote.ok ? 'text-emerald-400' : 'text-rose-400'">{{ newFacNote.t }}</p>
+        <button class="btn-violet w-full text-sm" :disabled="busy || !newFac.name.trim()"
+          @click="createAndLinkFacility">
+          🏟️ Create &amp; Link to This Club
+        </button>
+      </div>
+    </details>
   </div>
 
   <!-- ── Browse / Join more clubs ── -->
