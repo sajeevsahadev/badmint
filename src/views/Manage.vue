@@ -149,6 +149,21 @@ async function saveFacility() {
     : { ok: true, t: '✅ Facility info saved. Visible on the Explore page.' }
 }
 
+async function changeRole(userId, newRole) {
+  const { error } = await supabase
+    .from('club_members')
+    .update({ role: newRole })
+    .eq('club_id', currentClub.value.club_id)
+    .eq('user_id', userId)
+  if (error) {
+    note.value = { ok: false, t: 'Role update failed: ' + error.message }
+  } else {
+    members.value = members.value.map(m =>
+      m.user_id === userId ? { ...m, role: newRole } : m
+    )
+  }
+}
+
 const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: '🏸 Player' }[r] ?? r)
 </script>
 
@@ -300,13 +315,19 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
   <div v-if="currentClub && members.length" class="card p-4 mb-4 fade-up">
     <div class="label">Members — {{ currentClub.clubs?.name }}</div>
     <div v-for="m in members" :key="m.user_id"
-      class="flex justify-between py-2.5 border-b border-white/[0.05] last:border-0 text-sm items-center">
-      <span class="text-slate-400 text-xs font-mono truncate">{{ m.user_id.slice(0, 14) }}…</span>
-      <span class="text-xs">{{ roleLabel(m.role) }}</span>
+      class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0 gap-2">
+      <span class="text-slate-400 text-xs font-mono truncate flex-1">{{ m.user_id.slice(0, 14) }}…</span>
+      <select
+        v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
+        :value="m.role"
+        class="text-xs rounded-lg border border-white/10 bg-white/[0.05] px-2 py-1 outline-none cursor-pointer"
+        @change="changeRole(m.user_id, $event.target.value)">
+        <option value="player">🏸 Player</option>
+        <option value="manager">🛠 Manager</option>
+        <option v-if="currentClub.role === 'owner'" value="owner">👑 Owner</option>
+      </select>
+      <span v-else class="text-xs shrink-0">{{ roleLabel(m.role) }}</span>
     </div>
-    <p class="text-[11px] text-slate-500 mt-3">
-      To promote someone to Manager: update their role in Supabase → Table Editor → club_members.
-    </p>
   </div>
 
   <!-- ── Facility / Location info ── -->

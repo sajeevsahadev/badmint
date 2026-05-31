@@ -10,13 +10,15 @@ const { user } = useAuth()
 
 const playerId = route.params.id
 
-const player   = ref(null)   // players row
-const profile  = ref(null)   // user_profiles (nickname, bio only — no phone/email)
-const stats    = ref(null)   // v_leaderboard row
-const matches  = ref([])
-const clubName = ref('')
-const emirates = ref('')
-const loading  = ref(true)
+const player      = ref(null)
+const profile     = ref(null)
+const stats       = ref(null)
+const matches     = ref([])
+const clubName    = ref('')
+const emirates    = ref('')
+const loading     = ref(true)
+const matchLimit  = ref(10)
+const loadingMore = ref(false)
 
 const isOwnProfile = computed(() =>
   user.value && player.value?.user_id === user.value.id
@@ -76,7 +78,7 @@ async function load() {
       `)
       .eq('club_id', p.club_id)
       .order('created_at', { ascending: false })
-      .limit(10)
+      .limit(matchLimit.value)
   ])
 
   profile.value  = profRes.data
@@ -115,6 +117,13 @@ async function load() {
 }
 
 onMounted(load)
+
+async function loadMore() {
+  loadingMore.value = true
+  matchLimit.value += 20
+  await load()
+  loadingMore.value = false
+}
 
 const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short' })
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
@@ -225,6 +234,12 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
           <span>{{ m.oppTeam.join(' + ') }}</span>
         </div>
       </button>
+      <!-- Load more -->
+      <div v-if="matches.length === matchLimit" class="px-4 py-3 border-t border-white/[0.05]">
+        <button class="btn-ghost w-full text-sm" :disabled="loadingMore" @click="loadMore">
+          {{ loadingMore ? 'Loading…' : 'Load More Matches' }}
+        </button>
+      </div>
     </div>
 
   </template>

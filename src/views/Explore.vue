@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
@@ -47,7 +47,13 @@ const filteredClubs = computed(() => {
       (c.facility_address || '').toLowerCase().includes(q)
     )
   }
-  return list
+  // Own clubs always first, then sorted by club_score
+  return [...list].sort((a, b) => {
+    const aOwn = myClubIds.value.includes(a.id) ? 1 : 0
+    const bOwn = myClubIds.value.includes(b.id) ? 1 : 0
+    if (bOwn !== aOwn) return bOwn - aOwn
+    return (b.club_rank ?? 999) - (a.club_rank ?? 999) // lower rank number = better
+  })
 })
 
 const filteredPlayers = computed(() => {
@@ -171,7 +177,10 @@ const activityColor = (m30) =>
         <div class="flex items-start gap-2.5 min-w-0">
           <div class="text-xl shrink-0 mt-0.5">{{ rankIcon(i) }}</div>
           <div class="min-w-0">
-            <div class="font-bold text-slate-100 truncate">{{ club.name }}</div>
+            <RouterLink :to="'/club/' + club.id"
+              class="font-bold text-slate-100 hover:text-neon transition-colors block truncate">
+              {{ club.name }}
+            </RouterLink>
             <div class="text-[11px] text-slate-500 truncate">
               {{ [club.facility_name, club.emirates].filter(Boolean).join(' · ') || 'No facility info' }}
             </div>
@@ -179,7 +188,7 @@ const activityColor = (m30) =>
         </div>
         <!-- Action button -->
         <div class="shrink-0">
-          <span v-if="requestMap[club.id] === 'member'" class="badge-member">✓ Member</span>
+          <span v-if="requestMap[club.id] === 'member'" class="badge-member">✓ My Club</span>
           <span v-else-if="requestMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
           <span v-else-if="requestMap[club.id] === 'approved'" class="badge-approved">Approved</span>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"

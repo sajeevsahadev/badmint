@@ -5,14 +5,15 @@ import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
 const { currentClub, isManager } = useClub()
-const players  = ref([])
-const sideA    = ref([])
-const sideB    = ref([])
-const scoreA   = ref(21)
-const scoreB   = ref(0)
-const playedOn = ref(new Date().toISOString().slice(0, 10))
-const msg      = ref(null)
-const saving   = ref(false)
+const players    = ref([])
+const sideA      = ref([])
+const sideB      = ref([])
+const scoreA     = ref(21)
+const scoreB     = ref(0)
+const playedOn   = ref(new Date().toISOString().slice(0, 10))
+const matchName  = ref('')
+const msg        = ref(null)
+const saving     = ref(false)
 
 async function loadPlayers() {
   if (!currentClub.value) return
@@ -51,18 +52,19 @@ const avgElo = arr => arr.length
 function reset() {
   sideA.value = []; sideB.value = []
   scoreA.value = 21; scoreB.value = 0
-  msg.value = null
+  matchName.value = ''; msg.value = null
 }
 
 async function submit() {
   msg.value = null; saving.value = true
   const { error } = await supabase.rpc('record_match', {
-    p_club_id:   currentClub.value.club_id,
-    p_played_on: playedOn.value,
-    p_side_a:    sideA.value,
-    p_side_b:    sideB.value,
-    p_score_a:   Number(scoreA.value),
-    p_score_b:   Number(scoreB.value)
+    p_club_id:      currentClub.value.club_id,
+    p_played_on:    playedOn.value,
+    p_side_a:       sideA.value,
+    p_side_b:       sideB.value,
+    p_score_a:      Number(scoreA.value),
+    p_score_b:      Number(scoreB.value),
+    p_display_name: matchName.value.trim() || null
   })
   saving.value = false
   if (error) { msg.value = { ok: false, t: error.message }; return }
@@ -91,10 +93,16 @@ async function submit() {
       </template>
     </PageHeader>
 
-    <!-- Date -->
-    <div class="mb-4">
-      <label class="label">Match Date</label>
-      <input v-model="playedOn" type="date" class="input" />
+    <!-- Date + Name row -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div>
+        <label class="label">Match Date</label>
+        <input v-model="playedOn" type="date" class="input" />
+      </div>
+      <div>
+        <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
+        <input v-model="matchName" class="input" placeholder="Auto-generated if blank" maxlength="40" />
+      </div>
     </div>
 
     <!-- Side panels -->

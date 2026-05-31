@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
@@ -65,6 +65,12 @@ const trendColor = elo =>
         </div>
       </template>
     </PageHeader>
+    <div class="flex justify-end -mt-3 mb-3">
+      <RouterLink v-if="currentClub" :to="'/club/' + currentClub.club_id"
+        class="text-[10px] text-neon hover:opacity-75 transition">
+        View Club Profile →
+      </RouterLink>
+    </div>
 
     <!-- Podium top 3 -->
     <div class="grid grid-cols-3 gap-2 mb-4 fade-up">
