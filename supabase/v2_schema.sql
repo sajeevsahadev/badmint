@@ -233,7 +233,7 @@ from players p
 join clubs c on c.id = p.club_id
 left join v_leaderboard vl on vl.id = p.id
 left join user_profiles up on up.user_id = p.user_id
-where coalesce(vl.games, 0) >= 3;
+where coalesce(vl.games, 0) >= 1;
 
 -- ── Security-definer RPCs (bypass RLS for public endpoints) ──
 

@@ -15,6 +15,7 @@ const topPlayers  = ref([])
 const myRequests  = ref([])
 const loadingClubs   = ref(true)
 const loadingPlayers = ref(true)
+const playersError   = ref(null)
 const showAllPlayers = ref(false)
 
 // ── Filters ──
@@ -72,9 +73,10 @@ async function loadData() {
   ]
   if (user.value) tasks.push(supabase.from('join_requests').select('club_id, status'))
   const [clubsRes, playersRes, reqsRes] = await Promise.all(tasks)
-  allClubs.value   = clubsRes.data   ?? []
-  topPlayers.value = playersRes.data ?? []
-  myRequests.value = reqsRes?.data   ?? []
+  allClubs.value   = clubsRes.data    ?? []
+  topPlayers.value = playersRes.data  ?? []
+  myRequests.value = reqsRes?.data    ?? []
+  if (playersRes.error) playersError.value = playersRes.error.message
   loadingClubs.value = false; loadingPlayers.value = false
 }
 
@@ -233,9 +235,17 @@ const activityColor = (m30) =>
       <div v-for="i in 8" :key="i" class="h-12 shimmer rounded-xl" />
     </div>
 
+    <div v-else-if="playersError" class="card p-6 text-center fade-up"
+      style="border-color:rgba(244,63,94,.3)">
+      <div class="text-2xl mb-2">⚠️</div>
+      <p class="text-rose-400 text-sm font-semibold mb-1">Could not load players</p>
+      <p class="text-slate-500 text-xs">{{ playersError }}</p>
+      <p class="text-slate-600 text-xs mt-2">Run <code class="text-slate-400">v2_schema.sql</code> again in Supabase SQL Editor.</p>
+    </div>
+
     <div v-else-if="!filteredPlayers.length" class="card p-8 text-center text-slate-400 text-sm">
       <div class="text-3xl mb-3">🏆</div>
-      <p>No players qualify yet. Need at least 3 matches per player.</p>
+      <p>No players yet. Record at least 1 match to appear here.</p>
     </div>
 
     <div v-else>
