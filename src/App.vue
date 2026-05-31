@@ -4,23 +4,22 @@ import { useRoute, useRouter, RouterView, RouterLink } from 'vue-router'
 import { supabase } from './lib/supabase'
 import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
+import { useInstall } from './composables/useInstall'
 
 const { user, ready, signOut } = useAuth()
 const { clubs, currentClub, loadClubs, selectClub } = useClub()
+const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 const route  = useRoute()
 const router = useRouter()
 
 const pendingCount = ref(0)
+const showIOSHint  = ref(false)
 
 async function init() {
   if (!user.value) return
-  try {
-    await loadClubs()
-    await refreshPending()
-  } catch {}
+  try { await loadClubs(); await refreshPending() } catch {}
 }
 
-// Count pending join requests across all clubs where user is manager
 async function refreshPending() {
   const managerIds = clubs.value
     .filter(c => ['owner','manager'].includes(c.role))
@@ -44,13 +43,20 @@ function onSwitch(e) {
   if (c) selectClub(c)
 }
 
+// 5 primary nav tabs
 const nav = computed(() => [
   { to: '/dashboard', label: 'Rankings',  icon: '🏆' },
-  { to: '/match',     label: 'Add Match', icon: '➕' },
+  { to: '/matches',   label: 'Matches',   icon: '📋' },
+  { to: '/explore',   label: 'Explore',   icon: '🌍' },
   { to: '/players',   label: 'Players',   icon: '👥' },
-  { to: '/compare',   label: 'Compare',   icon: '⚔️'  },
   { to: '/manage',    label: 'Manage',    icon: '⚙️', badge: pendingCount.value },
 ])
+
+// Routes that don't need a club selected
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile']
+const needsClub = computed(() =>
+  !currentClub.value && !clubFreeRoutes.includes(route.path)
+)
 </script>
 
 <template>
@@ -63,10 +69,36 @@ const nav = computed(() => [
   </div>
 
   <template v-else>
-    <!-- Public routes (Login) render full-screen -->
+    <!-- Public routes (Login, Explore) render full-screen -->
     <RouterView v-if="route.meta.public" />
 
     <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-4">
+
+      <!-- ── PWA Install banner ── -->
+      <div v-if="canInstall && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
+        <span class="text-2xl shrink-0">📲</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold text-slate-200">Install Badmint on Android</div>
+          <div class="text-[10px] text-slate-500">Works offline · No app store needed</div>
+        </div>
+        <button class="btn-primary text-xs px-3 py-1.5 shrink-0" @click="promptInstall">Install</button>
+      </div>
+
+      <div v-if="isIOS && !isInstalled && showIOSHint"
+        class="card mb-4 px-4 py-3 fade-up" style="border-color:rgba(168,85,247,.3)">
+        <div class="flex items-start gap-2">
+          <span class="text-xl shrink-0">🍎</span>
+          <div>
+            <div class="text-xs font-bold text-slate-200 mb-1">Add to iPhone Home Screen</div>
+            <div class="text-[11px] text-slate-400 leading-relaxed">
+              Tap the <strong class="text-slate-300">Share</strong> button (↑) in Safari,
+              then choose <strong class="text-slate-300">"Add to Home Screen"</strong>.
+            </div>
+          </div>
+          <button class="text-slate-600 hover:text-slate-400 text-sm shrink-0 transition"
+            @click="showIOSHint = false">✕</button>
+        </div>
+      </div>
 
       <!-- ── Top bar ── -->
       <header class="mb-5 flex items-center justify-between gap-3">
@@ -74,69 +106,68 @@ const nav = computed(() => [
           <span class="text-2xl leading-none" style="filter:drop-shadow(0 0 12px rgba(0,229,255,.5));">🏸</span>
           <div>
             <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badmint</h1>
-            <div class="text-[9px] text-slate-500 tracking-[0.2em] uppercase">Ranking System</div>
+            <div class="text-[9px] text-slate-500 tracking-[0.2em] uppercase">UAE Badminton Rankings</div>
           </div>
         </div>
 
         <div class="flex items-center gap-2">
+          <!-- iOS install hint trigger -->
+          <button v-if="isIOS && !isInstalled && !showIOSHint"
+            class="text-[10px] text-violet hover:opacity-80 transition px-1" @click="showIOSHint = true">
+            📲 Install
+          </button>
+
           <!-- Club switcher -->
           <select v-if="clubs.length" :value="currentClub?.club_id" @change="onSwitch"
             class="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-xs
-                   max-w-[130px] truncate text-slate-200 outline-none focus:border-cyan-500/40
+                   max-w-[120px] truncate text-slate-200 outline-none focus:border-cyan-500/40
                    transition-colors duration-200">
             <option v-for="c in clubs" :key="c.club_id" :value="c.club_id"
               class="bg-slate-900">{{ c.clubs?.name }}</option>
           </select>
 
-          <button class="text-xs text-slate-500 hover:text-slate-200 transition px-1"
+          <!-- Profile link -->
+          <RouterLink to="/profile" class="w-7 h-7 rounded-full flex items-center justify-center text-xs
+            font-bold text-slate-950 shrink-0 hover:opacity-80 transition"
+            style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
+            {{ (user?.user_metadata?.full_name ?? user?.email ?? '?')[0].toUpperCase() }}
+          </RouterLink>
+
+          <button class="text-xs text-slate-500 hover:text-slate-200 transition"
             @click="logout">Sign out</button>
         </div>
       </header>
 
       <!-- ── No club state ── -->
-      <div v-if="!currentClub && route.path !== '/manage' && route.path !== '/join'"
-        class="card-neon p-8 text-center fade-up">
+      <div v-if="needsClub" class="card-neon p-8 text-center fade-up">
         <div class="text-4xl mb-4" style="filter:drop-shadow(0 0 20px rgba(0,229,255,.4));">👋</div>
         <h2 class="font-display text-xl font-bold gradient-text mb-1">Welcome to Badmint!</h2>
-        <p class="text-sm text-slate-400 mb-6">
-          Join your team's club or create a new one to get started.
-        </p>
+        <p class="text-sm text-slate-400 mb-6">Join your team's club or create a new one to get started.</p>
         <div class="flex flex-col gap-3">
-          <RouterLink to="/join" class="btn-primary w-full py-3 text-sm">
-            🏟️ Browse &amp; Join a Club
-          </RouterLink>
-          <RouterLink to="/manage" class="btn-ghost w-full py-3 text-sm">
-            ➕ Create My Own Club
-          </RouterLink>
+          <RouterLink to="/explore" class="btn-primary w-full py-3 text-sm">🌍 Browse &amp; Join a Club</RouterLink>
+          <RouterLink to="/join"    class="btn-ghost  w-full py-3 text-sm">🔗 Have an Invite Link?</RouterLink>
+          <RouterLink to="/manage"  class="btn-ghost  w-full py-3 text-sm">➕ Create My Own Club</RouterLink>
         </div>
-        <p class="mt-4 text-[11px] text-slate-600">
-          Have an invite link? Click it — you'll be added automatically.
-        </p>
       </div>
 
       <RouterView v-else />
 
       <!-- ── Bottom nav ── -->
       <nav class="fixed inset-x-0 bottom-0 z-20 safe-area-pb"
-        style="background:rgba(5,13,26,.95); border-top:1px solid rgba(255,255,255,.07); backdrop-filter:blur(20px);">
-
-        <!-- Neon top accent line -->
+        style="background:rgba(5,13,26,.96); border-top:1px solid rgba(255,255,255,.07); backdrop-filter:blur(20px);">
         <div class="absolute top-0 left-0 right-0 h-px"
           style="background:linear-gradient(90deg,transparent,rgba(0,229,255,.3) 40%,rgba(168,85,247,.3) 60%,transparent);" />
-
         <div class="mx-auto flex max-w-2xl">
           <RouterLink v-for="n in nav" :key="n.to" :to="n.to"
             class="relative flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px]
-                   text-slate-500 transition-all duration-200"
+                   text-slate-500 transition-all duration-200 font-medium"
             active-class="!text-cyan-400">
-
-            <!-- Badge for pending requests -->
-            <span v-if="n.badge" class="badge-dot absolute top-1.5 right-[25%] w-3.5 h-3.5 text-[8px]">
+            <span v-if="n.badge"
+              class="badge-dot absolute top-1.5 right-[22%] w-3.5 h-3.5 text-[8px]">
               {{ n.badge > 9 ? '9+' : n.badge }}
             </span>
-
             <span class="text-lg leading-none">{{ n.icon }}</span>
-            <span class="font-medium">{{ n.label }}</span>
+            <span>{{ n.label }}</span>
           </RouterLink>
         </div>
       </nav>

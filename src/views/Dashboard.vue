@@ -129,12 +129,18 @@ const trendColor = elo =>
       </table>
     </div>
 
-    <!-- Guide link -->
-    <button class="w-full card py-3.5 text-sm text-slate-400 hover:text-neon transition-all duration-200
-                   flex items-center justify-center gap-2 hover:border-white/15 fade-up"
-      @click="router.push('/guide')">
-      📖 How does the ranking work?
-      <span class="text-neon font-semibold">Learn more →</span>
-    </button>
+    <!-- Quick links -->
+    <div class="grid grid-cols-2 gap-2 fade-up">
+      <button class="card py-3 text-sm text-slate-400 hover:text-neon transition-all duration-200
+                     flex items-center justify-center gap-2 hover:border-white/15"
+        @click="router.push('/compare')">
+        ⚔️ Head-to-Head
+      </button>
+      <button class="card py-3 text-sm text-slate-400 hover:text-neon transition-all duration-200
+                     flex items-center justify-center gap-2 hover:border-white/15"
+        @click="router.push('/guide')">
+        📖 How Rankings Work
+      </button>
+    </div>
   </template>
 </template>

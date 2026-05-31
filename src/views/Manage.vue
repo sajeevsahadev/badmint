@@ -7,16 +7,22 @@ import PageHeader from '../components/PageHeader.vue'
 
 const { clubs, currentClub, loadClubs, createClub, isManager } = useClub()
 
+const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
+
 const newClub      = ref('')
 const cfg          = ref(null)
 const members      = ref([])
-const requests     = ref([])  // pending join requests
+const requests     = ref([])
 const inviteEmail  = ref('')
 const inviteLink   = ref('')
 const note         = ref(null)
 const cfgNote      = ref(null)
 const inviteNote   = ref(null)
+const facNote      = ref(null)
 const busy         = ref(false)
+
+// Facility form
+const facility = ref({ emirates: '', facility_name: '', facility_address: '', maps_url: '', description: '' })
 
 const pendingRequests = computed(() => requests.value.filter(r => r.status === 'pending'))
 
@@ -33,6 +39,18 @@ async function load() {
   cfg.value     = c
   members.value = m ?? []
   requests.value = r ?? []
+
+  // Load current club facility info
+  const { data: clubInfo } = await supabase.from('clubs')
+    .select('emirates, facility_name, facility_address, maps_url, description')
+    .eq('id', cid).single()
+  if (clubInfo) {
+    facility.value.emirates         = clubInfo.emirates         ?? ''
+    facility.value.facility_name    = clubInfo.facility_name    ?? ''
+    facility.value.facility_address = clubInfo.facility_address ?? ''
+    facility.value.maps_url         = clubInfo.maps_url         ?? ''
+    facility.value.description      = clubInfo.description      ?? ''
+  }
 }
 
 onMounted(() => { loadClubs(); load() })
@@ -112,6 +130,23 @@ function mailtoLink() {
     `Hi!\n\nYou've been invited to join "${club}" on Badmint — the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! 🏸`
   )
   return `mailto:${inviteEmail.value}?subject=${subj}&body=${body}`
+}
+
+// ── Save facility info ──
+async function saveFacility() {
+  busy.value = true; facNote.value = null
+  const { error } = await supabase.rpc('update_club_facility', {
+    p_club_id:          currentClub.value.club_id,
+    p_emirates:         facility.value.emirates         || null,
+    p_facility_name:    facility.value.facility_name    || null,
+    p_facility_address: facility.value.facility_address || null,
+    p_maps_url:         facility.value.maps_url         || null,
+    p_description:      facility.value.description      || null,
+  })
+  busy.value = false
+  facNote.value = error
+    ? { ok: false, t: error.message }
+    : { ok: true, t: '✅ Facility info saved. Visible on the Explore page.' }
 }
 
 const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: '🏸 Player' }[r] ?? r)
@@ -272,6 +307,50 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
     <p class="text-[11px] text-slate-500 mt-3">
       To promote someone to Manager: update their role in Supabase → Table Editor → club_members.
     </p>
+  </div>
+
+  <!-- ── Facility / Location info ── -->
+  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
+    <div class="label">Club Location &amp; Facility — {{ currentClub.clubs?.name }}</div>
+    <p class="text-[11px] text-slate-500 mb-3">
+      Optional · Shown on the Explore page so new players can find your court.
+    </p>
+    <div class="space-y-3">
+      <div>
+        <label class="label">Emirates</label>
+        <select v-model="facility.emirates" class="input">
+          <option value="">— Select Emirates —</option>
+          <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Facility / Academy Name</label>
+        <input v-model="facility.facility_name" class="input"
+          placeholder="e.g. Dubai Sports City, GEMS School Courts" maxlength="80" />
+      </div>
+      <div>
+        <label class="label">Address</label>
+        <input v-model="facility.facility_address" class="input"
+          placeholder="e.g. Al Barsha, Dubai" maxlength="120" />
+      </div>
+      <div>
+        <label class="label">Google Maps Link <span class="text-slate-600">(optional)</span></label>
+        <input v-model="facility.maps_url" class="input" type="url"
+          placeholder="https://maps.app.goo.gl/…" />
+      </div>
+      <div>
+        <label class="label">Description <span class="text-slate-600">(optional)</span></label>
+        <textarea v-model="facility.description" class="input resize-none" rows="2"
+          placeholder="Who can join, what time you play…" maxlength="200" />
+      </div>
+    </div>
+    <p v-if="facNote" class="mt-3 text-xs rounded-xl px-3 py-2"
+      :class="facNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
+      {{ facNote.t }}
+    </p>
+    <button class="btn-ghost w-full mt-3" :disabled="busy" @click="saveFacility">
+      Save Facility Info
+    </button>
   </div>
 
   <!-- ── Browse / Join more clubs ── -->

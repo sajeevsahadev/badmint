@@ -3,14 +3,17 @@ import { supabase } from '../lib/supabase'
 
 const routes = [
   { path: '/login',     component: () => import('../views/Login.vue'),        meta: { public: true } },
+  { path: '/explore',   component: () => import('../views/Explore.vue'),      meta: { public: true } },
   { path: '/',          redirect: '/dashboard' },
   { path: '/dashboard', component: () => import('../views/Dashboard.vue') },
+  { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
   { path: '/players',   component: () => import('../views/Players.vue') },
   { path: '/compare',   component: () => import('../views/Compare.vue') },
   { path: '/guide',     component: () => import('../views/RankingGuide.vue') },
   { path: '/manage',    component: () => import('../views/Manage.vue') },
   { path: '/join',      component: () => import('../views/JoinClub.vue') },
+  { path: '/profile',   component: () => import('../views/Profile.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
