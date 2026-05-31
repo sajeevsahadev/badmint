@@ -248,6 +248,36 @@ async function changeRole(userId, newRole) {
 }
 
 const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: '🏸 Player' }[r] ?? r)
+
+// ── Leave club ──
+const leaving   = ref(null)   // club_id in progress
+const leaveNote = ref(null)
+
+async function leaveClub(clubId) {
+  const name = clubs.value.find(c => c.club_id === clubId)?.clubs?.name ?? 'this club'
+  if (!confirm(`Leave "${name}"?\n\nYou can rejoin later by submitting a new request.`)) return
+  leaving.value = clubId; leaveNote.value = null
+  const { error } = await supabase.rpc('leave_club', { p_club_id: clubId })
+  leaving.value = null
+  if (error) {
+    if (error.message.includes('match history')) {
+      leaveNote.value = {
+        ok: false,
+        t: `You already have matches recorded in "${name}". You cannot leave directly — ask the club manager to mark you as Inactive from the Players page.`,
+      }
+    } else if (error.message.includes('owner')) {
+      leaveNote.value = {
+        ok: false,
+        t: `You are the owner of "${name}". Transfer ownership to another member first (Manage → Members).`,
+      }
+    } else {
+      leaveNote.value = { ok: false, t: error.message }
+    }
+  } else {
+    leaveNote.value = { ok: true, t: `You have left "${name}".` }
+    await loadClubs()
+  }
+}
 </script>
 
 <template>
@@ -544,16 +574,46 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
     <span class="text-slate-600 text-lg">→</span>
   </RouterLink>
 
-  <!-- ── Club list ── -->
+  <!-- ── Club list with Leave option ── -->
   <div v-if="clubs.length" class="card p-4 fade-up">
-    <div class="label">Your Clubs</div>
+    <div class="label mb-1">Your Clubs</div>
+    <p class="text-[11px] text-slate-500 mb-3">
+      You can leave a club if you have no recorded matches. If you have matches,
+      ask the manager to mark you as Inactive instead.
+    </p>
+
+    <!-- Leave result message -->
+    <div v-if="leaveNote" class="rounded-xl px-3 py-2.5 mb-3 text-xs"
+      :class="leaveNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-400'">
+      {{ leaveNote.t }}
+    </div>
+
     <div v-for="c in clubs" :key="c.club_id"
-      class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0">
-      <div>
-        <div class="text-sm font-semibold">{{ c.clubs?.name }}</div>
+      class="flex items-center gap-2 py-2.5 border-b border-white/[0.05] last:border-0">
+
+      <!-- Club info -->
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-slate-100 truncate">{{ c.clubs?.name }}</div>
         <div class="text-[10px] text-slate-500">{{ roleLabel(c.role) }}</div>
       </div>
-      <span v-if="currentClub?.club_id === c.club_id" class="badge-member">Active</span>
+
+      <!-- Active badge -->
+      <span v-if="currentClub?.club_id === c.club_id"
+        class="badge-member shrink-0">Active</span>
+
+      <!-- Leave button — hidden for owners -->
+      <button v-if="c.role !== 'owner'"
+        class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-150"
+        :class="leaving === c.club_id
+          ? 'border-white/10 text-slate-600 cursor-wait'
+          : 'border-rose-500/25 text-rose-500/70 hover:border-rose-400/50 hover:text-rose-400'"
+        :disabled="!!leaving"
+        @click="leaveClub(c.club_id)">
+        {{ leaving === c.club_id ? '…' : 'Leave' }}
+      </button>
+
+      <!-- Owner can't leave label -->
+      <span v-else class="shrink-0 text-[10px] text-slate-700 italic">Owner</span>
     </div>
   </div>
 </template>
