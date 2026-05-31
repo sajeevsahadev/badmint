@@ -3,20 +3,196 @@
 @tailwind utilities;
 
 :root { color-scheme: dark; }
+
+/* ── Base ── */
 body {
   margin: 0;
   font-family: 'Outfit', system-ui, sans-serif;
-  background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(20,184,166,.18), transparent),
-    radial-gradient(800px 500px at -10% 110%, rgba(251,191,36,.10), transparent),
-    #0b1120;
+  background: #050d1a;
   color: #e2e8f0;
   min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 1600px 700px at 95% -8%,  rgba(0,229,255,.13), transparent),
+    radial-gradient(ellipse 900px 600px  at -8% 90%,  rgba(168,85,247,.10), transparent),
+    radial-gradient(ellipse 700px 400px  at 50% 105%, rgba(251,191,36,.07), transparent);
 }
+
 .font-display { font-family: 'Bricolage Grotesque', sans-serif; }
-.card { @apply rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur; }
-.btn { @apply rounded-xl px-4 py-2.5 font-medium transition active:scale-[.98] disabled:opacity-40; }
-.btn-primary { @apply btn bg-teal-500 text-slate-950 hover:bg-teal-400; }
-.btn-ghost { @apply btn border border-white/15 hover:bg-white/5; }
-.input { @apply w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 outline-none focus:border-teal-400; }
-.label { @apply text-xs uppercase tracking-wider text-slate-400 mb-1 block; }
+
+/* ── Cards ── */
+.card {
+  @apply rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-xl;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    0 4px 24px rgba(0,0,0,.35);
+}
+
+.card-neon {
+  @apply card;
+  border-color: rgba(0,229,255,.2);
+  box-shadow:
+    0 0 0 1px rgba(0,229,255,.12),
+    0 0 32px rgba(0,229,255,.08),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 4px 24px rgba(0,0,0,.4);
+}
+
+.card-violet {
+  @apply card;
+  border-color: rgba(168,85,247,.22);
+  box-shadow:
+    0 0 0 1px rgba(168,85,247,.12),
+    0 0 32px rgba(168,85,247,.08),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 4px 24px rgba(0,0,0,.4);
+}
+
+.card-amber {
+  @apply card;
+  border-color: rgba(251,191,36,.22);
+  box-shadow:
+    0 0 0 1px rgba(251,191,36,.12),
+    0 0 32px rgba(251,191,36,.07),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 4px 24px rgba(0,0,0,.4);
+}
+
+/* ── Buttons ── */
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 font-semibold
+         text-sm transition-all duration-200 active:scale-[.97]
+         disabled:opacity-40 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn text-slate-950;
+  background: linear-gradient(135deg, #00e5ff 0%, #0099cc 100%);
+  box-shadow: 0 0 24px rgba(0,229,255,.4), 0 2px 8px rgba(0,0,0,.4);
+}
+.btn-primary:not(:disabled):hover {
+  box-shadow: 0 0 36px rgba(0,229,255,.6), 0 2px 8px rgba(0,0,0,.4);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  @apply btn border border-white/15 text-slate-200;
+}
+.btn-ghost:not(:disabled):hover {
+  @apply bg-white/[0.06] border-white/25;
+}
+
+.btn-violet {
+  @apply btn text-white;
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  box-shadow: 0 0 24px rgba(168,85,247,.4), 0 2px 8px rgba(0,0,0,.4);
+}
+.btn-violet:not(:disabled):hover {
+  box-shadow: 0 0 36px rgba(168,85,247,.6), 0 2px 8px rgba(0,0,0,.4);
+  transform: translateY(-1px);
+}
+
+.btn-success {
+  @apply btn text-slate-950;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 0 20px rgba(16,185,129,.4), 0 2px 8px rgba(0,0,0,.4);
+}
+.btn-success:not(:disabled):hover {
+  box-shadow: 0 0 32px rgba(16,185,129,.6);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  @apply btn text-white;
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+  box-shadow: 0 0 20px rgba(244,63,94,.3), 0 2px 8px rgba(0,0,0,.4);
+}
+.btn-danger:not(:disabled):hover {
+  box-shadow: 0 0 28px rgba(244,63,94,.5);
+  transform: translateY(-1px);
+}
+
+/* ── Input ── */
+.input {
+  @apply w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5
+         outline-none transition-all duration-200 text-slate-100
+         placeholder:text-slate-500;
+}
+.input:focus {
+  border-color: rgba(0,229,255,.45);
+  box-shadow: 0 0 0 3px rgba(0,229,255,.1);
+}
+
+/* ── Label ── */
+.label {
+  @apply text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 block font-semibold;
+}
+
+/* ── Neon text ── */
+.text-neon    { color: #00e5ff; text-shadow: 0 0 20px rgba(0,229,255,.5); }
+.text-violet  { color: #c084fc; text-shadow: 0 0 20px rgba(168,85,247,.5); }
+.text-gold    { color: #fbbf24; text-shadow: 0 0 20px rgba(251,191,36,.5); }
+
+/* ── Badges ── */
+.badge {
+  @apply inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider
+         px-2 py-0.5 rounded-full;
+}
+.badge-pending  { @apply badge bg-amber-500/15 text-amber-400 border border-amber-500/25; }
+.badge-approved { @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/25; }
+.badge-rejected { @apply badge bg-rose-500/15 text-rose-400 border border-rose-500/25; }
+.badge-member   { @apply badge bg-cyan-500/15 text-cyan-400 border border-cyan-500/25; }
+.badge-owner    { @apply badge bg-amber-500/15 text-amber-300 border border-amber-500/25; }
+.badge-dot      {
+  @apply w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black
+         flex items-center justify-center leading-none;
+  box-shadow: 0 0 8px rgba(244,63,94,.7);
+}
+
+/* ── Gradient text ── */
+.gradient-text {
+  background: linear-gradient(135deg, #00e5ff, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-gold {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Animations ── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,.03) 25%,
+    rgba(255,255,255,.07) 50%,
+    rgba(255,255,255,.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.fade-up { animation: float-up .35s ease both; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(0,229,255,.3); }
+  50%       { box-shadow: 0 0 32px rgba(0,229,255,.6); }
+}
+.pulse-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+
+/* ── Divider ── */
+.divider { @apply w-full h-px bg-white/[0.06] my-4; }
+
+/* ── Safe-area padding for iOS bottom nav ── */
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0); }
