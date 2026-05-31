@@ -56,13 +56,13 @@ function onSwitch(e) {
   if (c) selectClub(c)
 }
 
-// 5 primary nav tabs
+// Nav tabs — shown for all logged-in users on every page
 const nav = computed(() => [
-  { to: '/dashboard', label: 'Rankings',  icon: '🏆' },
-  { to: '/matches',   label: 'Matches',   icon: '📋' },
-  { to: '/explore',   label: 'Explore',   icon: '🌍' },
-  { to: '/players',   label: 'Players',   icon: '👥' },
-  { to: '/manage',    label: 'Manage',    icon: '⚙️', badge: pendingCount.value },
+  { to: '/',          label: 'Home',     icon: '🏠' },
+  { to: '/dashboard', label: 'Rankings', icon: '🏆' },
+  { to: '/matches',   label: 'Matches',  icon: '📋' },
+  { to: '/players',   label: 'Players',  icon: '👥' },
+  { to: '/manage',    label: 'Manage',   icon: '⚙️', badge: pendingCount.value },
 ])
 
 // Routes that don't need a club selected
@@ -82,9 +82,12 @@ const needsClub = computed(() =>
   </div>
 
   <template v-else>
-    <!-- Public routes (Login, Explore) render full-screen -->
-    <RouterView v-if="route.meta.public" />
+    <!-- Public routes render full-screen; pad bottom for nav when logged in -->
+    <div v-if="route.meta.public" :class="user ? 'pb-28' : ''">
+      <RouterView />
+    </div>
 
+    <!-- Authenticated shell (top bar + content wrapper) -->
     <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-4">
 
       <!-- ── PWA Install banner ── -->
@@ -165,26 +168,28 @@ const needsClub = computed(() =>
 
       <RouterView v-else />
 
-      <!-- ── Bottom nav ── -->
-      <nav class="fixed inset-x-0 bottom-0 z-20 safe-area-pb"
-        style="background:rgba(5,13,26,.96); border-top:1px solid rgba(255,255,255,.07); backdrop-filter:blur(20px);">
-        <div class="absolute top-0 left-0 right-0 h-px"
-          style="background:linear-gradient(90deg,transparent,rgba(0,229,255,.3) 40%,rgba(168,85,247,.3) 60%,transparent);" />
-        <div class="mx-auto flex max-w-2xl">
-          <RouterLink v-for="n in nav" :key="n.to" :to="n.to"
-            class="relative flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px]
-                   text-slate-500 transition-all duration-200 font-medium"
-            active-class="!text-cyan-400">
-            <span v-if="n.badge"
-              class="badge-dot absolute top-1.5 right-[22%] w-3.5 h-3.5 text-[8px]">
-              {{ n.badge > 9 ? '9+' : n.badge }}
-            </span>
-            <span class="text-lg leading-none">{{ n.icon }}</span>
-            <span>{{ n.label }}</span>
-          </RouterLink>
-        </div>
-      </nav>
-
     </div>
+
+    <!-- ── Bottom nav: all logged-in users on every page ── -->
+    <nav v-if="user && route.path !== '/login'"
+      class="fixed inset-x-0 bottom-0 z-20 safe-area-pb"
+      style="background:rgba(5,13,26,.96); border-top:1px solid rgba(255,255,255,.07); backdrop-filter:blur(20px);">
+      <div class="absolute top-0 left-0 right-0 h-px"
+        style="background:linear-gradient(90deg,transparent,rgba(0,229,255,.3) 40%,rgba(168,85,247,.3) 60%,transparent);" />
+      <div class="mx-auto flex max-w-2xl">
+        <RouterLink v-for="n in nav" :key="n.to" :to="n.to"
+          class="relative flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px]
+                 text-slate-500 transition-all duration-200 font-medium"
+          exact-active-class="!text-cyan-400">
+          <span v-if="n.badge"
+            class="badge-dot absolute top-1.5 right-[22%] w-3.5 h-3.5 text-[8px]">
+            {{ n.badge > 9 ? '9+' : n.badge }}
+          </span>
+          <span class="text-lg leading-none">{{ n.icon }}</span>
+          <span>{{ n.label }}</span>
+        </RouterLink>
+      </div>
+    </nav>
+
   </template>
 </template>
