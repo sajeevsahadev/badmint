@@ -51,9 +51,12 @@ async function save() {
   if (!form.value.nickname.trim()) { error.value = 'Nickname is required.'; return }
   saving.value = true; error.value = null; saved.value = false
   const { error: err } = await supabase.rpc('upsert_profile', {
-    p_nickname: form.value.nickname.trim(),
-    p_phone:    form.value.phone.trim() || null,
-    p_bio:      form.value.bio.trim()   || null,
+    p_nickname:  form.value.nickname.trim(),
+    p_full_name: null,
+    p_phone:     form.value.phone.trim() || null,
+    p_bio:       form.value.bio.trim()   || null,
+    p_emirate:   null,
+    p_country:   null,
   })
   saving.value = false
   if (err) { error.value = err.message }

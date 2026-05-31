@@ -7,10 +7,10 @@ import PageHeader from '../components/PageHeader.vue'
 import InfoTip from '../components/InfoTip.vue'
 
 const { currentClub } = useClub()
-const router   = useRouter()
-const board    = ref([])
-const bestPair = ref(null)
-const loading  = ref(true)
+const router     = useRouter()
+const board      = ref([])
+const bestPairs  = ref([])
+const loading    = ref(true)
 
 async function load() {
   if (!currentClub.value) return
@@ -18,11 +18,12 @@ async function load() {
   const cid = currentClub.value.club_id
   const [{ data: lb }, { data: bp }] = await Promise.all([
     supabase.from('v_leaderboard').select('*').eq('club_id', cid).order('club_rank'),
-    supabase.from('v_best_pairs').select('*').eq('club_id', cid).limit(1),
+    supabase.from('v_best_pairs').select('*').eq('club_id', cid)
+      .order('win_pct', { ascending: false }).order('games', { ascending: false }).limit(3),
   ])
-  board.value    = lb ?? []
-  bestPair.value = bp?.[0] ?? null
-  loading.value  = false
+  board.value     = lb ?? []
+  bestPairs.value = bp ?? []
+  loading.value   = false
 }
 onMounted(load)
 watch(currentClub, load)
@@ -91,17 +92,21 @@ const trendColor = elo =>
       </div>
     </div>
 
-    <!-- Best pair -->
-    <div v-if="bestPair" class="card-neon mb-4 p-4 fade-up">
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="label mb-0.5">🏅 Best Pair</div>
-          <div class="font-bold text-slate-100">{{ bestPair.p1_name }} + {{ bestPair.p2_name }}</div>
-          <div class="text-xs text-slate-400 mt-0.5">{{ bestPair.games }} games together</div>
+    <!-- Best pairs (top 3) -->
+    <div v-if="bestPairs.length" class="card overflow-hidden mb-4 fade-up">
+      <div class="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+        <span class="text-xs font-bold text-slate-200">🏅 Best Pairs</span>
+        <InfoTip text="Ranked by win % across all doubles matches played together (min 1 game). Two players share a side in a match = 1 game together." />
+      </div>
+      <div v-for="(pair, i) in bestPairs" :key="pair.p1 + pair.p2"
+        class="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0">
+        <span class="text-lg shrink-0 w-6 text-center">{{ ['🥇','🥈','🥉'][i] }}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-bold text-slate-100 truncate">{{ pair.p1_name }} + {{ pair.p2_name }}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">{{ pair.games }} games · {{ pair.wins }}W / {{ pair.games - pair.wins }}L</div>
         </div>
-        <div class="text-right">
-          <div class="text-neon text-2xl font-extrabold">{{ bestPair.win_pct }}%</div>
-          <div class="text-xs text-slate-500">{{ bestPair.wins }}W / {{ bestPair.games - bestPair.wins }}L</div>
+        <div class="text-right shrink-0">
+          <div class="text-lg font-extrabold text-neon">{{ pair.win_pct }}%</div>
         </div>
       </div>
     </div>
@@ -115,25 +120,29 @@ const trendColor = elo =>
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-white/[0.05]">
-            <th class="px-4 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-500">#</th>
-            <th class="px-4 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-500">Player</th>
-            <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Pts</th>
-            <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Elo</th>
-            <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">W%</th>
-            <th class="px-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Days</th>
+            <th class="pl-4 pr-2 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-500">#</th>
+            <th class="pl-2 pr-3 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-500">Player</th>
+            <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Pts</th>
+            <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Elo</th>
+            <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">W%</th>
+            <th class="pl-2 pr-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-500">Days</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(p, i) in board" :key="p.id"
-            class="border-b border-white/[0.04] transition-colors duration-150 cursor-pointer"
-            :class="i === 0 ? 'bg-amber-500/[0.04] hover:bg-amber-500/[0.07]' : 'hover:bg-white/[0.02]'"
-            @click="router.push('/player/' + p.id)">
-            <td class="px-4 py-3 font-bold text-slate-300">{{ medals[i] ?? (i + 1) }}</td>
-            <td class="px-4 py-3 font-semibold text-slate-100 hover:text-neon transition-colors">{{ p.display_name }}</td>
-            <td class="px-4 py-3 text-right font-extrabold text-neon">{{ p.composite }}</td>
-            <td class="px-4 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
-            <td class="px-4 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
-            <td class="px-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
+            class="border-b border-white/[0.04] transition-colors duration-150"
+            :class="i === 0 ? 'bg-amber-500/[0.04]' : 'hover:bg-white/[0.02]'">
+            <td class="pl-4 pr-2 py-3 font-bold text-slate-300">{{ medals[i] ?? (i + 1) }}</td>
+            <td class="pl-2 pr-3 py-3">
+              <RouterLink :to="'/player/' + p.id"
+                class="font-semibold text-slate-100 hover:text-neon transition-colors">
+                {{ p.display_name }}
+              </RouterLink>
+            </td>
+            <td class="px-2 py-3 text-right font-extrabold text-neon text-xs">{{ p.composite }}</td>
+            <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
+            <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
+            <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
           </tr>
         </tbody>
       </table>
