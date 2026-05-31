@@ -25,17 +25,24 @@ router.beforeEach(async (to) => {
   const { data } = await supabase.auth.getSession()
   const loggedIn = !!data.session
 
-  // After OAuth login, honour any stored redirect destination
-  if (loggedIn) {
+  // After Google OAuth the browser always lands on '/'.
+  // Only check the stored redirect at that moment — NOT on every navigation,
+  // which would intercept user-initiated button clicks.
+  if (loggedIn && to.path === '/') {
     const next = sessionStorage.getItem(REDIRECT_KEY)
-    if (next && next !== to.fullPath) {
+    if (next) {
       sessionStorage.removeItem(REDIRECT_KEY)
       return next
     }
   }
 
   if (!to.meta.public && !loggedIn) {
-    sessionStorage.setItem(REDIRECT_KEY, to.fullPath)
+    // Only persist the destination for paths that carry meaningful state
+    // (invite links, player profile deep-links). Regular paths like /dashboard
+    // don't need to be returned to after login.
+    if (to.path === '/join' || to.path.startsWith('/player')) {
+      sessionStorage.setItem(REDIRECT_KEY, to.fullPath)
+    }
     return '/login'
   }
 
