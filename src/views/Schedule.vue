@@ -2,10 +2,12 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
+import { useAuth } from '../composables/useAuth'
 import { usePushNotifications } from '../composables/usePushNotifications'
 import PageHeader from '../components/PageHeader.vue'
 
 const { currentClub } = useClub()
+const { user } = useAuth()
 const { isSupported: pushSupported, subscribe: subscribePush, isSubscribed, getPermission } = usePushNotifications()
 
 // ── Calendar state ──
@@ -201,21 +203,41 @@ async function selectDate(dateStr) {
   }
 }
 
-// ── Create / update schedule ──
+// ── Create / update schedule (direct table ops — no RPC) ──
 async function createSchedule(facilityId, facilityName) {
-  const { data: id, error } = await supabase.rpc('create_schedule', {
-    p_club_id:       currentClub.value.club_id,
-    p_date:          selectedDate.value,
-    p_facility_id:   facilityId ?? null,
-    p_facility_name: facilityName ?? null
-  })
+  const existing = selectedSchedule.value
+  let schedId = existing?.id
+  let error
+
+  if (schedId) {
+    // Update existing row's venue only
+    const res = await supabase
+      .from('club_schedule')
+      .update({ facility_id: facilityId ?? null, facility_name: facilityName ?? null })
+      .eq('id', schedId)
+    error = res.error
+  } else {
+    // Insert new schedule row
+    const res = await supabase
+      .from('club_schedule')
+      .insert({
+        club_id:        currentClub.value.club_id,
+        scheduled_date: selectedDate.value,
+        facility_id:    facilityId ?? null,
+        facility_name:  facilityName ?? null,
+        created_by:     user.value.id
+      })
+      .select('id')
+      .single()
+    error   = res.error
+    schedId = res.data?.id
+  }
+
   if (error) { alert(error.message); return }
   showFacilityPicker.value = false
   await loadMonthSchedules()
   await loadClubFacilityIds()
-  if (scheduleMap.value[selectedDate.value]) {
-    await loadVotesAndAttendees(id)
-  }
+  if (schedId) await loadVotesAndAttendees(schedId)
 }
 
 async function pickFacility(fac) {
