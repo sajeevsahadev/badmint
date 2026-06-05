@@ -5,7 +5,9 @@ const routes = [
   { path: '/login',     component: () => import('../views/Login.vue'),        meta: { public: true } },
   { path: '/explore',   component: () => import('../views/Explore.vue'),      meta: { public: true } },
   { path: '/',          component: () => import('../views/Home.vue'),          meta: { public: true } },
+  { path: '/poll/:id',  component: () => import('../views/PollView.vue'),      meta: { public: true } },
   { path: '/dashboard', component: () => import('../views/Dashboard.vue') },
+  { path: '/schedule',  component: () => import('../views/Schedule.vue') },
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
   { path: '/players',   component: () => import('../views/Players.vue') },
@@ -42,7 +44,7 @@ router.beforeEach(async (to) => {
     // Only persist the destination for paths that carry meaningful state
     // (invite links, player profile deep-links). Regular paths like /dashboard
     // don't need to be returned to after login.
-    if (to.path === '/join' || to.path.startsWith('/player')) {
+    if (to.path === '/join' || to.path.startsWith('/player') || to.path.startsWith('/poll')) {
       sessionStorage.setItem(REDIRECT_KEY, to.fullPath)
     }
     return '/login'

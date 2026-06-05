@@ -58,7 +58,7 @@ function onSwitch(e) {
 
 // Nav tabs — shown for all logged-in users on every page
 const nav = computed(() => [
-  { to: '/',          label: 'Home',     icon: '🏠' },
+  { to: '/schedule',  label: 'Schedule', icon: '📅' },
   { to: '/dashboard', label: 'Rankings', icon: '🏆' },
   { to: '/matches',   label: 'Matches',  icon: '📋' },
   { to: '/players',   label: 'Players',  icon: '👥' },
@@ -66,7 +66,7 @@ const nav = computed(() => [
 ])
 
 // Routes that don't need a club selected
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile']
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule']
 const needsClub = computed(() =>
   !currentClub.value && !clubFreeRoutes.includes(route.path)
 )

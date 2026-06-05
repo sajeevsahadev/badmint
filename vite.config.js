@@ -7,7 +7,10 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
+      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'sw-push.js'],
+      workbox: {
+        importScripts: ['sw-push.js']
+      },
       manifest: {
         name: 'Badmint – UAE Badminton Rankings',
         short_name: 'Badmint',

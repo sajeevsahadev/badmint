@@ -1,0 +1,672 @@
+<script setup>
+import { ref, computed, watch, onMounted } from 'vue'
+import { supabase } from '../lib/supabase'
+import { useClub } from '../composables/useClub'
+import { usePushNotifications } from '../composables/usePushNotifications'
+import PageHeader from '../components/PageHeader.vue'
+
+const { currentClub } = useClub()
+const { isSupported: pushSupported, subscribe: subscribePush, isSubscribed, getPermission } = usePushNotifications()
+
+// ── Calendar state ──
+const today    = new Date()
+const todayStr = fmtDate(today)
+const viewYear  = ref(today.getFullYear())
+const viewMonth = ref(today.getMonth() + 1)
+const selectedDate = ref(null)
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+// ── Schedule data ──
+const monthSchedules  = ref([])
+const loadingSchedules = ref(false)
+
+const scheduleMap = computed(() => {
+  const m = {}
+  monthSchedules.value.forEach(s => { m[s.scheduled_date] = s })
+  return m
+})
+
+const selectedSchedule = computed(() => selectedDate.value ? scheduleMap.value[selectedDate.value] : null)
+
+// ── Calendar grid ──
+const calendarDays = computed(() => {
+  const y = viewYear.value
+  const mo = viewMonth.value
+  const firstDow  = new Date(y, mo - 1, 1).getDay()
+  const lastDay   = new Date(y, mo, 0).getDate()
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+    cells.push({ dateStr: ds, day: d, isToday: ds === todayStr })
+  }
+  return cells
+})
+
+const selectedDateLabel = computed(() => {
+  if (!selectedDate.value) return ''
+  const [y, m, d] = selectedDate.value.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return `${MONTHS[m-1].slice(0,3)} ${d} ${DAYS[dt.getDay()]}`
+})
+
+const scheduleHeader = computed(() => {
+  if (!selectedSchedule.value) return ''
+  const venue = selectedSchedule.value.fac_name || selectedSchedule.value.facility_name
+  return venue ? `Match on ${selectedDateLabel.value} at ${venue}` : `Match on ${selectedDateLabel.value}`
+})
+
+// ── Facility picker ──
+const facilities      = ref([])
+const clubFacilityIds = ref(new Set())
+const facilitySearch  = ref('')
+const showFacilityPicker  = ref(false)
+const showCreateFacility  = ref(false)
+const newFacName          = ref('')
+const loadingFacilities   = ref(false)
+
+const filteredFacilities = computed(() => {
+  const q = facilitySearch.value.trim().toLowerCase()
+  let list = facilities.value
+  if (q) list = list.filter(f => f.name.toLowerCase().includes(q) || (f.address || '').toLowerCase().includes(q))
+  return [...list].sort((a, b) => {
+    const au = clubFacilityIds.value.has(a.id) ? 1 : 0
+    const bu = clubFacilityIds.value.has(b.id) ? 1 : 0
+    if (bu !== au) return bu - au
+    return a.name.localeCompare(b.name)
+  })
+})
+
+const clubFacilities  = computed(() => filteredFacilities.value.filter(f => clubFacilityIds.value.has(f.id)))
+const otherFacilities = computed(() => filteredFacilities.value.filter(f => !clubFacilityIds.value.has(f.id)))
+
+// ── Poll / votes ──
+const votes       = ref([])
+const votesFilter = ref('all')
+const showVotesModal = ref(false)
+const voting      = ref(null)
+
+const filteredVotes = computed(() => {
+  if (votesFilter.value === 'all') return votes.value
+  return votes.value.filter(v => v.vote === votesFilter.value)
+})
+
+// ── Attendees ──
+const allPlayers     = ref([])
+const attendeeIds    = ref(new Set())
+const savingAttendees = ref(false)
+const attendeesDirty  = ref(false)
+
+// ── Invite ──
+const showInvitePanel = ref(false)
+const copied          = ref(false)
+const shareUrl = computed(() =>
+  selectedSchedule.value ? `${window.location.origin}/poll/${selectedSchedule.value.id}` : ''
+)
+
+// ── Push subscription ──
+const pushSubscribed   = ref(false)
+const pushPermission   = ref('default')
+const subscribingPush  = ref(false)
+
+// ── Load ──
+async function loadMonthSchedules() {
+  if (!currentClub.value) return
+  loadingSchedules.value = true
+  const { data } = await supabase.rpc('get_club_schedule', {
+    p_club_id: currentClub.value.club_id,
+    p_year:    viewYear.value,
+    p_month:   viewMonth.value
+  })
+  monthSchedules.value = data ?? []
+  loadingSchedules.value = false
+}
+
+async function loadClubFacilityIds() {
+  if (!currentClub.value) return
+  const { data } = await supabase
+    .from('club_schedule')
+    .select('facility_id')
+    .eq('club_id', currentClub.value.club_id)
+    .not('facility_id', 'is', null)
+  clubFacilityIds.value = new Set((data ?? []).map(r => r.facility_id))
+}
+
+async function openFacilityPicker() {
+  showFacilityPicker.value = true
+  facilitySearch.value = ''
+  showCreateFacility.value = false
+  if (facilities.value.length > 0) return
+  loadingFacilities.value = true
+  const { data } = await supabase.rpc('get_facilities')
+  facilities.value = data ?? []
+  loadingFacilities.value = false
+}
+
+async function loadVotesAndAttendees(scheduleId) {
+  const [vRes, aRes, pRes] = await Promise.all([
+    supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId }),
+    supabase.rpc('get_schedule_attendees', { p_schedule_id: scheduleId }),
+    supabase.from('players').select('id, display_name, elo')
+      .eq('club_id', currentClub.value.club_id).eq('is_active', true).order('display_name')
+  ])
+  votes.value        = vRes.data ?? []
+  attendeeIds.value  = new Set((aRes.data ?? []).map(a => a.player_id))
+  allPlayers.value   = pRes.data ?? []
+  attendeesDirty.value = false
+}
+
+// ── Calendar interaction ──
+async function selectDate(dateStr) {
+  if (selectedDate.value === dateStr) { selectedDate.value = null; return }
+  selectedDate.value = dateStr
+  showInvitePanel.value = false
+  votes.value = []
+  attendeeIds.value = new Set()
+  if (scheduleMap.value[dateStr]) {
+    await loadVotesAndAttendees(scheduleMap.value[dateStr].id)
+  }
+}
+
+// ── Create / update schedule ──
+async function createSchedule(facilityId, facilityName) {
+  const { data: id, error } = await supabase.rpc('create_schedule', {
+    p_club_id:       currentClub.value.club_id,
+    p_date:          selectedDate.value,
+    p_facility_id:   facilityId ?? null,
+    p_facility_name: facilityName ?? null
+  })
+  if (error) { alert(error.message); return }
+  showFacilityPicker.value = false
+  await loadMonthSchedules()
+  await loadClubFacilityIds()
+  if (scheduleMap.value[selectedDate.value]) {
+    await loadVotesAndAttendees(id)
+  }
+}
+
+async function pickFacility(fac) {
+  await createSchedule(fac.id, null)
+}
+
+async function useCustomVenue() {
+  const name = newFacName.value.trim()
+  if (!name) return
+  await createSchedule(null, name)
+  newFacName.value = ''
+  showCreateFacility.value = false
+}
+
+// ── Voting ──
+async function castVote(option) {
+  if (!selectedSchedule.value) return
+  voting.value = option
+  await supabase.rpc('vote_schedule', {
+    p_schedule_id: selectedSchedule.value.id,
+    p_vote:        option
+  })
+  voting.value = null
+  await loadMonthSchedules()
+}
+
+// ── View votes modal ──
+async function openVotesModal() {
+  votesFilter.value = 'all'
+  const { data } = await supabase.rpc('get_schedule_votes', { p_schedule_id: selectedSchedule.value.id })
+  votes.value = data ?? []
+  showVotesModal.value = true
+}
+
+// ── Attendees ──
+function toggleAttendee(playerId) {
+  const next = new Set(attendeeIds.value)
+  next.has(playerId) ? next.delete(playerId) : next.add(playerId)
+  attendeeIds.value = next
+  attendeesDirty.value = true
+}
+
+async function saveAttendees() {
+  if (!selectedSchedule.value) return
+  savingAttendees.value = true
+  await supabase.rpc('set_schedule_attendees', {
+    p_schedule_id: selectedSchedule.value.id,
+    p_player_ids:  [...attendeeIds.value]
+  })
+  savingAttendees.value = false
+  attendeesDirty.value = false
+}
+
+// ── Share ──
+async function copyLink() {
+  await navigator.clipboard.writeText(shareUrl.value)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2500)
+}
+
+function shareWhatsApp() {
+  const msg = encodeURIComponent(`Join our match! ${scheduleHeader.value}\nVote here: ${shareUrl.value}`)
+  window.open(`https://wa.me/?text=${msg}`, '_blank')
+}
+
+// ── Push notifications ──
+async function checkPushStatus() {
+  if (!pushSupported) return
+  pushPermission.value = await getPermission()
+  pushSubscribed.value = await isSubscribed()
+}
+
+async function handleSubscribePush() {
+  subscribingPush.value = true
+  try {
+    await subscribePush(currentClub.value.club_id)
+    pushSubscribed.value = true
+    pushPermission.value = 'granted'
+  } catch (e) {
+    alert(e.message)
+  }
+  subscribingPush.value = false
+}
+
+// ── Month nav ──
+function prevMonth() {
+  if (viewMonth.value === 1) { viewMonth.value = 12; viewYear.value-- }
+  else viewMonth.value--
+  selectedDate.value = null
+  loadMonthSchedules()
+}
+
+function nextMonth() {
+  if (viewMonth.value === 12) { viewMonth.value = 1; viewYear.value++ }
+  else viewMonth.value++
+  selectedDate.value = null
+  loadMonthSchedules()
+}
+
+// ── Vote timestamp display ──
+function timeAgo(ts) {
+  const d    = new Date(ts)
+  const diff = Date.now() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  const hrs  = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (mins < 1)  return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  if (hrs  < 24) return `${hrs}h ago`
+  if (days === 1) return 'yesterday'
+  if (days < 7)  return d.toLocaleDateString('en-US', { weekday: 'short' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ── dot colour for calendar cell ──
+function dotClass(schedule) {
+  if (!schedule) return ''
+  if (schedule.status === 'cancelled') return 'bg-slate-600'
+  if (schedule.my_vote === 'attending') return 'bg-emerald-400'
+  if (schedule.my_vote === 'not_attending') return 'bg-rose-400'
+  return 'bg-cyan-400'
+}
+
+// ── Init ──
+onMounted(async () => {
+  await loadMonthSchedules()
+  await loadClubFacilityIds()
+  await checkPushStatus()
+})
+
+watch(currentClub, async () => {
+  selectedDate.value = null
+  votes.value = []
+  attendeeIds.value = new Set()
+  await loadMonthSchedules()
+  await loadClubFacilityIds()
+})
+</script>
+
+<template>
+  <div v-if="!currentClub" class="card p-8 text-center">
+    <div class="text-3xl mb-3">📅</div>
+    <p class="text-sm text-slate-400">Select a club to view the playing schedule.</p>
+  </div>
+
+  <template v-else>
+    <PageHeader icon="📅" title="Schedule" subtitle="Plan match days, run polls, track who's coming">
+      <template #help>
+        <div class="text-xs space-y-1.5">
+          <p><strong class="text-white">Tap any date</strong> to plan a match or see the existing schedule.</p>
+          <p><strong class="text-white">Poll</strong> — Let your team vote Attending / Not Attending before the day.</p>
+          <p><strong class="text-white">Invite</strong> — Copy a shareable link or send via WhatsApp. Club members can vote directly from the link.</p>
+          <p><strong class="text-white">Attendees</strong> — On match day, tick who actually showed up. These players will appear first when recording a match.</p>
+          <p><strong class="text-white">Notifications</strong> — Enable push so the app alerts you when a new match day is posted.</p>
+        </div>
+      </template>
+    </PageHeader>
+
+    <!-- Push notification subscribe banner -->
+    <div v-if="pushSupported && !pushSubscribed && pushPermission !== 'denied'"
+      class="card mb-4 px-4 py-3 flex items-center gap-3">
+      <span class="text-xl shrink-0">🔔</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-bold text-slate-200">Get match alerts</div>
+        <div class="text-[10px] text-slate-500">Push notification when your manager plans a new match day</div>
+      </div>
+      <button class="btn-ghost text-xs px-3 py-1.5 shrink-0" :disabled="subscribingPush"
+        @click="handleSubscribePush">
+        {{ subscribingPush ? '…' : 'Enable' }}
+      </button>
+    </div>
+
+    <!-- Month nav -->
+    <div class="flex items-center justify-between mb-3">
+      <button class="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:border-white/30 transition"
+        @click="prevMonth">‹</button>
+      <div class="font-display font-bold tracking-tight text-slate-200">
+        {{ MONTHS[viewMonth - 1] }} {{ viewYear }}
+        <span v-if="loadingSchedules" class="text-xs text-slate-600 ml-2 animate-pulse">loading…</span>
+      </div>
+      <button class="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:border-white/30 transition"
+        @click="nextMonth">›</button>
+    </div>
+
+    <!-- Day headers -->
+    <div class="grid grid-cols-7 gap-1 mb-1 text-center">
+      <span v-for="d in ['Su','Mo','Tu','We','Th','Fr','Sa']" :key="d"
+        class="text-[10px] text-slate-600 font-medium">{{ d }}</span>
+    </div>
+
+    <!-- Calendar grid -->
+    <div class="grid grid-cols-7 gap-1 mb-4">
+      <div v-for="(cell, i) in calendarDays" :key="i"
+        class="aspect-square"
+        :class="!cell ? 'pointer-events-none' : ''">
+        <button v-if="cell"
+          class="w-full h-full flex flex-col items-center justify-center rounded-xl text-sm font-medium transition relative"
+          :class="[
+            cell.dateStr === selectedDate
+              ? 'bg-cyan-500/20 border border-cyan-500/60 text-cyan-300'
+              : cell.isToday
+                ? 'border border-white/25 text-white font-bold'
+                : 'border border-transparent text-slate-400 hover:border-white/15',
+            scheduleMap[cell.dateStr] ? 'text-white' : ''
+          ]"
+          @click="selectDate(cell.dateStr)">
+          <span class="leading-none">{{ cell.day }}</span>
+          <span v-if="scheduleMap[cell.dateStr]"
+            class="w-1.5 h-1.5 rounded-full mt-0.5"
+            :class="dotClass(scheduleMap[cell.dateStr])" />
+        </button>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex gap-4 text-[10px] text-slate-600 mb-5">
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>You're in</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-400"></span>Can't make it</span>
+      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-400"></span>Planned</span>
+    </div>
+
+    <!-- Selected day panel -->
+    <div v-if="selectedDate">
+
+      <!-- ── No schedule: plan prompt ── -->
+      <div v-if="!selectedSchedule" class="card p-5 fade-up text-center">
+        <div class="text-3xl mb-2">🏸</div>
+        <div class="font-semibold text-slate-200 mb-1">Plan a match on {{ selectedDateLabel }}</div>
+        <div class="text-xs text-slate-500 mb-4">Pick a venue to create this match day and open the poll.</div>
+        <button class="btn-primary w-full py-3" @click="openFacilityPicker">📍 Set Venue &amp; Schedule</button>
+      </div>
+
+      <!-- ── Schedule exists ── -->
+      <div v-else class="space-y-4 fade-up">
+
+        <!-- Header -->
+        <div class="card-neon p-4">
+          <div class="font-display text-lg font-bold gradient-text leading-snug mb-1">{{ scheduleHeader }}</div>
+          <div v-if="selectedSchedule.status === 'cancelled'"
+            class="inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
+
+          <div class="flex gap-2 mt-3">
+            <button class="btn-primary flex-1 py-2 text-sm" @click="showInvitePanel = !showInvitePanel">
+              {{ showInvitePanel ? '✕ Close' : '📢 Invite' }}
+            </button>
+            <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
+          </div>
+
+          <!-- Invite / share panel -->
+          <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-white/10 space-y-2">
+            <div class="text-xs text-slate-400">Share poll link with your group:</div>
+            <div class="flex gap-2">
+              <input :value="shareUrl" readonly
+                class="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-mono text-slate-400 outline-none truncate" />
+              <button class="btn-ghost text-xs px-3 shrink-0" @click="copyLink">
+                {{ copied ? '✓ Copied' : 'Copy' }}
+              </button>
+            </div>
+            <button class="w-full rounded-xl py-2.5 text-sm font-medium transition"
+              style="background:rgba(37,211,102,.15); border:1px solid rgba(37,211,102,.3); color:#25d366"
+              @click="shareWhatsApp">
+              💬 Share via WhatsApp
+            </button>
+          </div>
+        </div>
+
+        <!-- Poll -->
+        <div class="card p-4">
+          <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Match Poll</div>
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <button
+              @click="castVote('attending')"
+              :disabled="voting !== null"
+              class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
+              :class="selectedSchedule.my_vote === 'attending'
+                ? 'bg-emerald-500/15 border-emerald-500/50'
+                : 'border-white/10 hover:border-white/25'">
+              <span class="text-2xl">✅</span>
+              <span class="text-xs font-semibold text-slate-200">Attending</span>
+              <span class="text-2xl font-bold text-emerald-400">{{ selectedSchedule.attending_count }}</span>
+            </button>
+            <button
+              @click="castVote('not_attending')"
+              :disabled="voting !== null"
+              class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
+              :class="selectedSchedule.my_vote === 'not_attending'
+                ? 'bg-rose-500/15 border-rose-500/50'
+                : 'border-white/10 hover:border-white/25'">
+              <span class="text-2xl">❌</span>
+              <span class="text-xs font-semibold text-slate-200">Not Attending</span>
+              <span class="text-2xl font-bold text-rose-400">{{ selectedSchedule.not_attending_count }}</span>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between text-xs">
+            <span v-if="selectedSchedule.my_vote" :class="selectedSchedule.my_vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
+              Your vote: {{ selectedSchedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
+            </span>
+            <span v-else class="text-slate-600">Tap to cast your vote</span>
+            <button class="text-slate-500 underline" @click="openVotesModal">View Votes</button>
+          </div>
+        </div>
+
+        <!-- Attendees -->
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="text-[10px] uppercase tracking-widest text-slate-500">Actual Attendees</div>
+              <div class="text-[10px] text-slate-600 mt-0.5">Who actually showed up — used in Add Match player list</div>
+            </div>
+            <span class="badge-dot text-[9px] px-2 py-0.5 rounded-full" style="background:rgba(0,229,255,.1);color:#00e5ff">
+              {{ attendeeIds.size }}/{{ allPlayers.length }}
+            </span>
+          </div>
+
+          <div v-if="allPlayers.length === 0" class="text-xs text-slate-600 italic py-2">
+            No active players in roster yet.
+          </div>
+
+          <div class="space-y-1 mb-3">
+            <label v-for="p in allPlayers" :key="p.id"
+              class="flex items-center gap-3 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-white/5 transition">
+              <div class="w-5 h-5 rounded border shrink-0 flex items-center justify-center transition"
+                :class="attendeeIds.has(p.id) ? 'bg-emerald-500 border-emerald-500' : 'border-white/20'"
+                @click="toggleAttendee(p.id)">
+                <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-slate-950 font-bold">✓</span>
+              </div>
+              <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-white' : 'text-slate-400'"
+                @click="toggleAttendee(p.id)">
+                {{ p.display_name }}
+              </span>
+              <span class="text-[10px] text-slate-700">{{ Math.round(p.elo) }}</span>
+            </label>
+          </div>
+
+          <button class="btn-success w-full py-2.5 text-sm"
+            :disabled="!attendeesDirty || savingAttendees"
+            @click="saveAttendees">
+            {{ savingAttendees ? 'Saving…' : `✓ Save Attendees (${attendeeIds.size})` }}
+          </button>
+          <div v-if="!attendeesDirty && attendeeIds.size > 0" class="text-[10px] text-slate-600 text-center mt-1.5">
+            Saved · Add Match will show only these {{ attendeeIds.size }} players
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div v-else class="text-center text-xs text-slate-600 py-2">Tap a date to plan or view a match day</div>
+
+    <!-- ── Facility picker bottom sheet ── -->
+    <Teleport to="body">
+      <div v-if="showFacilityPicker" class="fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-black/70" @click="showFacilityPicker = false" />
+        <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
+          style="background:#0a1628; max-height:82vh; border-top:1px solid rgba(255,255,255,.1)">
+
+          <!-- Sticky header -->
+          <div class="sticky top-0 px-4 pt-3 pb-3" style="background:#0a1628">
+            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-semibold">Select Venue — {{ selectedDateLabel }}</span>
+              <button @click="showFacilityPicker = false" class="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <input v-model="facilitySearch" placeholder="Search venues…"
+              class="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm outline-none focus:border-cyan-500/40 transition" />
+          </div>
+
+          <!-- Scrollable list -->
+          <div class="overflow-y-auto px-4 pb-8" style="max-height: calc(82vh - 130px)">
+            <div v-if="loadingFacilities" class="text-center text-sm text-slate-500 py-6 animate-pulse">
+              Loading venues…
+            </div>
+
+            <template v-if="!loadingFacilities">
+              <!-- Club's facilities first -->
+              <template v-if="!facilitySearch && clubFacilities.length">
+                <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2 mt-1">Your Club's Venues</div>
+                <div v-for="f in clubFacilities" :key="f.id"
+                  class="card px-3 py-3 mb-1.5 cursor-pointer hover:border-cyan-500/40 active:opacity-70 transition"
+                  @click="pickFacility(f)">
+                  <div class="text-sm font-medium">{{ f.name }}</div>
+                  <div v-if="f.address" class="text-[11px] text-slate-500 mt-0.5">{{ f.address }}</div>
+                </div>
+                <div v-if="otherFacilities.length" class="text-[10px] uppercase tracking-widest text-slate-600 mb-2 mt-4">All Venues</div>
+              </template>
+
+              <!-- Other / all facilities -->
+              <div v-for="f in (facilitySearch ? filteredFacilities : otherFacilities)" :key="f.id"
+                class="card px-3 py-3 mb-1.5 cursor-pointer hover:border-cyan-500/40 active:opacity-70 transition"
+                @click="pickFacility(f)">
+                <div class="text-sm font-medium">{{ f.name }}</div>
+                <div v-if="f.address" class="text-[11px] text-slate-500 mt-0.5">{{ f.address }}</div>
+              </div>
+
+              <div v-if="filteredFacilities.length === 0" class="text-sm text-slate-500 text-center py-4">
+                No venues found for "{{ facilitySearch }}"
+              </div>
+
+              <!-- Custom venue -->
+              <div class="mt-4 pt-4 border-t border-white/10">
+                <div class="text-xs text-slate-500 mb-2">Venue not listed?</div>
+                <div v-if="!showCreateFacility">
+                  <button class="btn-ghost w-full text-sm py-2.5" @click="showCreateFacility = true">
+                    ➕ Use a custom venue name
+                  </button>
+                </div>
+                <div v-else class="space-y-2">
+                  <input v-model="newFacName" placeholder="e.g. Al Nasr Sports Club, Dubai"
+                    class="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm outline-none focus:border-cyan-500/40" />
+                  <div class="flex gap-2">
+                    <button class="btn-primary flex-1 py-2 text-sm"
+                      :disabled="!newFacName.trim()"
+                      @click="useCustomVenue">Use This Venue</button>
+                    <button class="btn-ghost text-sm px-4"
+                      @click="showCreateFacility = false; newFacName = ''">Cancel</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- No venue / TBD -->
+              <button class="btn-ghost w-full text-sm text-slate-500 mt-2"
+                @click="createSchedule(null, null)">
+                📅 Schedule without venue (TBD)
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Votes modal ── -->
+    <Teleport to="body">
+      <div v-if="showVotesModal" class="fixed inset-0 z-50 flex items-end justify-center p-4 pb-8">
+        <div class="absolute inset-0 bg-black/70" @click="showVotesModal = false" />
+        <div class="relative w-full max-w-sm rounded-2xl overflow-hidden"
+          style="background:#0a1628; border:1px solid rgba(255,255,255,.1)">
+          <div class="p-4 pb-0">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <h3 class="font-semibold text-sm">Poll Votes</h3>
+                <div class="text-[11px] text-slate-500">{{ selectedDateLabel }}</div>
+              </div>
+              <button @click="showVotesModal = false" class="text-slate-400 hover:text-slate-200 text-lg">✕</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-1 mb-3">
+              <button v-for="t in ['all','attending','not_attending']" :key="t"
+                @click="votesFilter = t"
+                class="rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition"
+                :class="votesFilter === t ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'">
+                {{ t === 'all' ? `All (${votes.length})` : t === 'attending' ? `✅ ${votes.filter(v=>v.vote==='attending').length}` : `❌ ${votes.filter(v=>v.vote==='not_attending').length}` }}
+              </button>
+            </div>
+          </div>
+
+          <div class="px-4 pb-5 overflow-y-auto" style="max-height:320px">
+            <div v-if="filteredVotes.length === 0" class="text-sm text-slate-500 text-center py-6">
+              No votes yet.
+            </div>
+            <div v-for="v in filteredVotes" :key="v.user_id"
+              class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
+              <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-slate-950"
+                style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
+                {{ (v.display_name || '?')[0].toUpperCase() }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">{{ v.display_name || 'Unknown' }}</div>
+                <div class="text-[10px] text-slate-600">{{ timeAgo(v.voted_at) }}</div>
+              </div>
+              <span class="text-lg shrink-0" :class="v.vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
+                {{ v.vote === 'attending' ? '✅' : '❌' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+  </template>
+</template>

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
@@ -15,6 +16,38 @@ const matchName  = ref('')
 const msg        = ref(null)
 const saving     = ref(false)
 
+// Schedule-aware player filter
+const scheduleId         = ref(null)
+const scheduleAttendeeIds = ref(new Set())
+const showAllPlayers     = ref(false)
+
+const displayPlayers = computed(() => {
+  if (!scheduleId.value || showAllPlayers.value || scheduleAttendeeIds.value.size === 0) return players.value
+  return players.value.filter(p => scheduleAttendeeIds.value.has(p.id))
+})
+
+async function checkScheduleAttendees(date) {
+  scheduleId.value = null
+  scheduleAttendeeIds.value = new Set()
+  showAllPlayers.value = false
+  if (!currentClub.value || !date) return
+
+  const { data: sched } = await supabase
+    .from('club_schedule')
+    .select('id')
+    .eq('club_id', currentClub.value.club_id)
+    .eq('scheduled_date', date)
+    .maybeSingle()
+
+  if (!sched) return
+
+  const { data: atts } = await supabase.rpc('get_schedule_attendees', { p_schedule_id: sched.id })
+  if (atts?.length) {
+    scheduleId.value = sched.id
+    scheduleAttendeeIds.value = new Set(atts.map(a => a.player_id))
+  }
+}
+
 async function loadPlayers() {
   if (!currentClub.value) return
   const { data } = await supabase.from('players')
@@ -24,8 +57,10 @@ async function loadPlayers() {
     .order('display_name')
   players.value = data ?? []
 }
-onMounted(loadPlayers)
+
+onMounted(async () => { await loadPlayers(); await checkScheduleAttendees(playedOn.value) })
 watch(currentClub, () => { reset(); loadPlayers() })
+watch(playedOn, (date) => checkScheduleAttendees(date))
 
 const chosen = computed(() => new Set([...sideA.value, ...sideB.value]))
 
@@ -136,10 +171,24 @@ async function submit() {
       </div>
     </div>
 
+    <!-- Schedule attendees banner -->
+    <div v-if="scheduleId && scheduleAttendeeIds.size > 0"
+      class="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2 text-xs"
+      style="background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.2)">
+      <span class="text-neon shrink-0">📅</span>
+      <span class="flex-1 text-slate-300">
+        Showing <strong class="text-neon">{{ scheduleAttendeeIds.size }}</strong> attendees from today's schedule
+      </span>
+      <button class="text-slate-500 underline shrink-0"
+        @click="showAllPlayers = !showAllPlayers">
+        {{ showAllPlayers ? 'filter' : 'show all' }}
+      </button>
+    </div>
+
     <!-- Player list -->
     <div class="label mb-2">Tap to assign players to sides</div>
     <div class="space-y-1.5 mb-4">
-      <div v-for="p in players" :key="p.id"
+      <div v-for="p in displayPlayers" :key="p.id"
         class="card flex items-center justify-between px-3 py-2.5 transition"
         :class="chosen.has(p.id) ? 'bg-white/5' : ''">
         <div>
@@ -157,8 +206,12 @@ async function submit() {
             @click="toggle('B', p.id)">B</button>
         </div>
       </div>
-      <div v-if="!players.length" class="card p-4 text-center text-sm text-slate-500">
-        No players yet. Go to 👥 Players tab to add your team roster first.
+      <div v-if="!displayPlayers.length" class="card p-4 text-center text-sm text-slate-500">
+        <span v-if="scheduleId && !showAllPlayers">
+          No attendees saved for this schedule yet.
+          <RouterLink to="/schedule" class="text-neon underline ml-1">Set attendees →</RouterLink>
+        </span>
+        <span v-else>No players yet. Go to 👥 Players tab to add your team roster first.</span>
       </div>
     </div>
 

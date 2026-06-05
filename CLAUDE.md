@@ -1,7 +1,7 @@
 # CLAUDE.md — Badmint Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v8 and all UI work through session 4.
+> Last updated: June 2026 — reflects all migrations v1–v9 and all UI work through session 5.
 
 ---
 
@@ -74,7 +74,8 @@ badmint/
 │   ├── v5_schema.sql               # v5: app_sessions, activity_log, online status
 │   ├── v6_schema.sql               # v6: facilities, facility_schedule, facility_bookings
 │   ├── v7_schema.sql               # v7: leave_club() RPC
-│   └── v8_schema.sql               # v8: 10-club limit (request_join update) + revoke_join_request
+│   ├── v8_schema.sql               # v8: 10-club limit (request_join update) + revoke_join_request
+│   └── v9_schema.sql               # v9: playing schedule, poll, attendees, push_subscriptions
 └── src/
     ├── main.js
     ├── App.vue                     # Shell: top bar, nav, PWA banners, session tracking
@@ -94,6 +95,8 @@ badmint/
     └── views/
         ├── Home.vue                # Public landing: UAE flag hero, Top Clubs, Top Players, PWA install
         ├── Login.vue               # Google sign-in, feature grid
+        ├── Schedule.vue            # Calendar, match-day planning, poll voting, attendee tracking
+        ├── PollView.vue            # Public poll page — shareable /poll/:id URL (WhatsApp link target)
         ├── Dashboard.vue           # Leaderboard (clickable rows), podium, Best Pairs top-3, quick links
         ├── AddMatch.vue            # Pick 4 active players, assign sides, enter score + name
         ├── Matches.vue             # Match history (expand/rename/delete with confirmation modal)
@@ -149,7 +152,8 @@ badmint/
 6. `supabase/v5_schema.sql` — sessions, activity log, online status
 7. `supabase/v6_schema.sql` — facility master
 8. `supabase/v7_schema.sql` — leave_club RPC
-9. `supabase/v8_schema.sql` — 10-club limit + revoke_join_request RPC (**run this if not yet applied**)
+9. `supabase/v8_schema.sql` — 10-club limit + revoke_join_request RPC
+10. `supabase/v9_schema.sql` — Playing schedule, poll, attendees, push_subscriptions (**run this if not yet applied**)
 
 ---
 
@@ -585,7 +589,9 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - SEO: meta tags, OG, Twitter Card, JSON-LD, robots.txt, sitemap.xml
 - **PWA**: real shuttlecock brand icon (192 + 512 PNG), Android one-tap install, iOS guide bottom-sheet
 - **Home page** (`/`) public landing with UAE flag animation, top clubs/players, search, install section
-- **Bottom nav on all pages** for logged-in users (Home | Rankings | Matches | Players | Manage)
+- **Bottom nav on all pages** for logged-in users (Schedule | Rankings | Matches | Players | Manage)
+- **Playing Schedule** — Calendar view, plan match days, pick/create venue, team poll (Attending/Not Attending), actual attendee tracking, shareable poll URL, WhatsApp share
+- **Add Match** — Schedule-aware player filter: if schedule has saved attendees for the date, only those players appear (with override toggle)
 - K-factor locked at 24 for all clubs (cross-club Elo comparability)
 
 ### ❌ Not Yet Implemented
@@ -593,7 +599,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Admin role / Admin dashboard** — tables exist; UI pending
 - **Facility admin role** — creator is currently the de-facto owner; formal role pending
 - **Online court booking** — schedule visible but can't reserve online
-- **Push notifications** — Supabase Realtime not wired up
+- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable); requires VAPID key setup and a Supabase Edge Function to send (see push notification setup guide in session 5 notes)
 - **Season reset** — snapshot Elo, reset to 1000 for new season
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days
