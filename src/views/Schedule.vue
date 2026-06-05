@@ -149,14 +149,41 @@ async function openFacilityPicker() {
   loadingFacilities.value = false
 }
 
+async function loadVotes(scheduleId) {
+  const { data: voteRows } = await supabase
+    .from('schedule_votes')
+    .select('user_id, vote, voted_at')
+    .eq('schedule_id', scheduleId)
+    .order('voted_at')
+
+  if (!voteRows?.length) { votes.value = []; return }
+
+  const userIds = voteRows.map(v => v.user_id)
+
+  const [{ data: profiles }, { data: playerRows }] = await Promise.all([
+    supabase.from('user_profiles').select('user_id, nickname').in('user_id', userIds),
+    supabase.from('players').select('user_id, display_name')
+      .eq('club_id', currentClub.value.club_id).not('user_id', 'is', null).in('user_id', userIds)
+  ])
+
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p.nickname]))
+  const playerMap  = Object.fromEntries((playerRows ?? []).map(p => [p.user_id, p.display_name]))
+
+  votes.value = voteRows.map(v => ({
+    user_id:      v.user_id,
+    vote:         v.vote,
+    voted_at:     v.voted_at,
+    display_name: profileMap[v.user_id] || playerMap[v.user_id] || 'Member'
+  }))
+}
+
 async function loadVotesAndAttendees(scheduleId) {
-  const [vRes, aRes, pRes] = await Promise.all([
-    supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId }),
+  const [aRes, pRes] = await Promise.all([
     supabase.rpc('get_schedule_attendees', { p_schedule_id: scheduleId }),
     supabase.from('players').select('id, display_name, elo')
       .eq('club_id', currentClub.value.club_id).eq('is_active', true).order('display_name')
   ])
-  votes.value        = vRes.data ?? []
+  await loadVotes(scheduleId)
   attendeeIds.value  = new Set((aRes.data ?? []).map(a => a.player_id))
   allPlayers.value   = pRes.data ?? []
   attendeesDirty.value = false
@@ -212,16 +239,14 @@ async function castVote(option) {
     p_vote:        option
   })
   voting.value = null
-  await loadMonthSchedules()
+  await Promise.all([loadMonthSchedules(), loadVotes(selectedSchedule.value.id)])
 }
 
 // ── View votes modal ──
 async function openVotesModal() {
   votesFilter.value = 'all'
   showVotesModal.value = true
-  const { data, error } = await supabase.rpc('get_schedule_votes', { p_schedule_id: selectedSchedule.value.id })
-  if (error) { console.error('get_schedule_votes:', error); votes.value = [] }
-  else votes.value = data ?? []
+  await loadVotes(selectedSchedule.value.id)
 }
 
 // ── Attendees ──
