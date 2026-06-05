@@ -264,9 +264,8 @@ BEGIN
     sv.user_id,
     sv.vote,
     sv.voted_at,
-    COALESCE(up.nickname, pl.display_name, split_part(u.email, '@', 1)) AS display_name
+    COALESCE(up.nickname, pl.display_name, 'Member') AS display_name
   FROM schedule_votes sv
-  JOIN  auth.users u ON u.id = sv.user_id
   LEFT JOIN user_profiles up ON up.user_id = sv.user_id
   LEFT JOIN players pl ON pl.user_id = sv.user_id AND pl.club_id = v_club_id
   WHERE sv.schedule_id = p_schedule_id

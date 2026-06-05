@@ -218,9 +218,10 @@ async function castVote(option) {
 // ── View votes modal ──
 async function openVotesModal() {
   votesFilter.value = 'all'
-  const { data } = await supabase.rpc('get_schedule_votes', { p_schedule_id: selectedSchedule.value.id })
-  votes.value = data ?? []
   showVotesModal.value = true
+  const { data, error } = await supabase.rpc('get_schedule_votes', { p_schedule_id: selectedSchedule.value.id })
+  if (error) { console.error('get_schedule_votes:', error); votes.value = [] }
+  else votes.value = data ?? []
 }
 
 // ── Attendees ──
