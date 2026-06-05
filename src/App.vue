@@ -16,6 +16,34 @@ const router = useRouter()
 
 const pendingCount = ref(0)
 const showIOSHint  = ref(false)
+const showMenu     = ref(false)
+
+const menuSections = [
+  {
+    label: 'Your Club',
+    items: [
+      { to: '/match',   icon: '➕', label: 'Add Match' },
+      { to: '/compare', icon: '📊', label: 'Compare Players' },
+      { to: '/guide',   icon: '📖', label: 'Ranking Guide' },
+    ]
+  },
+  {
+    label: 'Discover',
+    items: [
+      { to: '/explore', icon: '🌍', label: 'Explore' },
+      { to: '/',        icon: '🏠', label: 'Home' },
+    ]
+  },
+  {
+    label: 'Account',
+    items: [
+      { to: '/profile', icon: '👤', label: 'My Profile' },
+      { to: '/join',    icon: '🔗', label: 'Join a Club' },
+    ]
+  }
+]
+
+function closeMenu() { showMenu.value = false }
 
 async function init() {
   if (!user.value) return
@@ -142,15 +170,21 @@ const needsClub = computed(() =>
               class="bg-slate-900">{{ c.clubs?.name }}</option>
           </select>
 
-          <!-- Profile link -->
+          <!-- Profile avatar -->
           <RouterLink to="/profile" class="w-7 h-7 rounded-full flex items-center justify-center text-xs
             font-bold text-slate-950 shrink-0 hover:opacity-80 transition"
             style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
             {{ (user?.user_metadata?.full_name ?? user?.email ?? '?')[0].toUpperCase() }}
           </RouterLink>
 
-          <button class="text-xs text-slate-500 hover:text-slate-200 transition"
-            @click="logout">Sign out</button>
+          <!-- Hamburger -->
+          <button @click="showMenu = true"
+            class="w-8 h-8 rounded-lg flex flex-col items-center justify-center gap-[5px]
+                   border border-white/10 hover:border-white/30 transition shrink-0">
+            <span class="block w-4 h-px bg-slate-400"></span>
+            <span class="block w-4 h-px bg-slate-400"></span>
+            <span class="block w-3 h-px bg-slate-400 self-start ml-2"></span>
+          </button>
         </div>
       </header>
 
@@ -191,5 +225,70 @@ const needsClub = computed(() =>
       </div>
     </nav>
 
+    <!-- ── Hamburger menu drawer ── -->
+    <Teleport to="body">
+      <Transition name="menu-fade">
+        <div v-if="showMenu" class="fixed inset-0 z-50 flex" @keydown.esc="closeMenu">
+
+          <!-- Backdrop -->
+          <div class="absolute inset-0 bg-black/65 backdrop-blur-sm" @click="closeMenu" />
+
+          <!-- Slide-in panel from right -->
+          <div class="menu-panel absolute right-0 top-0 bottom-0 w-72 flex flex-col"
+            style="background:#07101f; border-left:1px solid rgba(255,255,255,.08);">
+
+            <!-- Panel header -->
+            <div class="flex items-center justify-between px-5 py-4"
+              style="border-bottom:1px solid rgba(255,255,255,.07)">
+              <div class="flex items-center gap-2">
+                <span class="text-xl" style="filter:drop-shadow(0 0 10px rgba(0,229,255,.5))">🏸</span>
+                <span class="font-display font-extrabold gradient-text">Badmint</span>
+              </div>
+              <button @click="closeMenu"
+                class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400
+                       hover:text-white hover:bg-white/10 transition text-base">✕</button>
+            </div>
+
+            <!-- Nav sections -->
+            <div class="flex-1 overflow-y-auto py-3">
+              <div v-for="section in menuSections" :key="section.label" class="mb-1">
+                <div class="text-[10px] uppercase tracking-widest text-slate-600 px-5 py-2">
+                  {{ section.label }}
+                </div>
+                <RouterLink v-for="item in section.items" :key="item.to" :to="item.to"
+                  @click="closeMenu"
+                  class="flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-300
+                         hover:bg-white/[0.06] hover:text-white transition-colors"
+                  active-class="!text-cyan-400 bg-cyan-500/[0.08]">
+                  <span class="text-base w-6 text-center shrink-0">{{ item.icon }}</span>
+                  {{ item.label }}
+                </RouterLink>
+              </div>
+            </div>
+
+            <!-- Sign out at bottom -->
+            <div style="border-top:1px solid rgba(255,255,255,.07)" class="p-4">
+              <button @click="logout(); closeMenu()"
+                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm
+                       text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                <span class="text-base">🚪</span> Sign out
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </template>
 </template>
+
+<style>
+.menu-fade-enter-active { transition: opacity 0.2s ease; }
+.menu-fade-leave-active { transition: opacity 0.15s ease; }
+.menu-fade-enter-from, .menu-fade-leave-to { opacity: 0; }
+
+.menu-fade-enter-active .menu-panel { transition: transform 0.25s ease; }
+.menu-fade-leave-active .menu-panel { transition: transform 0.2s ease; }
+.menu-fade-enter-from .menu-panel, .menu-fade-leave-to .menu-panel { transform: translateX(100%); }
+</style>
