@@ -247,7 +247,13 @@ async function pickFacility(fac) {
 async function useCustomVenue() {
   const name = newFacName.value.trim()
   if (!name) return
-  await createSchedule(null, name)
+
+  // Create in the facilities master table first so it appears in Explore → Facilities
+  const { data: facId, error: facErr } = await supabase.rpc('create_facility', { p_name: name })
+  if (facErr) { alert(facErr.message); return }
+
+  // Link the schedule to the new facility by ID (not free text)
+  await createSchedule(facId, null)
   newFacName.value = ''
   showCreateFacility.value = false
 }
