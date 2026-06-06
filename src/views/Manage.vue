@@ -284,11 +284,11 @@ async function leaveClub(clubId) {
   <PageHeader icon="⚙️" title="Manage" subtitle="Clubs, members, and ranking settings">
     <template #help>
       <div class="text-xs space-y-1.5">
-        <p><strong class="text-white">Create a Club</strong> — Each club has its own roster, matches, and leaderboard. You become the owner.</p>
-        <p><strong class="text-white">Roles:</strong> 👑 Owner has full control. 🛠 Manager records matches. 🏸 Player views dashboards.</p>
-        <p><strong class="text-white">Join Requests</strong> — Players who request to join appear here. Approve to add them.</p>
-        <p><strong class="text-white">Invite by Email</strong> — Generate a 7-day invite link and send it to anyone.</p>
-        <p><strong class="text-white">Ranking Weights</strong> — Tune skill vs attendance. Must add to 1.0. K-factor controls Elo swing per match.</p>
+        <p><strong class="text-slate-800">Create a Club</strong> — Each club has its own roster, matches, and leaderboard. You become the owner.</p>
+        <p><strong class="text-slate-800">Roles:</strong> 👑 Owner has full control. 🛠 Manager records matches. 🏸 Player views dashboards.</p>
+        <p><strong class="text-slate-800">Join Requests</strong> — Players who request to join appear here. Approve to add them.</p>
+        <p><strong class="text-slate-800">Invite by Email</strong> — Generate a 7-day invite link and send it to anyone.</p>
+        <p><strong class="text-slate-800">Ranking Weights</strong> — Tune skill vs attendance. Must add to 1.0. K-factor controls Elo swing per match.</p>
       </div>
     </template>
   </PageHeader>

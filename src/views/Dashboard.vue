@@ -59,10 +59,10 @@ const trendColor = elo =>
     <PageHeader icon="🏆" title="Rankings" subtitle="Skill + attendance · updated after every match">
       <template #help>
         <div class="space-y-1.5 text-xs">
-          <p><strong class="text-white">Rank Points</strong> = Skill (70%) + Attendance (30%), both normalised 0–100 within your club.</p>
-          <p><strong class="text-white">Elo</strong> is your raw skill rating (starts at 1000). Wins raise it, losses drop it.</p>
-          <p><strong class="text-white">W%</strong> is your win percentage across all doubles matches.</p>
-          <p><strong class="text-white">Days</strong> is total days you showed up to play.</p>
+          <p><strong class="text-slate-800">Rank Points</strong> = Skill (70%) + Attendance (30%), both normalised 0–100 within your club.</p>
+          <p><strong class="text-slate-800">Elo</strong> is your raw skill rating (starts at 1000). Wins raise it, losses drop it.</p>
+          <p><strong class="text-slate-800">W%</strong> is your win percentage across all doubles matches.</p>
+          <p><strong class="text-slate-800">Days</strong> is total days you showed up to play.</p>
         </div>
       </template>
     </PageHeader>

@@ -102,10 +102,10 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
   <PageHeader icon="👥" title="Players" subtitle="Your club's roster — tap a name to view their profile">
     <template #help>
       <div class="text-xs space-y-1.5">
-        <p><strong class="text-white">Add players</strong> before recording any match. Add their name and optionally their email to send an invite.</p>
-        <p><strong class="text-white">Invite link</strong> — when you add an email, a personal invite link is generated. Share via WhatsApp or email. The player fills in their own profile when they join.</p>
-        <p><strong class="text-white">Guest players</strong> (no Google login yet) are supported — add their name and record matches. They can claim their account later via an invite link.</p>
-        <p><strong class="text-white">Tap any player name</strong> to view their public profile and match history.</p>
+        <p><strong class="text-slate-800">Add players</strong> before recording any match. Add their name and optionally their email to send an invite.</p>
+        <p><strong class="text-slate-800">Invite link</strong> — when you add an email, a personal invite link is generated. Share via WhatsApp or email. The player fills in their own profile when they join.</p>
+        <p><strong class="text-slate-800">Guest players</strong> (no Google login yet) are supported — add their name and record matches. They can claim their account later via an invite link.</p>
+        <p><strong class="text-slate-800">Tap any player name</strong> to view their public profile and match history.</p>
       </div>
     </template>
   </PageHeader>

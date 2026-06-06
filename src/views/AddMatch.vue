@@ -119,10 +119,10 @@ async function submit() {
     <PageHeader icon="➕" title="Add Match" subtitle="Record a doubles result — Elo updates instantly">
       <template #help>
         <div class="text-xs space-y-1.5">
-          <p><strong class="text-white">Step 1</strong> — Set the date (defaults to today).</p>
-          <p><strong class="text-white">Step 2</strong> — Tap <span class="text-teal-400">A</span> or <span class="text-amber-400">B</span> next to each player to assign them to a side. Each side needs exactly 2 players.</p>
-          <p><strong class="text-white">Step 3</strong> — Enter the final score for each side.</p>
-          <p><strong class="text-white">Step 4</strong> — Hit Record. Elo is recalculated and attendance is marked for all 4 players automatically.</p>
+          <p><strong class="text-slate-800">Step 1</strong> — Set the date (defaults to today).</p>
+          <p><strong class="text-slate-800">Step 2</strong> — Tap <span class="text-teal-400">A</span> or <span class="text-amber-400">B</span> next to each player to assign them to a side. Each side needs exactly 2 players.</p>
+          <p><strong class="text-slate-800">Step 3</strong> — Enter the final score for each side.</p>
+          <p><strong class="text-slate-800">Step 4</strong> — Hit Record. Elo is recalculated and attendance is marked for all 4 players automatically.</p>
           <p class="text-slate-500">Scores cannot be equal (a match must have a winner). Badminton standard: first to 21.</p>
         </div>
       </template>
@@ -152,7 +152,7 @@ async function submit() {
         <div class="mt-3">
           <label class="text-[10px] text-slate-500">Score</label>
           <input v-model="scoreA" type="number" min="0" max="30"
-            class="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-center font-bold text-lg" />
+            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
         </div>
       </div>
 
@@ -166,7 +166,7 @@ async function submit() {
         <div class="mt-3">
           <label class="text-[10px] text-slate-500">Score</label>
           <input v-model="scoreB" type="number" min="0" max="30"
-            class="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-center font-bold text-lg" />
+            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
         </div>
       </div>
     </div>
@@ -190,19 +190,19 @@ async function submit() {
     <div class="space-y-1.5 mb-4">
       <div v-for="p in displayPlayers" :key="p.id"
         class="card flex items-center justify-between px-3 py-2.5 transition"
-        :class="chosen.has(p.id) ? 'bg-white/5' : ''">
+        :class="chosen.has(p.id) ? 'bg-slate-50' : ''">
         <div>
-          <span class="font-medium text-sm" :class="chosen.has(p.id) ? 'text-white' : 'text-slate-400'">
+          <span class="font-medium text-sm" :class="chosen.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'">
             {{ p.display_name }}
           </span>
           <span class="ml-2 text-[10px] text-slate-600">Elo {{ Math.round(p.elo) }}</span>
         </div>
         <div class="flex gap-1.5">
           <button class="w-8 h-8 rounded-lg text-xs font-bold transition"
-            :class="sideA.includes(p.id) ? 'bg-teal-500 text-slate-950' : 'border border-white/15 text-slate-400 hover:border-teal-500'"
+            :class="sideA.includes(p.id) ? 'bg-teal-500 text-slate-950' : 'border border-slate-200 text-slate-500 hover:border-teal-400'"
             @click="toggle('A', p.id)">A</button>
           <button class="w-8 h-8 rounded-lg text-xs font-bold transition"
-            :class="sideB.includes(p.id) ? 'bg-amber-400 text-slate-950' : 'border border-white/15 text-slate-400 hover:border-amber-500'"
+            :class="sideB.includes(p.id) ? 'bg-amber-400 text-slate-950' : 'border border-slate-200 text-slate-500 hover:border-amber-400'"
             @click="toggle('B', p.id)">B</button>
         </div>
       </div>

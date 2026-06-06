@@ -392,11 +392,11 @@ watch(currentClub, async () => {
     <PageHeader icon="📅" title="Schedule" subtitle="Plan match days, run polls, track who's coming">
       <template #help>
         <div class="text-xs space-y-1.5">
-          <p><strong class="text-white">Tap any date</strong> to plan a match or see the existing schedule.</p>
-          <p><strong class="text-white">Poll</strong> — Let your team vote Attending / Not Attending before the day.</p>
-          <p><strong class="text-white">Invite</strong> — Copy a shareable link or send via WhatsApp. Club members can vote directly from the link.</p>
-          <p><strong class="text-white">Attendees</strong> — On match day, tick who actually showed up. These players will appear first when recording a match.</p>
-          <p><strong class="text-white">Notifications</strong> — Enable push so the app alerts you when a new match day is posted.</p>
+          <p><strong class="text-slate-800">Tap any date</strong> to plan a match or see the existing schedule.</p>
+          <p><strong class="text-slate-800">Poll</strong> — Let your team vote Attending / Not Attending before the day.</p>
+          <p><strong class="text-slate-800">Invite</strong> — Copy a shareable link or send via WhatsApp. Club members can vote directly from the link.</p>
+          <p><strong class="text-slate-800">Attendees</strong> — On match day, tick who actually showed up. These players will appear first when recording a match.</p>
+          <p><strong class="text-slate-800">Notifications</strong> — Enable push so the app alerts you when a new match day is posted.</p>
         </div>
       </template>
     </PageHeader>
@@ -417,13 +417,13 @@ watch(currentClub, async () => {
 
     <!-- Month nav -->
     <div class="flex items-center justify-between mb-3">
-      <button class="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:border-white/30 transition"
+      <button class="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:border-slate-400 transition"
         @click="prevMonth">‹</button>
-      <div class="font-display font-bold tracking-tight text-slate-200">
+      <div class="font-display font-bold tracking-tight text-slate-800">
         {{ MONTHS[viewMonth - 1] }} {{ viewYear }}
-        <span v-if="loadingSchedules" class="text-xs text-slate-600 ml-2 animate-pulse">loading…</span>
+        <span v-if="loadingSchedules" class="text-xs text-slate-400 ml-2 animate-pulse">loading…</span>
       </div>
-      <button class="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-slate-400 hover:border-white/30 transition"
+      <button class="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:border-slate-400 transition"
         @click="nextMonth">›</button>
     </div>
 
@@ -442,11 +442,11 @@ watch(currentClub, async () => {
           class="w-full h-full flex flex-col items-center justify-center rounded-xl text-sm font-medium transition relative"
           :class="[
             cell.dateStr === selectedDate
-              ? 'bg-cyan-500/20 border border-cyan-500/60 text-cyan-300'
+              ? 'bg-cyan-50 border border-cyan-400 text-cyan-700'
               : cell.isToday
-                ? 'border border-white/25 text-white font-bold'
-                : 'border border-transparent text-slate-400 hover:border-white/15',
-            scheduleMap[cell.dateStr] ? 'text-white' : ''
+                ? 'border border-slate-400 text-slate-900 font-bold bg-slate-50'
+                : 'border border-transparent text-slate-500 hover:border-slate-200',
+            scheduleMap[cell.dateStr] ? 'text-slate-800 font-semibold' : ''
           ]"
           @click="selectDate(cell.dateStr)">
           <span class="leading-none">{{ cell.day }}</span>
@@ -492,11 +492,11 @@ watch(currentClub, async () => {
           </div>
 
           <!-- Invite / share panel -->
-          <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-white/10 space-y-2">
-            <div class="text-xs text-slate-400">Share poll link with your group:</div>
+          <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-slate-100 space-y-2">
+            <div class="text-xs text-slate-500">Share poll link with your group:</div>
             <div class="flex gap-2">
               <input :value="shareUrl" readonly
-                class="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-mono text-slate-400 outline-none truncate" />
+                class="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-500 outline-none truncate" />
               <button class="btn-ghost text-xs px-3 shrink-0" @click="copyLink">
                 {{ copied ? '✓ Copied' : 'Copy' }}
               </button>
@@ -518,10 +518,10 @@ watch(currentClub, async () => {
               :disabled="voting !== null"
               class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
               :class="selectedSchedule.my_vote === 'attending'
-                ? 'bg-emerald-500/15 border-emerald-500/50'
-                : 'border-white/10 hover:border-white/25'">
+                ? 'bg-emerald-50 border-emerald-400'
+                : 'border-slate-200 hover:border-slate-300'">
               <span class="text-2xl">✅</span>
-              <span class="text-xs font-semibold text-slate-200">Attending</span>
+              <span class="text-xs font-semibold text-slate-700">Attending</span>
               <span class="text-2xl font-bold text-emerald-400">{{ selectedSchedule.attending_count }}</span>
             </button>
             <button
@@ -529,10 +529,10 @@ watch(currentClub, async () => {
               :disabled="voting !== null"
               class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
               :class="selectedSchedule.my_vote === 'not_attending'
-                ? 'bg-rose-500/15 border-rose-500/50'
-                : 'border-white/10 hover:border-white/25'">
+                ? 'bg-rose-50 border-rose-400'
+                : 'border-slate-200 hover:border-slate-300'">
               <span class="text-2xl">❌</span>
-              <span class="text-xs font-semibold text-slate-200">Not Attending</span>
+              <span class="text-xs font-semibold text-slate-700">Not Attending</span>
               <span class="text-2xl font-bold text-rose-400">{{ selectedSchedule.not_attending_count }}</span>
             </button>
           </div>
@@ -553,7 +553,7 @@ watch(currentClub, async () => {
               <div class="text-[10px] uppercase tracking-widest text-slate-500">Actual Attendees</div>
               <div class="text-[10px] text-slate-600 mt-0.5">Who actually showed up — used in Add Match player list</div>
             </div>
-            <span class="badge-dot text-[9px] px-2 py-0.5 rounded-full" style="background:rgba(0,229,255,.1);color:#00e5ff">
+            <span class="text-[9px] px-2 py-0.5 rounded-full font-bold" style="background:rgba(0,153,184,.12);color:#0077a8">
               {{ attendeeIds.size }}/{{ allPlayers.length }}
             </span>
           </div>
@@ -564,17 +564,17 @@ watch(currentClub, async () => {
 
           <div class="space-y-1 mb-3">
             <label v-for="p in allPlayers" :key="p.id"
-              class="flex items-center gap-3 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-white/5 transition">
+              class="flex items-center gap-3 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-slate-50 transition">
               <div class="w-5 h-5 rounded border shrink-0 flex items-center justify-center transition"
-                :class="attendeeIds.has(p.id) ? 'bg-emerald-500 border-emerald-500' : 'border-white/20'"
+                :class="attendeeIds.has(p.id) ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'"
                 @click="toggleAttendee(p.id)">
-                <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-slate-950 font-bold">✓</span>
+                <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-white font-bold">✓</span>
               </div>
-              <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-white' : 'text-slate-400'"
+              <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'"
                 @click="toggleAttendee(p.id)">
                 {{ p.display_name }}
               </span>
-              <span class="text-[10px] text-slate-700">{{ Math.round(p.elo) }}</span>
+              <span class="text-[10px] text-slate-400">{{ Math.round(p.elo) }}</span>
             </label>
           </div>
 

@@ -70,9 +70,9 @@ const better = (row, side) => {
   <PageHeader icon="⚔️" title="Compare Players" subtitle="Head-to-head stats and ranking comparison">
     <template #help>
       <div class="text-xs space-y-1.5">
-        <p><strong class="text-white">Rank comparison</strong> shows both players' full stat profile side by side — composite points, Elo, win rate, games played, and attendance.</p>
-        <p><strong class="text-white">Head-to-head</strong> counts every match where they were on <em>opposite sides</em>. If they've only played as partners, the head-to-head will show 0.</p>
-        <p><strong class="text-white">Best Pairs</strong> at the bottom shows which player combinations have the highest win rate when on the same side.</p>
+        <p><strong class="text-slate-800">Rank comparison</strong> shows both players' full stat profile side by side — composite points, Elo, win rate, games played, and attendance.</p>
+        <p><strong class="text-slate-800">Head-to-head</strong> counts every match where they were on <em>opposite sides</em>. If they've only played as partners, the head-to-head will show 0.</p>
+        <p><strong class="text-slate-800">Best Pairs</strong> at the bottom shows which player combinations have the highest win rate when on the same side.</p>
       </div>
     </template>
   </PageHeader>
@@ -104,9 +104,9 @@ const better = (row, side) => {
     </div>
     <div v-for="row in statRows" :key="row.label"
       class="grid grid-cols-3 px-3 py-2 border-b border-white/[0.04] last:border-0 text-center text-sm">
-      <div :class="better(row, 'A') ? 'text-white font-bold' : 'text-slate-400'">{{ row.vA }}</div>
-      <div class="text-[10px] text-slate-600 self-center uppercase tracking-wider">{{ row.label }}</div>
-      <div :class="better(row, 'B') ? 'text-white font-bold' : 'text-slate-400'">{{ row.vB }}</div>
+      <div :class="better(row, 'A') ? 'text-slate-900 font-bold' : 'text-slate-400'">{{ row.vA }}</div>
+      <div class="text-[10px] text-slate-500 self-center uppercase tracking-wider">{{ row.label }}</div>
+      <div :class="better(row, 'B') ? 'text-slate-900 font-bold' : 'text-slate-400'">{{ row.vB }}</div>
     </div>
   </div>
 

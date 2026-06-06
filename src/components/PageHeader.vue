@@ -20,13 +20,13 @@ const showHelp = ref(false)
         </div>
       </div>
       <button v-if="help" @click="showHelp = !showHelp"
-        class="shrink-0 rounded-xl border border-white/15 px-2.5 py-1 text-xs text-slate-400 hover:text-teal-400 hover:border-teal-500/40 transition">
+        class="shrink-0 rounded-xl border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:text-teal-600 hover:border-teal-400 transition">
         {{ showHelp ? 'Hide help' : '? Help' }}
       </button>
     </div>
 
     <div v-if="help && showHelp"
-      class="mt-3 rounded-2xl border border-teal-500/20 bg-teal-500/5 p-4 text-sm text-slate-300 leading-relaxed">
+      class="mt-3 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-slate-600 leading-relaxed">
       <slot name="help">{{ help }}</slot>
     </div>
   </div>
