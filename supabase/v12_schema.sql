@@ -6,6 +6,7 @@
 -- ── Alter paysplit_expenses: support wallet payments ──────────────────
 ALTER TABLE paysplit_expenses ALTER COLUMN paid_player_id DROP NOT NULL;
 ALTER TABLE paysplit_expenses ADD COLUMN IF NOT EXISTS paid_from_wallet boolean NOT NULL DEFAULT false;
+ALTER TABLE paysplit_expenses DROP CONSTRAINT IF EXISTS expense_payment_source;
 ALTER TABLE paysplit_expenses ADD CONSTRAINT expense_payment_source
   CHECK (paid_from_wallet = true OR paid_player_id IS NOT NULL);
 
