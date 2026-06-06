@@ -33,7 +33,6 @@ watch(needRefresh, (yes) => {
 })
 
 // ── Hamburger menu sections ──────────────────────────────────────────────────
-// When Payments ships: move comingSoon items into a new menuSection entry.
 const menuSections = [
   {
     label: 'Match Day',
@@ -51,6 +50,12 @@ const menuSections = [
     ]
   },
   {
+    label: 'Finances',
+    items: [
+      { to: '/splits',  icon: '💰', label: 'PaySplits' },
+    ]
+  },
+  {
     label: 'Account',
     items: [
       { to: '/profile', icon: '👤', label: 'My Profile' },
@@ -60,7 +65,6 @@ const menuSections = [
 ]
 
 const comingSoon = [
-  { icon: '💰', label: 'Payment Splits' },
   { icon: '📒', label: 'Ledger Book' },
 ]
 
@@ -106,14 +110,12 @@ function onSwitch(e) {
 }
 
 // ── Bottom nav ───────────────────────────────────────────────────────────────
-// Add Match promoted to bottom; Manage in hamburger.
-// When Payments ships: swap 📋 Matches → 💰 Payments.
 const nav = computed(() => [
   { to: '/schedule',  label: 'Schedule',  icon: '📅' },
   { to: '/dashboard', label: 'Rankings',  icon: '🏆' },
   { to: '/match',     label: 'Add Match', icon: '➕' },
   { to: '/players',   label: 'Players',   icon: '👥' },
-  { to: '/matches',   label: 'Matches',   icon: '📋' },
+  { to: '/splits',    label: 'Splits',    icon: '💰' },
 ])
 
 const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule']
@@ -348,13 +350,13 @@ const needsClub = computed(() =>
                 </RouterLink>
               </div>
 
-              <!-- Coming soon: Finances -->
-              <div class="mb-1 mt-2">
+              <!-- Coming soon items -->
+              <div v-if="comingSoon.length" class="mb-1 mt-2">
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2
                             font-semibold flex items-center gap-2">
-                  Finances
+                  Coming Soon
                   <span class="text-[9px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5
-                               normal-case tracking-normal font-semibold">coming soon</span>
+                               normal-case tracking-normal font-semibold">beta</span>
                 </div>
                 <div v-for="item in comingSoon" :key="item.label"
                   class="flex items-center gap-3 px-5 py-3 text-sm font-medium

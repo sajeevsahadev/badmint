@@ -14,6 +14,7 @@ const routes = [
   { path: '/compare',   component: () => import('../views/Compare.vue') },
   { path: '/guide',     component: () => import('../views/RankingGuide.vue') },
   { path: '/manage',    component: () => import('../views/Manage.vue') },
+  { path: '/splits',    component: () => import('../views/PaySplits.vue') },
   { path: '/join',      component: () => import('../views/JoinClub.vue') },
   { path: '/profile',   component: () => import('../views/Profile.vue') },
   { path: '/player/:id', component: () => import('../views/PlayerProfile.vue') },
