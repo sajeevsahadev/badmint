@@ -24,8 +24,10 @@ CREATE TABLE IF NOT EXISTS wallet_contributions (
 );
 
 -- ── Fix paysplit_expenses permissions: creator or manager only ─────────
-DROP POLICY IF EXISTS "club members update expenses" ON paysplit_expenses;
-DROP POLICY IF EXISTS "club members delete expenses" ON paysplit_expenses;
+DROP POLICY IF EXISTS "club members update expenses"          ON paysplit_expenses;
+DROP POLICY IF EXISTS "club members delete expenses"          ON paysplit_expenses;
+DROP POLICY IF EXISTS "creator or manager update expenses"    ON paysplit_expenses;
+DROP POLICY IF EXISTS "creator or manager delete expenses"    ON paysplit_expenses;
 
 CREATE POLICY "creator or manager update expenses" ON paysplit_expenses FOR UPDATE USING (
   created_by = auth.uid() OR EXISTS (
@@ -38,7 +40,8 @@ CREATE POLICY "creator or manager delete expenses" ON paysplit_expenses FOR DELE
     AND user_id = auth.uid() AND role IN ('owner','manager')));
 
 -- ── Fix paysplit_notes delete: creator or manager only ─────────────────
-DROP POLICY IF EXISTS "club members delete notes" ON paysplit_notes;
+DROP POLICY IF EXISTS "club members delete notes"          ON paysplit_notes;
+DROP POLICY IF EXISTS "creator or manager delete notes"    ON paysplit_notes;
 CREATE POLICY "creator or manager delete notes" ON paysplit_notes FOR DELETE USING (
   created_by = auth.uid() OR EXISTS (
     SELECT 1 FROM club_members WHERE club_id = paysplit_notes.club_id
@@ -46,6 +49,11 @@ CREATE POLICY "creator or manager delete notes" ON paysplit_notes FOR DELETE USI
 
 -- ── Wallet contributions RLS ───────────────────────────────────────────
 ALTER TABLE wallet_contributions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "club members read wallet"       ON wallet_contributions;
+DROP POLICY IF EXISTS "club members add wallet"        ON wallet_contributions;
+DROP POLICY IF EXISTS "creator or manager edit wallet" ON wallet_contributions;
+DROP POLICY IF EXISTS "creator or manager del wallet"  ON wallet_contributions;
 
 CREATE POLICY "club members read wallet"
   ON wallet_contributions FOR SELECT USING (
