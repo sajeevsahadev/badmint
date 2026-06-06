@@ -100,16 +100,53 @@ function canModify(item) {
   return item.created_by === user.value?.id || isManager()
 }
 
-// ── My balance summary (header card) ──────────────────────────────────
+// ── Settle-up: minimum transactions to clear ALL debts ────────────────
+// 1. Compute each player's net position from direct-pay expenses + wallet.
+// 2. Greedy: match biggest getter with biggest ower, repeat.
+// Result: fewest possible payment edges — like Splitwise.
+const settledEdges = computed(() => {
+  const netMap = {}
+  const addNet = (id, name, delta) => {
+    if (!netMap[id]) netMap[id] = { id, name, net: 0 }
+    netMap[id].net = Math.round((netMap[id].net + delta) * 100) / 100
+  }
+
+  // Direct-pay expense debts (from DB summary)
+  balances.value.forEach(b => {
+    addNet(b.from_player_id, b.from_name, -Number(b.net_amount))
+    addNet(b.to_player_id,   b.to_name,   +Number(b.net_amount))
+  })
+
+  // Wallet net positions (contributed − share of wallet expenses)
+  ;(walletData.value.player_balances ?? []).forEach(b => {
+    const bal = Math.round(Number(b.balance) * 100) / 100
+    if (Math.abs(bal) >= 0.01) addNet(b.player_id, b.player_name, bal)
+  })
+
+  const positions = Object.values(netMap).filter(p => Math.abs(p.net) >= 0.01)
+  const getters   = positions.filter(p => p.net > 0).map(p => ({ ...p })).sort((a, b) => b.net - a.net)
+  const owers     = positions.filter(p => p.net < 0).map(p => ({ ...p, net: Math.abs(p.net) })).sort((a, b) => b.net - a.net)
+
+  const edges = []
+  let gi = 0, oi = 0
+  while (gi < getters.length && oi < owers.length) {
+    const g = getters[gi], o = owers[oi]
+    const amount = Math.round(Math.min(g.net, o.net) * 100) / 100
+    if (amount >= 0.01) edges.push({ fromId: o.id, fromName: o.name, toId: g.id, toName: g.name, amount })
+    g.net = Math.round((g.net - amount) * 100) / 100
+    o.net = Math.round((o.net - amount) * 100) / 100
+    if (g.net < 0.01) gi++
+    if (o.net < 0.01) oi++
+  }
+  return edges
+})
+
+// ── My balance summary — derived from settled edges ───────────────────
 const myBalance = computed(() => {
   const mid = myPlayer.value?.id
   if (!mid) return null
-  const owe  = []
-  const gets = []
-  balances.value.forEach(b => {
-    if (b.from_player_id === mid) owe.push({ name: b.to_name,   amount: Number(b.net_amount) })
-    else if (b.to_player_id === mid) gets.push({ name: b.from_name, amount: Number(b.net_amount) })
-  })
+  const owe  = settledEdges.value.filter(e => e.fromId === mid).map(e => ({ name: e.toName,   amount: e.amount }))
+  const gets = settledEdges.value.filter(e => e.toId   === mid).map(e => ({ name: e.fromName, amount: e.amount }))
   const totalOwe  = owe.reduce((s, x)  => s + x.amount, 0)
   const totalGets = gets.reduce((s, x) => s + x.amount, 0)
   return { owe, gets, totalOwe, totalGets, net: totalGets - totalOwe }
@@ -138,69 +175,17 @@ function myContrib(exp) {
   return { type: 'split', net: -Number(part.share) }
 }
 
-// ── Wallet debt edges: greedy settlement of per-player wallet positions ──
-// Each player's wallet balance = contributed − their share of wallet expenses.
-// Positive = they over-contributed (others owe them). Negative = they under-contributed (they owe others).
-// Greedy matching turns these positions into minimum debt edges (from owers to getters).
-const walletDebtEdges = computed(() => {
-  const positions = (walletData.value.player_balances ?? [])
-    .map(b => ({
-      id:        b.player_id,
-      name:      b.player_name,
-      remaining: Math.round(Number(b.balance) * 100) / 100
-    }))
-    .filter(b => Math.abs(b.remaining) >= 0.01)
-
-  const getters = positions.filter(b => b.remaining > 0).map(b => ({ ...b })).sort((a, b) => b.remaining - a.remaining)
-  const owers   = positions.filter(b => b.remaining < 0).map(b => ({ ...b, remaining: Math.abs(b.remaining) })).sort((a, b) => b.remaining - a.remaining)
-
-  const edges = []
-  let gi = 0, oi = 0
-  while (gi < getters.length && oi < owers.length) {
-    const g = getters[gi], o = owers[oi]
-    const amount = Math.round(Math.min(g.remaining, o.remaining) * 100) / 100
-    if (amount >= 0.01) {
-      edges.push({ from_player_id: o.id, from_name: o.name, to_player_id: g.id, to_name: g.name, net_amount: amount })
-    }
-    g.remaining = Math.round((g.remaining - amount) * 100) / 100
-    o.remaining = Math.round((o.remaining - amount) * 100) / 100
-    if (g.remaining < 0.01) gi++
-    if (o.remaining < 0.01) oi++
-  }
-  return edges
-})
-
-// ── Balance tab: combined direct-pay + wallet debts, netted per pair ───
+// ── Balance tab list — derived from settled edges ─────────────────────
 const playerBalanceList = computed(() => {
-  // Accumulate all edges into a canonical (lo < hi) pair map, then resolve direction
-  const pairMap = {}
-  const addEdge = (fromId, fromName, toId, toName, amt) => {
-    const fwd = fromId < toId
-    const lo = fwd ? fromId : toId, hi = fwd ? toId : fromId
-    const key = `${lo}|${hi}`
-    if (!pairMap[key]) pairMap[key] = { lo, hi, loName: fwd ? fromName : toName, hiName: fwd ? toName : fromName, net: 0 }
-    pairMap[key].net += fwd ? amt : -amt
-  }
-
-  balances.value.forEach(b => addEdge(b.from_player_id, b.from_name, b.to_player_id, b.to_name, Number(b.net_amount)))
-  walletDebtEdges.value.forEach(e => addEdge(e.from_player_id, e.from_name, e.to_player_id, e.to_name, e.net_amount))
-
   const map = {}
-  Object.values(pairMap).forEach(({ lo, hi, loName, hiName, net }) => {
-    if (Math.abs(net) < 0.01) return
-    const fromId   = net > 0 ? lo : hi
-    const fromName = net > 0 ? loName : hiName
-    const toId     = net > 0 ? hi : lo
-    const toName   = net > 0 ? hiName : loName
-    const amount   = Math.round(Math.abs(net) * 100) / 100
+  settledEdges.value.forEach(({ fromId, fromName, toId, toName, amount }) => {
     if (!map[fromId]) map[fromId] = { id: fromId, name: fromName, owes: [], gets: [], net: 0 }
     if (!map[toId])   map[toId]   = { id: toId,   name: toName,   owes: [], gets: [], net: 0 }
     map[fromId].owes.push({ to: toName, toId, amount })
-    map[fromId].net -= amount
+    map[fromId].net = Math.round((map[fromId].net - amount) * 100) / 100
     map[toId].gets.push({ from: fromName, fromId, amount })
-    map[toId].net += amount
+    map[toId].net = Math.round((map[toId].net + amount) * 100) / 100
   })
-
   return Object.values(map)
     .filter(p => Math.abs(p.net) >= 0.01)
     .sort((a, b) => {
@@ -547,34 +532,21 @@ const isMe = id => myPlayer.value?.id === id
           </span>
         </div>
         <div class="text-xs text-slate-500 mb-3">
-          {{ myBalance.net > 0.01 ? 'Overall you get back (person-paid expenses)' : myBalance.net < -0.01 ? 'Overall you owe (person-paid expenses)' : '🎉 All settled up!' }}
+          {{ myBalance.net > 0.01 ? 'Net — you get back overall' : myBalance.net < -0.01 ? 'Net — you owe overall' : '🎉 All settled up!' }}
         </div>
         <div class="space-y-1.5">
-          <div v-for="g in myBalance.gets" :key="g.name" class="flex items-center justify-between text-xs">
-            <span class="text-slate-400">{{ g.name }} owes you</span>
-            <span class="font-semibold text-emerald-400">+{{ aed(g.amount) }}</span>
+          <div v-for="g in myBalance.gets" :key="g.name" class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
+            style="background:rgba(52,211,153,.07); border:1px solid rgba(52,211,153,.15)">
+            <span class="text-slate-400">{{ g.name }} pays you</span>
+            <span class="font-semibold text-emerald-500">+{{ aed(g.amount) }}</span>
           </div>
-          <div v-for="o in myBalance.owe" :key="o.name" class="flex items-center justify-between text-xs">
-            <span class="text-slate-400">You owe {{ o.name }}</span>
-            <span class="font-semibold text-rose-400">-{{ aed(o.amount) }}</span>
+          <div v-for="o in myBalance.owe" :key="o.name" class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
+            style="background:rgba(248,113,113,.07); border:1px solid rgba(248,113,113,.15)">
+            <span class="text-slate-400">You pay {{ o.name }}</span>
+            <span class="font-semibold text-rose-500">-{{ aed(o.amount) }}</span>
           </div>
           <div v-if="!myBalance.owe.length && !myBalance.gets.length"
-            class="text-xs text-slate-600">No outstanding person-to-person balances</div>
-        </div>
-
-        <!-- Wallet position -->
-        <div v-if="myWalletPosition && (myWalletPosition.contributed > 0 || myWalletPosition.expense_share > 0)"
-          class="mt-3 pt-3 border-t border-white/[.06]">
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-500">💰 Wallet position</span>
-            <span class="font-semibold"
-              :class="myWalletPosition.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ myWalletPosition.balance >= 0 ? '+' : '' }}{{ aed(myWalletPosition.balance) }}
-            </span>
-          </div>
-          <div class="text-[10px] text-slate-600 mt-0.5">
-            Contributed {{ aed(myWalletPosition.contributed) }} · Share of wallet expenses {{ aed(myWalletPosition.expense_share) }}
-          </div>
+            class="text-xs text-slate-600">No outstanding balances</div>
         </div>
       </template>
       <div v-else class="text-sm text-slate-500">
@@ -734,33 +706,34 @@ const isMe = id => myPlayer.value?.id === id
               :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
           </button>
 
-          <!-- Expanded breakdown -->
+          <!-- Expanded: simplified settlement instructions -->
           <div v-if="expandedPlayer === p.id"
             class="border-t border-white/[0.06] px-4 py-3 space-y-2">
 
-            <!-- Debts this player owes to others -->
             <div v-for="o in p.owes" :key="o.toId"
               class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
               style="background:rgba(248,113,113,.06); border:1px solid rgba(248,113,113,.12)">
               <span>
                 <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'You' : p.name }}</span>
-                <span class="text-slate-500"> owe </span>
+                <span class="text-slate-500"> → pay → </span>
                 <span class="font-medium text-slate-200">{{ o.to }}</span>
               </span>
               <span class="text-rose-400 font-bold shrink-0 ml-3">{{ aed(o.amount) }}</span>
             </div>
 
-            <!-- Debts others owe to this player -->
             <div v-for="g in p.gets" :key="g.fromId"
               class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
               style="background:rgba(52,211,153,.06); border:1px solid rgba(52,211,153,.12)">
               <span>
                 <span class="font-medium text-slate-200">{{ g.from }}</span>
-                <span class="text-slate-500"> owes </span>
+                <span class="text-slate-500"> → pays → </span>
                 <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'you' : p.name }}</span>
               </span>
               <span class="text-emerald-400 font-bold shrink-0 ml-3">{{ aed(g.amount) }}</span>
             </div>
+
+            <div v-if="!p.owes.length && !p.gets.length"
+              class="text-xs text-slate-500 text-center py-1">Settled up ✓</div>
           </div>
         </div>
       </div>
