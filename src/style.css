@@ -4,6 +4,8 @@
 
 :root { color-scheme: light; }
 
+html { font-size: 17px; }
+
 /* ── Base ── */
 body {
   margin: 0;
@@ -61,7 +63,7 @@ body {
 /* ── Buttons ── */
 .btn {
   @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 font-semibold
-         text-sm transition-all duration-200 active:scale-[.97]
+         text-base transition-all duration-200 active:scale-[.97]
          disabled:opacity-40 disabled:cursor-not-allowed;
 }
 
@@ -129,7 +131,7 @@ body {
 
 /* ── Label ── */
 .label {
-  @apply text-[10px] uppercase tracking-widest mb-1.5 block font-semibold;
+  @apply text-[12px] uppercase tracking-widest mb-1.5 block font-semibold;
   color: #64748b;
 }
 
@@ -140,7 +142,7 @@ body {
 
 /* ── Badges ── */
 .badge {
-  @apply inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider
+  @apply inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider
          px-2 py-0.5 rounded-full;
 }
 .badge-pending  { @apply badge bg-amber-50   text-amber-700  border border-amber-200; }
@@ -149,7 +151,7 @@ body {
 .badge-member   { @apply badge bg-cyan-50    text-cyan-700   border border-cyan-200; }
 .badge-owner    { @apply badge bg-violet-50  text-violet-700 border border-violet-200; }
 .badge-dot      {
-  @apply w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black
+  @apply w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black
          flex items-center justify-center leading-none;
   box-shadow: 0 0 6px rgba(244,63,94,.5);
 }
