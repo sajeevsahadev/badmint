@@ -164,34 +164,8 @@ const playerBalanceList = computed(() => {
 })
 
 // ── Wallet debts: proportional settlement from net positions ───────────
-// Players with negative wallet balance owe those with positive balance.
-const walletDebtList = computed(() => {
-  const positions = walletData.value.player_balances ?? []
-  const creditors = positions.filter(p => Number(p.balance) > 0.01)
-  const debtors   = positions.filter(p => Number(p.balance) < -0.01)
-  if (!creditors.length || !debtors.length) return []
-
-  const totalCredit = creditors.reduce((s, p) => s + Number(p.balance), 0)
-  const debts = []
-  debtors.forEach(debtor => {
-    const owesTotal = Math.abs(Number(debtor.balance))
-    creditors.forEach(creditor => {
-      const share = Number(creditor.balance) / totalCredit
-      const amt   = Math.round(owesTotal * share * 100) / 100
-      if (amt >= 0.01) debts.push({
-        from_id:   debtor.player_id,
-        from_name: debtor.player_name,
-        to_id:     creditor.player_id,
-        to_name:   creditor.player_name,
-        amount:    amt
-      })
-    })
-  })
-  return debts
-})
-
 // ── Wallet: FIFO computation (frontend) ───────────────────────────────
-// Oldest contribution is depleted first when a wallet expense is recorded.
+// Oldest contribution depleted first. Returns separate active / consumed lists.
 const fifoResult = computed(() => {
   const contribs = [...walletData.value.contributions]
     .sort((a, b) => new Date(a.contributed_at) - new Date(b.contributed_at))
@@ -217,14 +191,19 @@ const fifoResult = computed(() => {
     }
   })
 
+  const mapped = contribs.map(c => ({
+    ...c,
+    remaining:  remaining[c.id] ?? 0,
+    consumedBy: consumedBy[c.id] ?? []
+  }))
+
   return {
-    contributions: contribs.map(c => ({
-      ...c,
-      remaining:  remaining[c.id] ?? 0,
-      consumedBy: consumedBy[c.id] ?? []
-    }))
+    active:   mapped.filter(c => c.remaining > 0.005),
+    consumed: mapped.filter(c => c.remaining <= 0.005 && c.consumedBy.length > 0)
   }
 })
+
+const expandedConsumed = ref(null)
 
 const walletTotalContributed = computed(() =>
   walletData.value.contributions.reduce((s, c) => s + Number(c.amount), 0)
@@ -647,96 +626,55 @@ const isMe = id => myPlayer.value?.id === id
     </div>
 
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
-    <div v-if="activeTab === 'balance'" class="fade-up space-y-4">
+    <div v-if="activeTab === 'balance'" class="fade-up">
+      <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
+        <div class="text-4xl mb-3">⚖️</div>
+        <p class="font-semibold mb-1">All settled!</p>
+        <p class="text-sm">No outstanding person-paid balances in this club.</p>
+      </div>
 
-      <!-- ── Person-paid balances ── -->
-      <div>
-        <div v-if="playerBalanceList.length"
-          class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-1">
-          Person-paid expenses
-        </div>
+      <div class="space-y-2">
+        <div v-for="p in playerBalanceList" :key="p.id"
+          class="card overflow-hidden"
+          :class="isMe(p.id) ? 'card-neon' : ''">
 
-        <div v-if="!playerBalanceList.length && !walletDebtList.length"
-          class="card p-10 text-center text-slate-400">
-          <div class="text-4xl mb-3">⚖️</div>
-          <p class="font-semibold mb-1">All settled!</p>
-          <p class="text-sm">No outstanding balances in this club.</p>
-        </div>
-
-        <div class="space-y-2">
-          <div v-for="p in playerBalanceList" :key="p.id"
-            class="card overflow-hidden"
-            :class="isMe(p.id) ? 'card-neon' : ''">
-
-            <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
-              @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
-              <div class="min-w-0">
-                <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
-                  {{ isMe(p.id) ? 'You' : p.name }}
-                </span>
-                <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
+          <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
+            @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
+            <div class="min-w-0">
+              <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
+                {{ isMe(p.id) ? 'You' : p.name }}
+              </span>
+              <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <div class="text-xs font-bold"
+                :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
+                {{ p.net > 0.01 ? 'Gets back' : 'Owes' }} {{ aed(Math.abs(p.net)) }}
               </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <div class="text-right">
-                  <div class="text-xs font-bold"
-                    :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
-                    {{ p.net > 0.01 ? 'Gets back' : 'Owes' }} {{ aed(Math.abs(p.net)) }}
-                  </div>
-                </div>
-                <span class="text-slate-500 text-xs transition-transform duration-200"
-                  :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
-              </div>
-            </button>
+              <span class="text-slate-500 text-xs transition-transform duration-200"
+                :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
+            </div>
+          </button>
 
-            <div v-if="expandedPlayer === p.id"
-              class="border-t border-white/[0.06] px-4 py-3 space-y-2">
-              <div v-for="o in p.owes" :key="o.toId"
-                class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">
-                  {{ isMe(p.id) ? 'You owe' : p.name + ' owes' }}
-                  <span class="text-slate-300 font-medium">{{ o.to }}</span>
-                </span>
-                <span class="text-rose-400 font-semibold shrink-0 ml-3">−{{ aed(o.amount) }}</span>
-              </div>
-              <div v-for="g in p.gets" :key="g.fromId"
-                class="flex items-center justify-between text-xs">
-                <span class="text-slate-400">
-                  {{ isMe(p.id) ? 'You get back from' : p.name + ' gets back from' }}
-                  <span class="text-slate-300 font-medium">{{ g.from }}</span>
-                </span>
-                <span class="text-emerald-400 font-semibold shrink-0 ml-3">+{{ aed(g.amount) }}</span>
-              </div>
+          <div v-if="expandedPlayer === p.id"
+            class="border-t border-white/[0.06] px-4 py-3 space-y-2">
+            <div v-for="o in p.owes" :key="o.toId" class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">
+                {{ isMe(p.id) ? 'You owe' : p.name + ' owes' }}
+                <span class="text-slate-300 font-medium">{{ o.to }}</span>
+              </span>
+              <span class="text-rose-400 font-semibold shrink-0 ml-3">−{{ aed(o.amount) }}</span>
+            </div>
+            <div v-for="g in p.gets" :key="g.fromId" class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">
+                {{ isMe(p.id) ? 'You get back from' : p.name + ' gets back from' }}
+                <span class="text-slate-300 font-medium">{{ g.from }}</span>
+              </span>
+              <span class="text-emerald-400 font-semibold shrink-0 ml-3">+{{ aed(g.amount) }}</span>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- ── Wallet debts ── -->
-      <div v-if="walletDebtList.length">
-        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-1">
-          💰 Wallet expenses
-        </div>
-        <div class="space-y-2">
-          <div v-for="d in walletDebtList" :key="d.from_id + d.to_id"
-            class="card px-4 py-3 flex items-center justify-between"
-            :class="isMe(d.from_id) ? 'card-neon' : ''">
-            <div class="text-sm">
-              <span class="font-semibold"
-                :class="isMe(d.from_id) ? 'text-neon' : 'text-slate-200'">
-                {{ isMe(d.from_id) ? 'You' : d.from_name }}
-              </span>
-              <span class="text-slate-500 text-xs"> owes </span>
-              <span class="font-semibold"
-                :class="isMe(d.to_id) ? 'text-neon' : 'text-slate-200'">
-                {{ isMe(d.to_id) ? 'you' : d.to_name }}
-              </span>
-              <span class="text-[10px] text-slate-600 ml-1">(wallet)</span>
-            </div>
-            <span class="font-bold text-rose-400 shrink-0 ml-3">{{ aed(d.amount) }}</span>
-          </div>
-        </div>
-      </div>
-
     </div>
 
     <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->
@@ -745,7 +683,7 @@ const isMe = id => myPlayer.value?.id === id
       <!-- Wallet balance summary -->
       <div class="card p-4">
         <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Common Wallet</div>
-        <div class="grid grid-cols-3 gap-3 text-center mb-4">
+        <div class="grid grid-cols-3 gap-3 text-center mb-3">
           <div>
             <div class="text-[10px] text-slate-500 mb-1">Contributed</div>
             <div class="text-base font-extrabold text-emerald-400">{{ aed(walletTotalContributed) }}</div>
@@ -763,7 +701,7 @@ const isMe = id => myPlayer.value?.id === id
           </div>
         </div>
         <div class="text-[10px] text-slate-600 text-center">
-          Contributions are used oldest-first (FIFO) when wallet pays for an expense
+          Oldest contribution is consumed first (FIFO) when wallet pays an expense
         </div>
       </div>
 
@@ -772,60 +710,24 @@ const isMe = id => myPlayer.value?.id === id
         ➕ Add Contribution
       </button>
 
-      <!-- Per-player wallet positions -->
-      <div v-if="walletData.player_balances.length" class="card overflow-hidden">
-        <div class="px-4 py-2.5 border-b border-white/[.06]">
-          <div class="text-xs font-semibold text-slate-300">Player Positions</div>
-          <div class="text-[10px] text-slate-500">Contributed vs. their share of wallet expenses</div>
-        </div>
-        <div v-for="pb in walletData.player_balances" :key="pb.player_id"
-          class="flex items-center justify-between px-4 py-3 border-b border-white/[.04] last:border-0"
-          :class="isMe(pb.player_id) ? 'bg-white/[.02]' : ''">
-          <div>
-            <div class="text-sm font-medium"
-              :class="isMe(pb.player_id) ? 'text-neon' : 'text-slate-200'">
-              {{ isMe(pb.player_id) ? 'You' : pb.player_name }}
-              <span v-if="isMe(pb.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ pb.player_name }}</span>
-            </div>
-            <div class="text-[10px] text-slate-500 mt-0.5">
-              Paid in {{ aed(pb.contributed) }} · Spent {{ aed(pb.expense_share) }}
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="font-bold text-sm"
-              :class="Number(pb.balance) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ Number(pb.balance) >= 0 ? '+' : '' }}{{ aed(pb.balance) }}
-            </div>
-            <div class="text-[9px] text-slate-600">
-              {{ Number(pb.balance) >= 0 ? 'credit' : 'owes wallet' }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- FIFO Queue -->
+      <!-- ── Active FIFO Queue ── -->
       <div class="card overflow-hidden">
-        <div class="px-4 py-2.5 border-b border-white/[.06] flex items-center gap-2">
-          <div>
-            <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
-            <div class="text-[10px] text-slate-500">#1 is consumed first when wallet pays</div>
-          </div>
+        <div class="px-4 py-2.5 border-b border-white/[.06]">
+          <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
+          <div class="text-[10px] text-slate-500">#1 is consumed first when wallet pays an expense</div>
         </div>
 
-        <div v-if="!fifoResult.contributions.length" class="px-4 py-8 text-center text-sm text-slate-500">
+        <div v-if="!fifoResult.active.length" class="px-4 py-8 text-center text-sm text-slate-500">
           <div class="text-3xl mb-2">🪙</div>
-          No contributions yet. Be the first to add!
+          No active contributions. Add the first one!
         </div>
 
-        <div v-for="(c, i) in fifoResult.contributions" :key="c.id"
+        <div v-for="(c, i) in fifoResult.active" :key="c.id"
           class="px-4 py-3 border-b border-white/[.04] last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
-              <!-- FIFO rank badge -->
               <div class="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold shrink-0"
-                :style="c.remaining < 0.01
-                  ? 'background:rgba(148,163,184,.12); color:#64748b'
-                  : 'background:rgba(0,229,255,.12); color:#00e5ff'">
+                style="background:rgba(0,229,255,.12); color:#00e5ff">
                 #{{ i + 1 }}
               </div>
               <div class="min-w-0">
@@ -835,33 +737,24 @@ const isMe = id => myPlayer.value?.id === id
                   <span v-if="isMe(c.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ c.player_name }}</span>
                 </div>
                 <div class="text-[10px] text-slate-500">
-                  {{ fmtDatetime(c.contributed_at) }}
-                  <span v-if="c.notes"> · {{ c.notes }}</span>
+                  {{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span>
                 </div>
               </div>
             </div>
             <div class="text-right shrink-0">
-              <div class="font-bold" :class="c.remaining < 0.01 ? 'text-slate-600' : 'text-slate-100'">
-                {{ aed(c.amount) }}
-              </div>
-              <div class="text-[10px]"
-                :class="c.remaining < 0.01 ? 'text-slate-600' : 'text-emerald-400'">
-                {{ c.remaining < 0.01 ? 'used up' : aed(c.remaining) + ' left' }}
-              </div>
+              <div class="font-bold text-slate-100">{{ aed(c.amount) }}</div>
+              <div class="text-[10px] text-emerald-400">{{ aed(c.remaining) }} left</div>
             </div>
           </div>
-
-          <!-- Consumed by which expenses -->
-          <div v-if="c.consumedBy.length" class="mt-2 ml-9.5 space-y-1">
+          <!-- Partial consumption so far -->
+          <div v-if="c.consumedBy.length" class="mt-2 ml-9 space-y-1">
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between text-[10px] text-slate-500">
               <span>→ {{ cb.title }}</span>
-              <span class="text-rose-400/80">−{{ aed(cb.amount) }}</span>
+              <span class="text-rose-400/70">−{{ aed(cb.amount) }}</span>
             </div>
           </div>
-
-          <!-- Edit / Delete (creator or manager) -->
-          <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9.5">
+          <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9">
             <button class="text-[10px] text-slate-500 hover:text-neon transition"
               @click="openWalletEditForm(c)">✏️ Edit</button>
             <button class="text-[10px] text-rose-500/60 hover:text-rose-400 transition"
@@ -869,6 +762,57 @@ const isMe = id => myPlayer.value?.id === id
           </div>
         </div>
       </div>
+
+      <!-- ── Consumed contributions ── -->
+      <div v-if="fifoResult.consumed.length" class="card overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-white/[.06]">
+          <div class="text-xs font-semibold text-slate-400">✓ Wallet Consumed</div>
+          <div class="text-[10px] text-slate-600">Fully used — tap to see which expenses</div>
+        </div>
+
+        <div v-for="c in fifoResult.consumed" :key="c.id"
+          class="border-b border-white/[.04] last:border-0">
+
+          <!-- Row (tap to expand) -->
+          <button class="w-full px-4 py-3 flex items-center justify-between text-left"
+            @click="expandedConsumed = expandedConsumed === c.id ? null : c.id">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0"
+                style="background:rgba(100,116,139,.12); color:#475569">✓</div>
+              <div class="min-w-0">
+                <div class="text-sm text-slate-500">
+                  {{ isMe(c.player_id) ? 'You' : c.player_name }}
+                </div>
+                <div class="text-[10px] text-slate-600">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <div class="font-bold text-slate-600 line-through text-sm">{{ aed(c.amount) }}</div>
+              <span class="text-slate-600 text-xs transition-transform duration-200"
+                :style="expandedConsumed === c.id ? 'transform:rotate(180deg)' : ''">▾</span>
+            </div>
+          </button>
+
+          <!-- Expanded: expense breakdown -->
+          <div v-if="expandedConsumed === c.id"
+            class="px-4 pb-3 ml-9 space-y-2 border-t border-white/[.04]">
+            <div class="pt-2 text-[10px] text-slate-600 mb-1">Used for:</div>
+            <div v-for="cb in c.consumedBy" :key="cb.expenseId"
+              class="flex items-center justify-between rounded-lg px-3 py-2"
+              style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06)">
+              <span class="text-xs text-slate-400">{{ cb.title }}</span>
+              <span class="text-xs font-semibold text-slate-400">{{ aed(cb.amount) }}</span>
+            </div>
+            <div v-if="canModify(c)" class="flex gap-3 pt-1">
+              <button class="text-[10px] text-slate-600 hover:text-neon transition"
+                @click="openWalletEditForm(c)">✏️ Edit</button>
+              <button class="text-[10px] text-rose-600/50 hover:text-rose-400 transition"
+                @click="confirmDelWallet = c.id">🗑️ Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══════════════════════════════ TOTALS ══════════════════════════════ -->
@@ -960,16 +904,16 @@ const isMe = id => myPlayer.value?.id === id
       <div v-if="showForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showForm = false" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
-          style="background:#0a1628; border-top:1px solid rgba(255,255,255,.1); max-height:92vh">
+          style="background:#ffffff; border-top:1px solid rgba(0,0,0,.1); max-height:92vh">
 
           <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
-            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.06)">
-            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            style="background:#ffffff; border-bottom:1px solid rgba(0,0,0,.07)">
+            <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-3" />
             <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-100">
+              <span class="font-semibold text-slate-800">
                 {{ editingId ? 'Edit Expense' : 'Add Expense' }}
               </span>
-              <button @click="showForm = false" class="text-slate-400 hover:text-slate-200 text-lg">✕</button>
+              <button @click="showForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
           </div>
 
@@ -988,8 +932,8 @@ const isMe = id => myPlayer.value?.id === id
                 <button v-for="c in CATEGORIES" :key="c.value"
                   @click="form.category = c.value"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
-                  :class="form.category === c.value ? 'text-slate-950 font-bold' : 'text-slate-400 border border-white/10 hover:border-white/25'"
-                  :style="form.category === c.value ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
+                  :class="form.category === c.value ? 'text-white font-bold' : 'text-slate-500 border border-slate-200 hover:border-slate-400'"
+                  :style="form.category === c.value ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
                   {{ c.icon }} {{ c.label }}
                 </button>
               </div>
@@ -1014,15 +958,15 @@ const isMe = id => myPlayer.value?.id === id
                 <button
                   @click="form.paymentSource = 'person'"
                   class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
-                  :class="form.paymentSource === 'person' ? 'text-slate-950' : 'text-slate-400 border border-white/10'"
-                  :style="form.paymentSource === 'person' ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
+                  :class="form.paymentSource === 'person' ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="form.paymentSource === 'person' ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
                   👤 Person Paid
                 </button>
                 <button
                   @click="form.paymentSource = 'wallet'"
                   class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
-                  :class="form.paymentSource === 'wallet' ? 'text-white' : 'text-slate-400 border border-white/10'"
-                  :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed); border:1px solid rgba(168,85,247,.4)' : ''">
+                  :class="form.paymentSource === 'wallet' ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed)' : ''">
                   💰 Common Wallet
                 </button>
               </div>
@@ -1030,8 +974,8 @@ const isMe = id => myPlayer.value?.id === id
               <div v-if="form.paymentSource === 'wallet'"
                 class="mt-2 text-[10px] px-3 py-2 rounded-lg"
                 :style="walletBalance >= 0
-                  ? 'background:rgba(0,229,255,.06); color:#64b5f6; border:1px solid rgba(0,229,255,.15)'
-                  : 'background:rgba(244,63,94,.06); color:#f87171; border:1px solid rgba(244,63,94,.2)'">
+                  ? 'background:rgba(0,153,184,.08); color:#0077a0; border:1px solid rgba(0,153,184,.2)'
+                  : 'background:rgba(220,38,38,.06); color:#dc2626; border:1px solid rgba(220,38,38,.2)'">
                 Wallet balance: {{ aed(walletBalance) }}
                 {{ walletBalance < 0 ? ' — wallet is in deficit' : '' }}
               </div>
@@ -1053,9 +997,9 @@ const isMe = id => myPlayer.value?.id === id
               <div class="flex items-center justify-between mb-2">
                 <label class="label mb-0">Split Among</label>
                 <div class="flex gap-3">
-                  <button class="text-[10px] text-neon" @click="form.participant_ids = players.map(p => p.id)">All</button>
-                  <button class="text-[10px] text-slate-500" @click="form.participant_ids = []">None</button>
-                  <button class="text-[10px] text-slate-500"
+                  <button class="text-[10px] text-cyan-600 font-semibold" @click="form.participant_ids = players.map(p => p.id)">All</button>
+                  <button class="text-[10px] text-slate-400" @click="form.participant_ids = []">None</button>
+                  <button class="text-[10px] text-slate-400"
                     @click="form.participant_ids = players.filter(p => p.is_active).map(p => p.id)">
                     Active only
                   </button>
@@ -1063,7 +1007,7 @@ const isMe = id => myPlayer.value?.id === id
               </div>
 
               <div v-if="perShare && form.participant_ids.length"
-                class="text-[11px] text-neon mb-2 font-semibold">
+                class="text-[11px] font-semibold mb-2" style="color:#0077a0">
                 AED {{ perShare }} per person ({{ form.participant_ids.length }} selected)
               </div>
 
@@ -1071,10 +1015,10 @@ const isMe = id => myPlayer.value?.id === id
                 <label v-for="p in players" :key="p.id"
                   class="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-all text-sm select-none"
                   :class="form.participant_ids.includes(p.id)
-                    ? 'text-slate-100 font-medium'
-                    : 'text-slate-500 border border-white/10'"
+                    ? 'font-medium text-slate-800'
+                    : 'text-slate-500 border border-slate-200'"
                   :style="form.participant_ids.includes(p.id)
-                    ? 'background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.28)'
+                    ? 'background:rgba(0,153,184,.1); border:1px solid rgba(0,153,184,.3)'
                     : ''"
                   @click="toggleParticipant(p.id)">
                   <span class="text-xs w-3 shrink-0">{{ form.participant_ids.includes(p.id) ? '✓' : '' }}</span>
@@ -1085,11 +1029,11 @@ const isMe = id => myPlayer.value?.id === id
 
             <!-- Notes -->
             <div>
-              <label class="label">Notes <span class="text-slate-600">(optional)</span></label>
+              <label class="label">Notes <span class="text-slate-400 normal-case tracking-normal">(optional)</span></label>
               <input v-model="form.notes" class="input" placeholder="Any extra details…" maxlength="120" />
             </div>
 
-            <p v-if="formError" class="text-xs text-rose-400 px-1">{{ formError }}</p>
+            <p v-if="formError" class="text-xs text-rose-600 px-1">{{ formError }}</p>
 
             <button class="btn-primary w-full py-3" :disabled="formSaving" @click="saveExpense">
               {{ formSaving ? 'Saving…' : editingId ? '✓ Update Expense' : '➕ Add Expense' }}
@@ -1104,16 +1048,16 @@ const isMe = id => myPlayer.value?.id === id
       <div v-if="showWalletForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showWalletForm = false" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
-          style="background:#0a1628; border-top:1px solid rgba(168,85,247,.3); max-height:85vh">
+          style="background:#ffffff; border-top:1px solid rgba(168,85,247,.3); max-height:85vh">
 
           <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
-            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.06)">
-            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            style="background:#ffffff; border-bottom:1px solid rgba(0,0,0,.07)">
+            <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-3" />
             <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-100">
+              <span class="font-semibold text-slate-800">
                 {{ walletEditId ? 'Edit Contribution' : 'Add Wallet Contribution' }}
               </span>
-              <button @click="showWalletForm = false" class="text-slate-400 hover:text-slate-200 text-lg">✕</button>
+              <button @click="showWalletForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
           </div>
 
@@ -1140,18 +1084,18 @@ const isMe = id => myPlayer.value?.id === id
             <div>
               <label class="label">
                 Date &amp; Time
-                <span class="text-[10px] text-slate-500 font-normal ml-1">— determines queue position</span>
+                <span class="text-[10px] text-slate-400 font-normal normal-case tracking-normal ml-1">— determines queue position</span>
               </label>
               <input v-model="walletForm.contributed_at" type="datetime-local" class="input" />
             </div>
 
             <!-- Notes -->
             <div>
-              <label class="label">Notes <span class="text-slate-600">(optional)</span></label>
+              <label class="label">Notes <span class="text-slate-400 normal-case tracking-normal">(optional)</span></label>
               <input v-model="walletForm.notes" class="input" placeholder="e.g. June court fee, whatsapp payment…" maxlength="100" />
             </div>
 
-            <p v-if="walletFormError" class="text-xs text-rose-400 px-1">{{ walletFormError }}</p>
+            <p v-if="walletFormError" class="text-xs text-rose-600 px-1">{{ walletFormError }}</p>
 
             <button class="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-[.98]"
               style="background:linear-gradient(135deg,#a855f7,#7c3aed)"

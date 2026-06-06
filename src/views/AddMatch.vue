@@ -7,15 +7,17 @@ import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
 const { currentClub, isManager } = useClub()
-const players    = ref([])
-const sideA      = ref([])
-const sideB      = ref([])
-const scoreA     = ref(21)
-const scoreB     = ref(0)
-const playedOn   = ref(new Date().toISOString().slice(0, 10))
-const matchName  = ref('')
-const msg        = ref(null)
-const saving     = ref(false)
+const players      = ref([])
+const sideA        = ref([])
+const sideB        = ref([])
+const scoreA       = ref(21)
+const scoreB       = ref(0)
+const playedOn     = ref(new Date().toISOString().slice(0, 10))
+const matchName    = ref('')
+const matchNameEdited = ref(false)
+const nextMatchNum = ref(null)
+const msg          = ref(null)
+const saving       = ref(false)
 
 // Schedule-aware player filter
 const scheduleId         = ref(null)
@@ -59,8 +61,24 @@ async function loadPlayers() {
   players.value = await withNicknames(data ?? [])
 }
 
-onMounted(async () => { await loadPlayers(); await checkScheduleAttendees(playedOn.value) })
-watch(currentClub, () => { reset(); loadPlayers() })
+async function loadNextMatchNum() {
+  if (!currentClub.value) return
+  const { data } = await supabase
+    .from('matches')
+    .select('match_number')
+    .eq('club_id', currentClub.value.club_id)
+    .order('match_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  nextMatchNum.value = (data?.match_number ?? 0) + 1
+}
+
+onMounted(async () => {
+  await loadPlayers()
+  await loadNextMatchNum()
+  await checkScheduleAttendees(playedOn.value)
+})
+watch(currentClub, () => { reset(); loadPlayers(); loadNextMatchNum() })
 watch(playedOn, (date) => checkScheduleAttendees(date))
 
 const chosen = computed(() => new Set([...sideA.value, ...sideB.value]))
@@ -85,10 +103,24 @@ const avgElo = arr => arr.length
   ? Math.round(arr.reduce((s, id) => s + (eloOf(id) ?? 1000), 0) / arr.length)
   : '—'
 
+const abbrev = id => (nameOf(id) ?? '').slice(0, 2).toUpperCase()
+
+const autoMatchName = computed(() => {
+  if (sideA.value.length < 2 || sideB.value.length < 2) return ''
+  const a   = sideA.value.map(abbrev).join('-')
+  const b   = sideB.value.map(abbrev).join('-')
+  const num = nextMatchNum.value ? `#${nextMatchNum.value} ` : ''
+  return `${num}${a} VS ${b}`
+})
+
+watch(autoMatchName, newName => {
+  if (!matchNameEdited.value) matchName.value = newName
+})
+
 function reset() {
   sideA.value = []; sideB.value = []
   scoreA.value = 21; scoreB.value = 0
-  matchName.value = ''; msg.value = null
+  matchName.value = ''; matchNameEdited.value = false; msg.value = null
 }
 
 async function submit() {
@@ -105,7 +137,7 @@ async function submit() {
   saving.value = false
   if (error) { msg.value = { ok: false, t: error.message }; return }
   msg.value = { ok: true, t: '✅ Match saved! Elo + attendance updated for all 4 players.' }
-  reset(); loadPlayers()
+  reset(); loadPlayers(); loadNextMatchNum()
 }
 </script>
 
@@ -137,7 +169,8 @@ async function submit() {
       </div>
       <div>
         <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
-        <input v-model="matchName" class="input" placeholder="Auto-generated if blank" maxlength="40" />
+        <input v-model="matchName" class="input" placeholder="Auto-generated from player names" maxlength="40"
+          @input="matchNameEdited = true" />
       </div>
     </div>
 
