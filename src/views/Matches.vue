@@ -4,11 +4,13 @@ import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { buildNameMap } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
+import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
 
 const router = useRouter()
 const route  = useRoute()
 const { currentClub, isManager } = useClub()
+const { user } = useAuth()
 
 const matches   = ref([])
 const loading   = ref(true)
@@ -23,7 +25,7 @@ async function load() {
   const { data } = await supabase
     .from('matches')
     .select(`
-      id, played_on, created_at, display_name, match_number,
+      id, played_on, created_at, created_by, display_name, match_number,
       match_sides(
         id, side, score, is_winner,
         match_participants(
@@ -43,6 +45,7 @@ async function load() {
       id: m.id,
       played_on: m.played_on,
       created_at: m.created_at,
+      created_by: m.created_by,
       name: m.display_name ?? `Match #${m.match_number}`,
       match_number: m.match_number,
       sideA: {
@@ -137,6 +140,9 @@ async function confirmDoDelete() {
 const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short', year:'numeric' })
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
 const deltaText  = d => d > 0 ? `+${d}` : `${d}`
+
+const canDelete = m =>
+  m.created_by === user.value?.id || currentClub.value?.role === 'owner'
 </script>
 
 <template>
@@ -262,15 +268,17 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
           </div>
         </div>
 
-        <!-- Manager actions -->
-        <div v-if="isManager() && renaming !== m.id" class="mt-2">
+        <!-- Match actions -->
+        <div v-if="(isManager() || canDelete(m)) && renaming !== m.id" class="mt-2">
           <p v-if="deleteError && deleting !== m.id" class="text-[10px] text-rose-400 mb-1.5 px-2">
             ⚠️ {{ deleteError }}
           </p>
           <div class="flex justify-between items-center">
-            <button class="text-[11px] text-slate-500 hover:text-neon transition px-2 py-1"
+            <button v-if="isManager()" class="text-[11px] text-slate-500 hover:text-neon transition px-2 py-1"
               @click="startRename(m)">✏️ Rename</button>
-            <button class="text-[11px] text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
+            <div v-else />
+            <button v-if="canDelete(m)"
+              class="text-[11px] text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
               :disabled="deleting === m.id"
               @click="askDelete(m)">
               {{ deleting === m.id ? '⏳ Deleting…' : '🗑️ Delete match' }}

@@ -6,7 +6,7 @@ import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
-const { currentClub, isManager } = useClub()
+const { currentClub } = useClub()
 const players      = ref([])
 const sideA        = ref([])
 const sideB        = ref([])
@@ -142,13 +142,7 @@ async function submit() {
 </script>
 
 <template>
-  <div v-if="!isManager()" class="card p-6 text-center">
-    <div class="text-3xl mb-3">🔒</div>
-    <p class="font-semibold">Managers only</p>
-    <p class="text-sm text-slate-400 mt-1">Only club owners and managers can record matches. Contact your manager.</p>
-  </div>
-
-  <template v-else>
+  <div>
     <PageHeader icon="➕" title="Add Match" subtitle="Record a doubles result — Elo updates instantly">
       <template #help>
         <div class="text-xs space-y-1.5">
@@ -265,5 +259,5 @@ async function submit() {
       :class="msg.ok ? 'bg-teal-500/15 text-teal-300' : 'bg-rose-500/15 text-rose-300'">
       {{ msg.t }}
     </p>
-  </template>
+  </div>
 </template>
