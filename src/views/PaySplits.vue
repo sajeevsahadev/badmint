@@ -5,27 +5,30 @@ import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
 
-const { currentClub } = useClub()
+const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 
 // ── Constants ──────────────────────────────────────────────────────────
 const CURRENCY = 'AED'
 const CATEGORIES = [
-  { value: 'facility',  label: 'Court Rent',  icon: '🏟️' },
-  { value: 'food',      label: 'Food / Snacks', icon: '🍔' },
-  { value: 'drinks',    label: 'Water / Tea',  icon: '☕' },
+  { value: 'facility',  label: 'Court Rent',      icon: '🏟️' },
+  { value: 'food',      label: 'Food / Snacks',    icon: '🍔' },
+  { value: 'drinks',    label: 'Water / Tea',      icon: '☕' },
   { value: 'equipment', label: 'Cork / Equipment', icon: '🏸' },
-  { value: 'transport', label: 'Transport',    icon: '🚗' },
-  { value: 'tax',       label: 'Tax / Fees',   icon: '📋' },
-  { value: 'other',     label: 'Other',        icon: '💡' },
+  { value: 'transport', label: 'Transport',        icon: '🚗' },
+  { value: 'tax',       label: 'Tax / Fees',       icon: '📋' },
+  { value: 'other',     label: 'Other',            icon: '💡' },
 ]
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 const catIcon  = v => CATEGORIES.find(c => c.value === v)?.icon  ?? '💡'
 const catLabel = v => CATEGORIES.find(c => c.value === v)?.label ?? v
-
-const aed = n => `${CURRENCY} ${Number(n).toFixed(2)}`
-const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
+const aed      = n => `${CURRENCY} ${Number(n).toFixed(2)}`
+const fmtDate  = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
+const fmtDatetime = ts => new Date(ts).toLocaleString('en-AE', {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+})
+const toDatetimeLocal = d => new Date(d).toISOString().slice(0, 16)
 const timeAgo = ts => {
   const mins = Math.floor((Date.now() - new Date(ts)) / 60000)
   if (mins < 1)  return 'just now'
@@ -43,6 +46,7 @@ const balances       = ref([])
 const players        = ref([])
 const notes          = ref([])
 const myPlayer       = ref(null)
+const walletData     = ref({ contributions: [], wallet_expenses: [], player_balances: [] })
 const loading        = ref(true)
 const activeTab      = ref('activities')
 const expandedPlayer = ref(null)
@@ -53,7 +57,7 @@ async function load() {
   loading.value = true
   const cid = currentClub.value.club_id
 
-  const [plRes, expRes, balRes, noteRes, myPlRes] = await Promise.all([
+  const [plRes, expRes, balRes, noteRes, myPlRes, wRes] = await Promise.all([
     supabase.rpc('get_club_players', { p_club_id: cid }),
     supabase.rpc('get_expenses', { p_club_id: cid }),
     supabase.rpc('get_balance_summary', { p_club_id: cid }),
@@ -62,7 +66,8 @@ async function load() {
       .eq('club_id', cid).order('created_at', { ascending: false }),
     supabase.from('players')
       .select('id, display_name, user_id')
-      .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle()
+      .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle(),
+    supabase.rpc('get_wallet_data', { p_club_id: cid })
   ])
 
   players.value  = plRes.data  ?? []
@@ -76,11 +81,24 @@ async function load() {
     author: players.value.find(p => p.user_id === n.created_by)?.display_name ?? 'Member'
   }))
 
+  if (wRes.data) {
+    walletData.value = {
+      contributions:   wRes.data.contributions   ?? [],
+      wallet_expenses: wRes.data.wallet_expenses ?? [],
+      player_balances: wRes.data.player_balances ?? []
+    }
+  }
+
   loading.value = false
 }
 
 onMounted(load)
 watch(currentClub, () => { expandedPlayer.value = null; load() })
+
+// ── Permission helper: creator or club manager/owner ───────────────────
+function canModify(item) {
+  return item.created_by === user.value?.id || isManager()
+}
 
 // ── My balance summary (header card) ──────────────────────────────────
 const myBalance = computed(() => {
@@ -97,15 +115,26 @@ const myBalance = computed(() => {
   return { owe, gets, totalOwe, totalGets, net: totalGets - totalOwe }
 })
 
+// ── My wallet position ─────────────────────────────────────────────────
+const myWalletPosition = computed(() => {
+  const mid = myPlayer.value?.id
+  if (!mid) return null
+  const wb = walletData.value.player_balances.find(p => p.player_id === mid)
+  return wb ? { contributed: Number(wb.contributed), expense_share: Number(wb.expense_share), balance: Number(wb.balance) } : null
+})
+
 // ── My contribution per expense ────────────────────────────────────────
 function myContrib(exp) {
   const mid = myPlayer.value?.id
   if (!mid) return null
-  const isPayer = exp.paid_player_id === mid
+  const isPayer = !exp.paid_from_wallet && exp.paid_player_id === mid
   const part    = exp.participants?.find(p => p.player_id === mid)
   if (!isPayer && !part) return null
-  if (isPayer && !part)  return { type: 'paid', net: Number(exp.amount) }
-  if (isPayer &&  part)  return { type: 'paid', net: Number(exp.amount) - Number(part.share) }
+  if (exp.paid_from_wallet) {
+    return part ? { type: 'wallet', net: -Number(part.share) } : null
+  }
+  if (isPayer && !part) return { type: 'paid', net: Number(exp.amount) }
+  if (isPayer &&  part) return { type: 'paid', net: Number(exp.amount) - Number(part.share) }
   return { type: 'split', net: -Number(part.share) }
 }
 
@@ -134,6 +163,50 @@ const playerBalanceList = computed(() => {
       return Math.abs(b.net) - Math.abs(a.net)
     })
 })
+
+// ── Wallet: FIFO computation (frontend) ───────────────────────────────
+// Oldest contribution is depleted first when a wallet expense is recorded.
+const fifoResult = computed(() => {
+  const contribs = [...walletData.value.contributions]
+    .sort((a, b) => new Date(a.contributed_at) - new Date(b.contributed_at))
+
+  const wExps = [...walletData.value.wallet_expenses]
+    .sort((a, b) => {
+      const d = (a.expense_date ?? '').localeCompare(b.expense_date ?? '')
+      return d || new Date(a.created_at) - new Date(b.created_at)
+    })
+
+  const remaining  = {}
+  const consumedBy = {}
+  contribs.forEach(c => { remaining[c.id] = Number(c.amount); consumedBy[c.id] = [] })
+
+  wExps.forEach(exp => {
+    let toConsume = Number(exp.amount)
+    for (const c of contribs) {
+      if (remaining[c.id] < 0.005 || toConsume < 0.005) continue
+      const take = Math.min(remaining[c.id], toConsume)
+      remaining[c.id] = Math.round((remaining[c.id] - take) * 100) / 100
+      toConsume       = Math.round((toConsume - take) * 100) / 100
+      consumedBy[c.id].push({ expenseId: exp.id, title: exp.title, amount: take })
+    }
+  })
+
+  return {
+    contributions: contribs.map(c => ({
+      ...c,
+      remaining:  remaining[c.id] ?? 0,
+      consumedBy: consumedBy[c.id] ?? []
+    }))
+  }
+})
+
+const walletTotalContributed = computed(() =>
+  walletData.value.contributions.reduce((s, c) => s + Number(c.amount), 0)
+)
+const walletTotalExpenses = computed(() =>
+  walletData.value.wallet_expenses.reduce((s, e) => s + Number(e.amount), 0)
+)
+const walletBalance = computed(() => walletTotalContributed.value - walletTotalExpenses.value)
 
 // ── Totals tab computeds ───────────────────────────────────────────────
 const allTimeTotal = computed(() =>
@@ -180,10 +253,13 @@ const formError  = ref(null)
 const formSaving = ref(false)
 
 const blankForm = () => ({
-  title: '', category: 'other', amount: '',
-  paid_player_id: myPlayer.value?.id ?? '',
-  expense_date: new Date().toISOString().slice(0, 10),
-  notes: '',
+  title:           '',
+  category:        'other',
+  amount:          '',
+  paymentSource:   'person',
+  paid_player_id:  myPlayer.value?.id ?? '',
+  expense_date:    new Date().toISOString().slice(0, 10),
+  notes:           '',
   participant_ids: players.value.filter(p => p.is_active).map(p => p.id)
 })
 
@@ -202,7 +278,8 @@ function openEditForm(exp) {
     title:           exp.title,
     category:        exp.category,
     amount:          String(exp.amount),
-    paid_player_id:  exp.paid_player_id,
+    paymentSource:   exp.paid_from_wallet ? 'wallet' : 'person',
+    paid_player_id:  exp.paid_player_id ?? '',
     expense_date:    exp.expense_date,
     notes:           exp.notes ?? '',
     participant_ids: (exp.participants ?? []).map(p => p.player_id)
@@ -221,19 +298,22 @@ async function saveExpense() {
   const amt = parseFloat(form.value.amount)
   if (!form.value.title.trim())          { formError.value = 'Title is required'; return }
   if (!amt || amt <= 0)                  { formError.value = 'Enter a valid amount'; return }
-  if (!form.value.paid_player_id)        { formError.value = 'Select who paid'; return }
+  if (form.value.paymentSource === 'person' && !form.value.paid_player_id)
+                                         { formError.value = 'Select who paid'; return }
   if (!form.value.participant_ids.length){ formError.value = 'Select at least one participant'; return }
 
   formSaving.value = true
+  const isWallet = form.value.paymentSource === 'wallet'
   const params = {
-    p_club_id:        currentClub.value.club_id,
-    p_title:          form.value.title.trim(),
-    p_category:       form.value.category,
-    p_amount:         amt,
-    p_paid_player_id: form.value.paid_player_id,
-    p_expense_date:   form.value.expense_date,
-    p_participant_ids: form.value.participant_ids,
-    p_notes:          form.value.notes.trim() || null
+    p_club_id:          currentClub.value.club_id,
+    p_title:            form.value.title.trim(),
+    p_category:         form.value.category,
+    p_amount:           amt,
+    p_paid_player_id:   isWallet ? null : form.value.paid_player_id,
+    p_expense_date:     form.value.expense_date,
+    p_participant_ids:  form.value.participant_ids,
+    p_notes:            form.value.notes.trim() || null,
+    p_paid_from_wallet: isWallet
   }
 
   const { error } = editingId.value
@@ -260,6 +340,81 @@ async function doDelete() {
   await load()
 }
 
+// ── Wallet contribution form ───────────────────────────────────────────
+const showWalletForm   = ref(false)
+const walletEditId     = ref(null)
+const walletFormError  = ref(null)
+const walletFormSaving = ref(false)
+const confirmDelWallet = ref(null)
+
+const blankWalletForm = () => ({
+  player_id:      myPlayer.value?.id ?? (players.value[0]?.id ?? ''),
+  amount:         '',
+  notes:          '',
+  contributed_at: toDatetimeLocal(new Date())
+})
+
+const walletForm = ref(blankWalletForm())
+
+function openWalletAddForm() {
+  walletEditId.value    = null
+  walletForm.value      = blankWalletForm()
+  walletFormError.value = null
+  showWalletForm.value  = true
+}
+
+function openWalletEditForm(contrib) {
+  walletEditId.value = contrib.id
+  walletForm.value = {
+    player_id:      contrib.player_id,
+    amount:         String(contrib.amount),
+    notes:          contrib.notes ?? '',
+    contributed_at: toDatetimeLocal(new Date(contrib.contributed_at))
+  }
+  walletFormError.value = null
+  showWalletForm.value  = true
+}
+
+async function saveContrib() {
+  walletFormError.value = null
+  const amt = parseFloat(walletForm.value.amount)
+  if (!walletForm.value.player_id) { walletFormError.value = 'Select a player'; return }
+  if (!amt || amt <= 0)            { walletFormError.value = 'Enter a valid amount'; return }
+
+  walletFormSaving.value = true
+  const params = {
+    p_amount:         amt,
+    p_notes:          walletForm.value.notes.trim() || null,
+    p_contributed_at: new Date(walletForm.value.contributed_at).toISOString()
+  }
+
+  let error
+  if (walletEditId.value) {
+    const res = await supabase.rpc('update_wallet_contribution', { p_id: walletEditId.value, ...params })
+    error = res.error
+  } else {
+    const res = await supabase.rpc('add_wallet_contribution', {
+      p_club_id:   currentClub.value.club_id,
+      p_player_id: walletForm.value.player_id,
+      ...params
+    })
+    error = res.error
+  }
+
+  walletFormSaving.value = false
+  if (error) { walletFormError.value = error.message; return }
+  showWalletForm.value = false
+  await load()
+}
+
+async function doDeleteContrib() {
+  const id = confirmDelWallet.value
+  if (!id) return
+  confirmDelWallet.value = null
+  await supabase.rpc('delete_wallet_contribution', { p_id: id })
+  await load()
+}
+
 // ── Notes ──────────────────────────────────────────────────────────────
 const noteText   = ref('')
 const noteSaving = ref(false)
@@ -282,7 +437,6 @@ async function deleteNote(id) {
   notes.value = notes.value.filter(n => n.id !== id)
 }
 
-// Per-share live preview
 const perShare = computed(() => {
   const amt = parseFloat(form.value.amount)
   const n   = form.value.participant_ids.length
@@ -302,11 +456,11 @@ const isMe = id => myPlayer.value?.id === id
     <PageHeader icon="💰" title="PaySplits" subtitle="Track & split court costs equally among players">
       <template #help>
         <div class="text-xs space-y-1.5">
-          <p><strong class="text-slate-800">Add Expense</strong> — Record any shared cost (rent, tea, cork). Select who paid and who splits it.</p>
-          <p><strong class="text-slate-800">Activities</strong> — Full expense list with your contribution per item.</p>
-          <p><strong class="text-slate-800">Balance</strong> — Who owes whom across all expenses. Tap a name to see the breakdown.</p>
+          <p><strong class="text-slate-800">Activities</strong> — Full expense list with your contribution per item. Only the person who added an entry (or a manager) can edit or delete it.</p>
+          <p><strong class="text-slate-800">Balance</strong> — Who owes whom across person-paid expenses. Tap a name to expand.</p>
+          <p><strong class="text-slate-800">Wallet</strong> — Shared cash pool. Contributions are consumed oldest-first (FIFO) when a wallet expense is recorded.</p>
           <p><strong class="text-slate-800">Totals</strong> — Monthly spending charts and all-time summary.</p>
-          <p><strong class="text-slate-800">Notes</strong> — Shared notepad for payment reminders or group agreements.</p>
+          <p><strong class="text-slate-800">Notes</strong> — Shared notepad for payment reminders.</p>
         </div>
       </template>
     </PageHeader>
@@ -322,21 +476,34 @@ const isMe = id => myPlayer.value?.id === id
           </span>
         </div>
         <div class="text-xs text-slate-500 mb-3">
-          {{ myBalance.net > 0.01 ? 'Overall you get back' : myBalance.net < -0.01 ? 'Overall you owe' : '🎉 All settled up!' }}
+          {{ myBalance.net > 0.01 ? 'Overall you get back (person-paid expenses)' : myBalance.net < -0.01 ? 'Overall you owe (person-paid expenses)' : '🎉 All settled up!' }}
         </div>
         <div class="space-y-1.5">
-          <div v-for="g in myBalance.gets" :key="g.name"
-            class="flex items-center justify-between text-xs">
+          <div v-for="g in myBalance.gets" :key="g.name" class="flex items-center justify-between text-xs">
             <span class="text-slate-400">{{ g.name }} owes you</span>
             <span class="font-semibold text-emerald-400">+{{ aed(g.amount) }}</span>
           </div>
-          <div v-for="o in myBalance.owe" :key="o.name"
-            class="flex items-center justify-between text-xs">
+          <div v-for="o in myBalance.owe" :key="o.name" class="flex items-center justify-between text-xs">
             <span class="text-slate-400">You owe {{ o.name }}</span>
             <span class="font-semibold text-rose-400">-{{ aed(o.amount) }}</span>
           </div>
           <div v-if="!myBalance.owe.length && !myBalance.gets.length"
-            class="text-xs text-slate-600">No outstanding balances in this club</div>
+            class="text-xs text-slate-600">No outstanding person-to-person balances</div>
+        </div>
+
+        <!-- Wallet position -->
+        <div v-if="myWalletPosition && (myWalletPosition.contributed > 0 || myWalletPosition.expense_share > 0)"
+          class="mt-3 pt-3 border-t border-white/[.06]">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-500">💰 Wallet position</span>
+            <span class="font-semibold"
+              :class="myWalletPosition.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ myWalletPosition.balance >= 0 ? '+' : '' }}{{ aed(myWalletPosition.balance) }}
+            </span>
+          </div>
+          <div class="text-[10px] text-slate-600 mt-0.5">
+            Contributed {{ aed(myWalletPosition.contributed) }} · Share of wallet expenses {{ aed(myWalletPosition.expense_share) }}
+          </div>
         </div>
       </template>
       <div v-else class="text-sm text-slate-500">
@@ -344,23 +511,24 @@ const isMe = id => myPlayer.value?.id === id
       </div>
     </div>
 
-    <!-- ── Tab bar ── -->
+    <!-- ── Tab bar (5 tabs) ── -->
     <div class="flex gap-1 mb-4 rounded-2xl p-1" style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07)">
       <button v-for="t in [
-          { key: 'activities', label: 'Activities' },
+          { key: 'activities', label: 'Expenses' },
           { key: 'balance',    label: 'Balance' },
+          { key: 'wallet',     label: 'Wallet' },
           { key: 'totals',     label: 'Totals' },
           { key: 'notes',      label: 'Notes' }
         ]" :key="t.key"
         @click="activeTab = t.key"
-        class="flex-1 py-2 rounded-xl text-xs font-semibold transition-all duration-200"
+        class="flex-1 py-2 rounded-xl text-[10px] font-semibold transition-all duration-200"
         :class="activeTab === t.key ? 'text-slate-950' : 'text-slate-500 hover:text-slate-300'"
         :style="activeTab === t.key ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
         {{ t.label }}
       </button>
     </div>
 
-    <!-- ══════════════════════════════ ACTIVITIES ══════════════════════════ -->
+    <!-- ══════════════════════════════ EXPENSES ══════════════════════════ -->
     <div v-if="activeTab === 'activities'" class="fade-up">
       <button class="btn-primary w-full py-3 mb-4 text-sm" @click="openAddForm">
         ➕ Add Expense
@@ -382,7 +550,14 @@ const isMe = id => myPlayer.value?.id === id
                 {{ catIcon(exp.category) }}
               </div>
               <div class="min-w-0">
-                <div class="font-semibold text-sm text-slate-100 truncate">{{ exp.title }}</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-semibold text-sm text-slate-100 truncate">{{ exp.title }}</span>
+                  <span v-if="exp.paid_from_wallet"
+                    class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md"
+                    style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.3)">
+                    💰 WALLET
+                  </span>
+                </div>
                 <div class="text-[10px] text-slate-500 mt-0.5">
                   {{ catLabel(exp.category) }} · {{ fmtDate(exp.expense_date) }}
                 </div>
@@ -390,7 +565,9 @@ const isMe = id => myPlayer.value?.id === id
             </div>
             <div class="text-right shrink-0">
               <div class="font-bold text-slate-100">{{ aed(exp.amount) }}</div>
-              <div class="text-[10px] text-slate-500">{{ exp.paid_name }} paid</div>
+              <div class="text-[10px] text-slate-500">
+                {{ exp.paid_from_wallet ? 'From wallet' : exp.paid_name + ' paid' }}
+              </div>
             </div>
           </div>
 
@@ -399,7 +576,9 @@ const isMe = id => myPlayer.value?.id === id
             class="flex items-center justify-between rounded-lg px-3 py-2 mb-2 text-xs"
             style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06)">
             <span class="text-slate-400">
-              {{ myContrib(exp).type === 'paid' ? 'You paid · gets back' : 'Your share' }}
+              {{ myContrib(exp).type === 'paid' ? 'You paid · gets back'
+               : myContrib(exp).type === 'wallet' ? 'Your share (wallet-paid)'
+               : 'Your share' }}
             </span>
             <span class="font-bold"
               :class="myContrib(exp).net >= 0 ? 'text-emerald-400' : 'text-rose-400'">
@@ -415,8 +594,8 @@ const isMe = id => myPlayer.value?.id === id
             </span>
           </div>
 
-          <!-- Actions -->
-          <div class="flex items-center gap-2 pt-2 border-t border-white/[0.05]">
+          <!-- Actions: only for creator or manager -->
+          <div v-if="canModify(exp)" class="flex items-center gap-2 pt-2 border-t border-white/[0.05]">
             <button class="text-[11px] text-slate-500 hover:text-neon transition"
               @click="openEditForm(exp)">✏️ Edit</button>
             <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition ml-auto"
@@ -430,11 +609,19 @@ const isMe = id => myPlayer.value?.id === id
     </div>
 
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
-    <div v-else-if="activeTab === 'balance'" class="fade-up">
+    <div v-if="activeTab === 'balance'" class="fade-up">
+      <!-- Info: wallet expenses excluded -->
+      <div v-if="walletData.wallet_expenses.length"
+        class="flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-[10px] text-slate-500"
+        style="background:rgba(168,85,247,.08); border:1px solid rgba(168,85,247,.2)">
+        <span>💰</span>
+        <span>Wallet-paid expenses are tracked in the <strong class="text-violet-400">Wallet</strong> tab, not here.</span>
+      </div>
+
       <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
         <div class="text-4xl mb-3">⚖️</div>
         <p class="font-semibold mb-1">All settled!</p>
-        <p class="text-sm">No outstanding balances in this club.</p>
+        <p class="text-sm">No outstanding balances from person-paid expenses.</p>
       </div>
 
       <div class="space-y-2">
@@ -442,12 +629,10 @@ const isMe = id => myPlayer.value?.id === id
           class="card overflow-hidden"
           :class="isMe(p.id) ? 'card-neon' : ''">
 
-          <!-- Player row (click to expand) -->
           <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
             @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
             <div class="min-w-0">
-              <span class="font-semibold text-sm"
-                :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
+              <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
                 {{ isMe(p.id) ? 'You' : p.name }}
               </span>
               <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
@@ -464,7 +649,6 @@ const isMe = id => myPlayer.value?.id === id
             </div>
           </button>
 
-          <!-- Expanded breakdown -->
           <div v-if="expandedPlayer === p.id"
             class="border-t border-white/[0.06] px-4 py-3 space-y-2">
             <div v-for="o in p.owes" :key="o.toId" class="flex items-center justify-between text-xs">
@@ -486,9 +670,140 @@ const isMe = id => myPlayer.value?.id === id
       </div>
     </div>
 
+    <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->
+    <div v-if="activeTab === 'wallet'" class="fade-up space-y-4">
+
+      <!-- Wallet balance summary -->
+      <div class="card p-4">
+        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Common Wallet</div>
+        <div class="grid grid-cols-3 gap-3 text-center mb-4">
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Contributed</div>
+            <div class="text-base font-extrabold text-emerald-400">{{ aed(walletTotalContributed) }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Spent</div>
+            <div class="text-base font-extrabold text-rose-400">{{ aed(walletTotalExpenses) }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-500 mb-1">Balance</div>
+            <div class="text-base font-extrabold"
+              :class="walletBalance >= 0 ? 'text-neon' : 'text-rose-400'">
+              {{ aed(walletBalance) }}
+            </div>
+          </div>
+        </div>
+        <div class="text-[10px] text-slate-600 text-center">
+          Contributions are used oldest-first (FIFO) when wallet pays for an expense
+        </div>
+      </div>
+
+      <!-- Add Contribution button -->
+      <button class="btn-primary w-full py-3 text-sm" @click="openWalletAddForm">
+        ➕ Add Contribution
+      </button>
+
+      <!-- Per-player wallet positions -->
+      <div v-if="walletData.player_balances.length" class="card overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-white/[.06]">
+          <div class="text-xs font-semibold text-slate-300">Player Positions</div>
+          <div class="text-[10px] text-slate-500">Contributed vs. their share of wallet expenses</div>
+        </div>
+        <div v-for="pb in walletData.player_balances" :key="pb.player_id"
+          class="flex items-center justify-between px-4 py-3 border-b border-white/[.04] last:border-0"
+          :class="isMe(pb.player_id) ? 'bg-white/[.02]' : ''">
+          <div>
+            <div class="text-sm font-medium"
+              :class="isMe(pb.player_id) ? 'text-neon' : 'text-slate-200'">
+              {{ isMe(pb.player_id) ? 'You' : pb.player_name }}
+              <span v-if="isMe(pb.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ pb.player_name }}</span>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-0.5">
+              Paid in {{ aed(pb.contributed) }} · Spent {{ aed(pb.expense_share) }}
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold text-sm"
+              :class="Number(pb.balance) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ Number(pb.balance) >= 0 ? '+' : '' }}{{ aed(pb.balance) }}
+            </div>
+            <div class="text-[9px] text-slate-600">
+              {{ Number(pb.balance) >= 0 ? 'credit' : 'owes wallet' }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FIFO Queue -->
+      <div class="card overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-white/[.06] flex items-center gap-2">
+          <div>
+            <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
+            <div class="text-[10px] text-slate-500">#1 is consumed first when wallet pays</div>
+          </div>
+        </div>
+
+        <div v-if="!fifoResult.contributions.length" class="px-4 py-8 text-center text-sm text-slate-500">
+          <div class="text-3xl mb-2">🪙</div>
+          No contributions yet. Be the first to add!
+        </div>
+
+        <div v-for="(c, i) in fifoResult.contributions" :key="c.id"
+          class="px-4 py-3 border-b border-white/[.04] last:border-0">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <!-- FIFO rank badge -->
+              <div class="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold shrink-0"
+                :style="c.remaining < 0.01
+                  ? 'background:rgba(148,163,184,.12); color:#64748b'
+                  : 'background:rgba(0,229,255,.12); color:#00e5ff'">
+                #{{ i + 1 }}
+              </div>
+              <div class="min-w-0">
+                <div class="text-sm font-semibold"
+                  :class="isMe(c.player_id) ? 'text-neon' : 'text-slate-100'">
+                  {{ isMe(c.player_id) ? 'You' : c.player_name }}
+                  <span v-if="isMe(c.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ c.player_name }}</span>
+                </div>
+                <div class="text-[10px] text-slate-500">
+                  {{ fmtDatetime(c.contributed_at) }}
+                  <span v-if="c.notes"> · {{ c.notes }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="font-bold" :class="c.remaining < 0.01 ? 'text-slate-600' : 'text-slate-100'">
+                {{ aed(c.amount) }}
+              </div>
+              <div class="text-[10px]"
+                :class="c.remaining < 0.01 ? 'text-slate-600' : 'text-emerald-400'">
+                {{ c.remaining < 0.01 ? 'used up' : aed(c.remaining) + ' left' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Consumed by which expenses -->
+          <div v-if="c.consumedBy.length" class="mt-2 ml-9.5 space-y-1">
+            <div v-for="cb in c.consumedBy" :key="cb.expenseId"
+              class="flex items-center justify-between text-[10px] text-slate-500">
+              <span>→ {{ cb.title }}</span>
+              <span class="text-rose-400/80">−{{ aed(cb.amount) }}</span>
+            </div>
+          </div>
+
+          <!-- Edit / Delete (creator or manager) -->
+          <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9.5">
+            <button class="text-[10px] text-slate-500 hover:text-neon transition"
+              @click="openWalletEditForm(c)">✏️ Edit</button>
+            <button class="text-[10px] text-rose-500/60 hover:text-rose-400 transition"
+              @click="confirmDelWallet = c.id">🗑️ Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══════════════════════════════ TOTALS ══════════════════════════════ -->
-    <div v-else-if="activeTab === 'totals'" class="fade-up">
-      <!-- Summary tiles -->
+    <div v-if="activeTab === 'totals'" class="fade-up">
       <div class="grid grid-cols-2 gap-3 mb-5">
         <div class="card p-4 text-center">
           <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1.5">All-time spent</div>
@@ -502,12 +817,10 @@ const isMe = id => myPlayer.value?.id === id
         </div>
       </div>
 
-      <!-- Bar chart: last 3 months -->
       <div class="card p-4 mb-5">
         <div class="text-xs font-semibold text-slate-300 mb-5">Last 3 Months</div>
         <div class="flex items-end justify-around gap-3" style="height:130px">
-          <div v-for="m in last3Months" :key="m.key"
-            class="flex-1 flex flex-col items-center gap-1.5">
+          <div v-for="m in last3Months" :key="m.key" class="flex-1 flex flex-col items-center gap-1.5">
             <div class="text-[10px] text-slate-400 font-semibold text-center leading-tight">
               <span v-if="m.total > 0">{{ aed(m.total) }}</span>
               <span v-else class="opacity-40">—</span>
@@ -515,9 +828,7 @@ const isMe = id => myPlayer.value?.id === id
             <div class="w-full rounded-t-xl transition-all duration-700 min-h-[4px]"
               :style="{
                 height: Math.max((m.total / barMax) * 80, m.total > 0 ? 6 : 2) + 'px',
-                background: m.total > 0
-                  ? 'linear-gradient(180deg,#00e5ff,#0099cc)'
-                  : 'rgba(255,255,255,.08)'
+                background: m.total > 0 ? 'linear-gradient(180deg,#00e5ff,#0099cc)' : 'rgba(255,255,255,.08)'
               }" />
             <div class="text-[11px] font-medium" :class="m.total > 0 ? 'text-slate-300' : 'text-slate-600'">
               {{ m.label }}
@@ -526,7 +837,6 @@ const isMe = id => myPlayer.value?.id === id
         </div>
       </div>
 
-      <!-- Monthly breakdown list -->
       <div class="card overflow-hidden">
         <div class="px-4 py-3 border-b border-white/[0.06]">
           <div class="text-xs font-semibold text-slate-300">Monthly Breakdown</div>
@@ -543,8 +853,7 @@ const isMe = id => myPlayer.value?.id === id
     </div>
 
     <!-- ══════════════════════════════ NOTES ═══════════════════════════════ -->
-    <div v-else-if="activeTab === 'notes'" class="fade-up">
-      <!-- Add note -->
+    <div v-if="activeTab === 'notes'" class="fade-up">
       <div class="card p-4 mb-4">
         <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Add a Note</div>
         <textarea v-model="noteText" rows="3" class="input resize-none w-full mb-3"
@@ -556,7 +865,6 @@ const isMe = id => myPlayer.value?.id === id
         </button>
       </div>
 
-      <!-- Notes list -->
       <div v-if="!notes.length" class="card p-10 text-center text-slate-400">
         <div class="text-4xl mb-3">📝</div>
         <p class="font-semibold mb-1">No notes yet</p>
@@ -571,22 +879,22 @@ const isMe = id => myPlayer.value?.id === id
               <span class="font-medium text-slate-400">{{ n.author }}</span>
               · {{ timeAgo(n.created_at) }}
             </div>
-            <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
+            <button v-if="canModify(n)" class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
               @click="deleteNote(n.id)">Delete</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ══════════════════════════ ADD / EDIT FORM ═════════════════════════ -->
+    <!-- ══════════════════════════ ADD / EDIT EXPENSE FORM ════════════════ -->
     <Teleport to="body">
       <div v-if="showForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showForm = false" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
           style="background:#0a1628; border-top:1px solid rgba(255,255,255,.1); max-height:92vh">
 
-          <!-- Sticky handle + title -->
-          <div class="sticky top-0 px-4 pt-3 pb-3 z-10" style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.06)">
+          <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
+            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.06)">
             <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
             <div class="flex items-center justify-between">
               <span class="font-semibold text-slate-100">
@@ -596,9 +904,7 @@ const isMe = id => myPlayer.value?.id === id
             </div>
           </div>
 
-          <!-- Scrollable form body -->
-          <div class="overflow-y-auto px-4 pb-8 space-y-4 pt-4"
-            style="max-height: calc(92vh - 72px)">
+          <div class="overflow-y-auto px-4 pb-8 space-y-4 pt-4" style="max-height: calc(92vh - 72px)">
 
             <!-- Title -->
             <div>
@@ -624,8 +930,7 @@ const isMe = id => myPlayer.value?.id === id
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="label">Amount (AED)</label>
-                <input v-model="form.amount" type="number" min="0.01" step="0.01" class="input"
-                  placeholder="0.00" />
+                <input v-model="form.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
               </div>
               <div>
                 <label class="label">Date</label>
@@ -633,8 +938,38 @@ const isMe = id => myPlayer.value?.id === id
               </div>
             </div>
 
-            <!-- Paid by -->
+            <!-- Payment source toggle -->
             <div>
+              <label class="label">Payment Source</label>
+              <div class="flex gap-2">
+                <button
+                  @click="form.paymentSource = 'person'"
+                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
+                  :class="form.paymentSource === 'person' ? 'text-slate-950' : 'text-slate-400 border border-white/10'"
+                  :style="form.paymentSource === 'person' ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
+                  👤 Person Paid
+                </button>
+                <button
+                  @click="form.paymentSource = 'wallet'"
+                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
+                  :class="form.paymentSource === 'wallet' ? 'text-white' : 'text-slate-400 border border-white/10'"
+                  :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed); border:1px solid rgba(168,85,247,.4)' : ''">
+                  💰 Common Wallet
+                </button>
+              </div>
+              <!-- Wallet balance hint -->
+              <div v-if="form.paymentSource === 'wallet'"
+                class="mt-2 text-[10px] px-3 py-2 rounded-lg"
+                :style="walletBalance >= 0
+                  ? 'background:rgba(0,229,255,.06); color:#64b5f6; border:1px solid rgba(0,229,255,.15)'
+                  : 'background:rgba(244,63,94,.06); color:#f87171; border:1px solid rgba(244,63,94,.2)'">
+                Wallet balance: {{ aed(walletBalance) }}
+                {{ walletBalance < 0 ? ' — wallet is in deficit' : '' }}
+              </div>
+            </div>
+
+            <!-- Paid by (only for person payment) -->
+            <div v-if="form.paymentSource === 'person'">
               <label class="label">Paid by</label>
               <select v-model="form.paid_player_id" class="input">
                 <option value="" disabled>Who paid?</option>
@@ -649,10 +984,8 @@ const isMe = id => myPlayer.value?.id === id
               <div class="flex items-center justify-between mb-2">
                 <label class="label mb-0">Split Among</label>
                 <div class="flex gap-3">
-                  <button class="text-[10px] text-neon"
-                    @click="form.participant_ids = players.map(p => p.id)">All</button>
-                  <button class="text-[10px] text-slate-500"
-                    @click="form.participant_ids = []">None</button>
+                  <button class="text-[10px] text-neon" @click="form.participant_ids = players.map(p => p.id)">All</button>
+                  <button class="text-[10px] text-slate-500" @click="form.participant_ids = []">None</button>
                   <button class="text-[10px] text-slate-500"
                     @click="form.participant_ids = players.filter(p => p.is_active).map(p => p.id)">
                     Active only
@@ -660,7 +993,6 @@ const isMe = id => myPlayer.value?.id === id
                 </div>
               </div>
 
-              <!-- Per-share preview -->
               <div v-if="perShare && form.participant_ids.length"
                 class="text-[11px] text-neon mb-2 font-semibold">
                 AED {{ perShare }} per person ({{ form.participant_ids.length }} selected)
@@ -688,10 +1020,8 @@ const isMe = id => myPlayer.value?.id === id
               <input v-model="form.notes" class="input" placeholder="Any extra details…" maxlength="120" />
             </div>
 
-            <!-- Error -->
             <p v-if="formError" class="text-xs text-rose-400 px-1">{{ formError }}</p>
 
-            <!-- Submit -->
             <button class="btn-primary w-full py-3" :disabled="formSaving" @click="saveExpense">
               {{ formSaving ? 'Saving…' : editingId ? '✓ Update Expense' : '➕ Add Expense' }}
             </button>
@@ -700,7 +1030,72 @@ const isMe = id => myPlayer.value?.id === id
       </div>
     </Teleport>
 
-    <!-- ══════════════════════════ DELETE CONFIRM ══════════════════════════ -->
+    <!-- ══════════════════════════ ADD / EDIT WALLET FORM ═════════════════ -->
+    <Teleport to="body">
+      <div v-if="showWalletForm" class="fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-black/70" @click="showWalletForm = false" />
+        <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
+          style="background:#0a1628; border-top:1px solid rgba(168,85,247,.3); max-height:85vh">
+
+          <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
+            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.06)">
+            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-slate-100">
+                {{ walletEditId ? 'Edit Contribution' : 'Add Wallet Contribution' }}
+              </span>
+              <button @click="showWalletForm = false" class="text-slate-400 hover:text-slate-200 text-lg">✕</button>
+            </div>
+          </div>
+
+          <div class="overflow-y-auto px-4 pb-8 space-y-4 pt-4" style="max-height: calc(85vh - 72px)">
+
+            <!-- Player -->
+            <div>
+              <label class="label">Player (who contributed)</label>
+              <select v-model="walletForm.player_id" class="input">
+                <option value="" disabled>Select player</option>
+                <option v-for="p in players" :key="p.id" :value="p.id">
+                  {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Amount -->
+            <div>
+              <label class="label">Amount (AED)</label>
+              <input v-model="walletForm.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
+            </div>
+
+            <!-- Date & time (determines FIFO position) -->
+            <div>
+              <label class="label">
+                Date &amp; Time
+                <span class="text-[10px] text-slate-500 font-normal ml-1">— determines queue position</span>
+              </label>
+              <input v-model="walletForm.contributed_at" type="datetime-local" class="input" />
+            </div>
+
+            <!-- Notes -->
+            <div>
+              <label class="label">Notes <span class="text-slate-600">(optional)</span></label>
+              <input v-model="walletForm.notes" class="input" placeholder="e.g. June court fee, whatsapp payment…" maxlength="100" />
+            </div>
+
+            <p v-if="walletFormError" class="text-xs text-rose-400 px-1">{{ walletFormError }}</p>
+
+            <button class="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-[.98]"
+              style="background:linear-gradient(135deg,#a855f7,#7c3aed)"
+              :disabled="walletFormSaving"
+              @click="saveContrib">
+              {{ walletFormSaving ? 'Saving…' : walletEditId ? '✓ Update Contribution' : '💰 Record Contribution' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════ DELETE EXPENSE CONFIRM ═════════════════ -->
     <Teleport to="body">
       <div v-if="confirmDelId"
         class="fixed inset-0 z-50 flex items-center justify-center px-5"
@@ -715,12 +1110,36 @@ const isMe = id => myPlayer.value?.id === id
             <p class="text-sm text-slate-400 mt-1">Balances will be recalculated for all members.</p>
           </div>
           <div class="flex gap-3">
-            <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300
-                           border border-white/10 hover:border-white/25 hover:text-white transition"
+            <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
               @click="confirmDelId = null">Cancel</button>
             <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
               style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
               @click="doDelete">Yes, Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════ DELETE WALLET CONFIRM ══════════════════ -->
+    <Teleport to="body">
+      <div v-if="confirmDelWallet"
+        class="fixed inset-0 z-50 flex items-center justify-center px-5"
+        style="background:rgba(0,0,0,.75); backdrop-filter:blur(6px)"
+        @click.self="confirmDelWallet = null">
+        <div class="w-full max-w-sm rounded-2xl p-6"
+          style="background:#0d1a2e; border:1px solid rgba(168,85,247,.25); box-shadow:0 0 40px rgba(168,85,247,.1)">
+          <div class="text-center mb-4">
+            <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
+              style="background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.25)">💰</div>
+            <h3 class="font-display text-lg font-bold text-slate-100">Delete Contribution?</h3>
+            <p class="text-sm text-slate-400 mt-1">The FIFO queue and wallet balance will update accordingly.</p>
+          </div>
+          <div class="flex gap-3">
+            <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
+              @click="confirmDelWallet = null">Cancel</button>
+            <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
+              style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
+              @click="doDeleteContrib">Yes, Delete</button>
           </div>
         </div>
       </div>
