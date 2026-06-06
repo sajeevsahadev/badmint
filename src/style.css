@@ -2,59 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root { color-scheme: light; }
 
 /* ── Base ── */
 body {
   margin: 0;
   font-family: 'Outfit', system-ui, sans-serif;
-  background: #050d1a;
-  color: #e2e8f0;
+  /* Light blue-white base with brand-colour glow accents in corners */
+  background-color: #eef4ff;
+  color: #0f172a;
   min-height: 100vh;
   background-image:
-    radial-gradient(ellipse 1600px 700px at 95% -8%,  rgba(0,229,255,.13), transparent),
-    radial-gradient(ellipse 900px 600px  at -8% 90%,  rgba(168,85,247,.10), transparent),
-    radial-gradient(ellipse 700px 400px  at 50% 105%, rgba(251,191,36,.07), transparent);
+    radial-gradient(ellipse 1200px 600px at 100% 0%,   rgba(0,180,220,.16), transparent),
+    radial-gradient(ellipse 800px  600px at 0%   100%, rgba(147,51,234,.13), transparent),
+    radial-gradient(ellipse 600px  400px at 50%  115%, rgba(217,119,6,.09), transparent);
 }
 
 .font-display { font-family: 'Bricolage Grotesque', sans-serif; }
 
 /* ── Cards ── */
 .card {
-  @apply rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-xl;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.05),
-    0 4px 24px rgba(0,0,0,.35);
+  @apply rounded-2xl border;
+  background: #ffffff;
+  border-color: rgba(15,23,42,.07);
+  box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 24px rgba(0,0,0,.08);
 }
 
 .card-neon {
-  @apply card;
-  border-color: rgba(0,229,255,.2);
+  @apply rounded-2xl border;
+  background: #ffffff;
+  border-color: rgba(0,168,204,.35);
   box-shadow:
-    0 0 0 1px rgba(0,229,255,.12),
-    0 0 32px rgba(0,229,255,.08),
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 4px 24px rgba(0,0,0,.4);
+    0 0 0 1px rgba(0,168,204,.15),
+    0 0 32px rgba(0,200,240,.10),
+    0 6px 24px rgba(0,0,0,.08);
 }
 
 .card-violet {
-  @apply card;
-  border-color: rgba(168,85,247,.22);
+  @apply rounded-2xl border;
+  background: #ffffff;
+  border-color: rgba(147,51,234,.28);
   box-shadow:
-    0 0 0 1px rgba(168,85,247,.12),
-    0 0 32px rgba(168,85,247,.08),
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 4px 24px rgba(0,0,0,.4);
+    0 0 0 1px rgba(147,51,234,.12),
+    0 0 28px rgba(168,85,247,.09),
+    0 6px 24px rgba(0,0,0,.08);
 }
 
 .card-amber {
-  @apply card;
-  border-color: rgba(251,191,36,.22);
+  @apply rounded-2xl border;
+  background: #ffffff;
+  border-color: rgba(217,119,6,.30);
   box-shadow:
-    0 0 0 1px rgba(251,191,36,.12),
-    0 0 32px rgba(251,191,36,.07),
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 4px 24px rgba(0,0,0,.4);
+    0 0 0 1px rgba(251,191,36,.15),
+    0 0 24px rgba(251,191,36,.08),
+    0 6px 24px rgba(0,0,0,.08);
 }
 
 /* ── Buttons ── */
@@ -65,99 +66,104 @@ body {
 }
 
 .btn-primary {
-  @apply btn text-slate-950;
-  background: linear-gradient(135deg, #00e5ff 0%, #0099cc 100%);
-  box-shadow: 0 0 24px rgba(0,229,255,.4), 0 2px 8px rgba(0,0,0,.4);
+  @apply btn text-white;
+  background: linear-gradient(135deg, #00b4d8 0%, #0077a8 100%);
+  box-shadow: 0 2px 10px rgba(0,180,216,.40), 0 1px 3px rgba(0,0,0,.12);
 }
 .btn-primary:not(:disabled):hover {
-  box-shadow: 0 0 36px rgba(0,229,255,.6), 0 2px 8px rgba(0,0,0,.4);
+  box-shadow: 0 4px 18px rgba(0,180,216,.55), 0 1px 4px rgba(0,0,0,.14);
   transform: translateY(-1px);
 }
 
 .btn-ghost {
-  @apply btn border border-white/15 text-slate-200;
+  @apply btn text-slate-700;
+  border: 1px solid rgba(15,23,42,.15);
+  background: transparent;
 }
 .btn-ghost:not(:disabled):hover {
-  @apply bg-white/[0.06] border-white/25;
+  background: rgba(0,0,0,.04);
+  border-color: rgba(15,23,42,.24);
 }
 
 .btn-violet {
   @apply btn text-white;
   background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
-  box-shadow: 0 0 24px rgba(168,85,247,.4), 0 2px 8px rgba(0,0,0,.4);
+  box-shadow: 0 2px 10px rgba(168,85,247,.40), 0 1px 3px rgba(0,0,0,.12);
 }
 .btn-violet:not(:disabled):hover {
-  box-shadow: 0 0 36px rgba(168,85,247,.6), 0 2px 8px rgba(0,0,0,.4);
+  box-shadow: 0 4px 18px rgba(168,85,247,.55), 0 1px 4px rgba(0,0,0,.14);
   transform: translateY(-1px);
 }
 
 .btn-success {
-  @apply btn text-slate-950;
+  @apply btn text-white;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 0 20px rgba(16,185,129,.4), 0 2px 8px rgba(0,0,0,.4);
+  box-shadow: 0 2px 10px rgba(16,185,129,.40), 0 1px 3px rgba(0,0,0,.12);
 }
 .btn-success:not(:disabled):hover {
-  box-shadow: 0 0 32px rgba(16,185,129,.6);
+  box-shadow: 0 4px 18px rgba(16,185,129,.55);
   transform: translateY(-1px);
 }
 
 .btn-danger {
   @apply btn text-white;
   background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
-  box-shadow: 0 0 20px rgba(244,63,94,.3), 0 2px 8px rgba(0,0,0,.4);
+  box-shadow: 0 2px 10px rgba(244,63,94,.35), 0 1px 3px rgba(0,0,0,.12);
 }
 .btn-danger:not(:disabled):hover {
-  box-shadow: 0 0 28px rgba(244,63,94,.5);
+  box-shadow: 0 4px 18px rgba(244,63,94,.50);
   transform: translateY(-1px);
 }
 
 /* ── Input ── */
 .input {
-  @apply w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5
-         outline-none transition-all duration-200 text-slate-100
-         placeholder:text-slate-500;
+  @apply w-full rounded-xl px-3 py-2.5 outline-none transition-all duration-200
+         text-slate-800 placeholder:text-slate-400;
+  border: 1px solid rgba(15,23,42,.13);
+  background: #ffffff;
 }
 .input:focus {
-  border-color: rgba(0,229,255,.45);
-  box-shadow: 0 0 0 3px rgba(0,229,255,.1);
+  border-color: rgba(0,168,204,.50);
+  box-shadow: 0 0 0 3px rgba(0,168,204,.12);
 }
 
 /* ── Label ── */
 .label {
-  @apply text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 block font-semibold;
+  @apply text-[10px] uppercase tracking-widest mb-1.5 block font-semibold;
+  color: #64748b;
 }
 
-/* ── Neon text ── */
-.text-neon    { color: #00e5ff; text-shadow: 0 0 20px rgba(0,229,255,.5); }
-.text-violet  { color: #c084fc; text-shadow: 0 0 20px rgba(168,85,247,.5); }
-.text-gold    { color: #fbbf24; text-shadow: 0 0 20px rgba(251,191,36,.5); }
+/* ── Accent text — darkened for light-background readability ── */
+.text-neon   { color: #0099b8; }
+.text-violet { color: #8b5cf6; }
+.text-gold   { color: #d97706; }
 
 /* ── Badges ── */
 .badge {
   @apply inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider
          px-2 py-0.5 rounded-full;
 }
-.badge-pending  { @apply badge bg-amber-500/15 text-amber-400 border border-amber-500/25; }
-.badge-approved { @apply badge bg-emerald-500/15 text-emerald-400 border border-emerald-500/25; }
-.badge-rejected { @apply badge bg-rose-500/15 text-rose-400 border border-rose-500/25; }
-.badge-member   { @apply badge bg-cyan-500/15 text-cyan-400 border border-cyan-500/25; }
-.badge-owner    { @apply badge bg-amber-500/15 text-amber-300 border border-amber-500/25; }
+.badge-pending  { @apply badge bg-amber-50   text-amber-700  border border-amber-200; }
+.badge-approved { @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200; }
+.badge-rejected { @apply badge bg-rose-50    text-rose-600   border border-rose-200; }
+.badge-member   { @apply badge bg-cyan-50    text-cyan-700   border border-cyan-200; }
+.badge-owner    { @apply badge bg-violet-50  text-violet-700 border border-violet-200; }
 .badge-dot      {
   @apply w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black
          flex items-center justify-center leading-none;
-  box-shadow: 0 0 8px rgba(244,63,94,.7);
+  box-shadow: 0 0 6px rgba(244,63,94,.5);
 }
 
 /* ── Gradient text ── */
 .gradient-text {
-  background: linear-gradient(135deg, #00e5ff, #a855f7);
+  background: linear-gradient(135deg, #0094b3, #9333ea);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-gold {
-  background: linear-gradient(135deg, #fbbf24, #f97316);
+  background: linear-gradient(135deg, #d97706, #ea580c);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -171,9 +177,9 @@ body {
 .shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255,255,255,.03) 25%,
-    rgba(255,255,255,.07) 50%,
-    rgba(255,255,255,.03) 75%
+    rgba(0,0,0,.04) 25%,
+    rgba(0,0,0,.08) 50%,
+    rgba(0,0,0,.04) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
@@ -186,13 +192,13 @@ body {
 .fade-up { animation: float-up .35s ease both; }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 16px rgba(0,229,255,.3); }
-  50%       { box-shadow: 0 0 32px rgba(0,229,255,.6); }
+  0%, 100% { box-shadow: 0 0 14px rgba(0,153,184,.22); }
+  50%       { box-shadow: 0 0 26px rgba(0,153,184,.38); }
 }
 .pulse-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
 
 /* ── Divider ── */
-.divider { @apply w-full h-px bg-white/[0.06] my-4; }
+.divider { @apply w-full h-px my-4; background: rgba(0,0,0,.07); }
 
 /* ── Safe-area padding for iOS bottom nav ── */
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0); }
@@ -202,3 +208,11 @@ body {
   0%, 100% { transform: translateY(0px) scaleY(1); }
   50%       { transform: translateY(-9px) scaleY(0.97); }
 }
+
+/* ── Light-theme text remapping ──────────────────────────────────────────────
+   Tailwind's near-white slate shades (100–300) are invisible on the light
+   background. These overrides — placed AFTER @tailwind utilities — remap
+   them to dark equivalents so existing templates work without mass edits. */
+.text-slate-100 { color: #0f172a; }
+.text-slate-200 { color: #1e293b; }
+.text-slate-300 { color: #334155; }
