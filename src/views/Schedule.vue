@@ -152,31 +152,8 @@ async function openFacilityPicker() {
 }
 
 async function loadVotes(scheduleId) {
-  const { data: voteRows } = await supabase
-    .from('schedule_votes')
-    .select('user_id, vote, voted_at')
-    .eq('schedule_id', scheduleId)
-    .order('voted_at')
-
-  if (!voteRows?.length) { votes.value = []; return }
-
-  const userIds = voteRows.map(v => v.user_id)
-
-  const [{ data: profiles }, { data: playerRows }] = await Promise.all([
-    supabase.from('user_profiles').select('user_id, nickname').in('user_id', userIds),
-    supabase.from('players').select('user_id, display_name')
-      .eq('club_id', currentClub.value.club_id).not('user_id', 'is', null).in('user_id', userIds)
-  ])
-
-  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p.nickname]))
-  const playerMap  = Object.fromEntries((playerRows ?? []).map(p => [p.user_id, p.display_name]))
-
-  votes.value = voteRows.map(v => ({
-    user_id:      v.user_id,
-    vote:         v.vote,
-    voted_at:     v.voted_at,
-    display_name: profileMap[v.user_id] || playerMap[v.user_id] || 'Member'
-  }))
+  const { data } = await supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId })
+  votes.value = data ?? []
 }
 
 async function loadVotesAndAttendees(scheduleId) {

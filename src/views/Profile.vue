@@ -52,11 +52,11 @@ async function save() {
   saving.value = true; error.value = null; saved.value = false
   const { error: err } = await supabase.rpc('upsert_profile', {
     p_nickname:  form.value.nickname.trim(),
-    p_full_name: null,
+    p_full_name: profile.value?.full_name ?? null,
     p_phone:     form.value.phone.trim() || null,
     p_bio:       form.value.bio.trim()   || null,
-    p_emirate:   null,
-    p_country:   null,
+    p_emirate:   profile.value?.emirate  ?? null,
+    p_country:   profile.value?.country  ?? 'UAE',
   })
   saving.value = false
   if (err) { error.value = err.message }
