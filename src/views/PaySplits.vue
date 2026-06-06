@@ -117,10 +117,25 @@ const settledEdges = computed(() => {
     addNet(b.to_player_id,   b.to_name,   +Number(b.net_amount))
   })
 
-  // Wallet net positions (contributed − share of wallet expenses)
+  // Wallet net positions — using consumed fraction only so the sum = 0.
+  // player_balances.balance = contributed − expense_share, but this does NOT
+  // sum to zero when the wallet has unspent money (remaining > 0). That breaks
+  // greedy settle-up. Fix: scale each player's credit by the consumed fraction
+  // (totalWalletExpenses / totalContributed). Proof: sum(consumed_credit) =
+  // ratio × totalContributed = totalWalletExpenses = sum(expense_share). ✓
+  const totalContributed = walletData.value.contributions
+    .reduce((s, c) => s + Number(c.amount), 0)
+  const totalWalletExp = walletData.value.wallet_expenses
+    .reduce((s, e) => s + Number(e.amount), 0)
+  const consumedRatio = totalContributed > 0
+    ? Math.min(1, totalWalletExp / totalContributed)
+    : 0
+
   ;(walletData.value.player_balances ?? []).forEach(b => {
-    const bal = Math.round(Number(b.balance) * 100) / 100
-    if (Math.abs(bal) >= 0.01) addNet(b.player_id, b.player_name, bal)
+    const consumedCredit = Math.round(Number(b.contributed) * consumedRatio * 100) / 100
+    const expenseShare   = Math.round(Number(b.expense_share) * 100) / 100
+    const netDebt = Math.round((consumedCredit - expenseShare) * 100) / 100
+    if (Math.abs(netDebt) >= 0.01) addNet(b.player_id, b.player_name, netDebt)
   })
 
   const positions = Object.values(netMap).filter(p => Math.abs(p.net) >= 0.01)
