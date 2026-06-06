@@ -139,21 +139,20 @@ function myContrib(exp) {
 }
 
 // ── Balance tab: net position per player ───────────────────────────────
+// Built directly from balance data (names already resolved by SQL).
+// Does NOT depend on players.value so inactive/missing players still appear.
 const playerBalanceList = computed(() => {
   const map = {}
-  players.value.forEach(p => {
-    map[p.id] = { id: p.id, name: p.display_name, owes: [], gets: [], net: 0 }
-  })
   balances.value.forEach(b => {
     const amt = Number(b.net_amount)
-    if (map[b.from_player_id]) {
-      map[b.from_player_id].owes.push({ to: b.to_name, toId: b.to_player_id, amount: amt })
-      map[b.from_player_id].net -= amt
-    }
-    if (map[b.to_player_id]) {
-      map[b.to_player_id].gets.push({ from: b.from_name, fromId: b.from_player_id, amount: amt })
-      map[b.to_player_id].net += amt
-    }
+    if (!map[b.from_player_id])
+      map[b.from_player_id] = { id: b.from_player_id, name: b.from_name, owes: [], gets: [], net: 0 }
+    if (!map[b.to_player_id])
+      map[b.to_player_id]   = { id: b.to_player_id,   name: b.to_name,   owes: [], gets: [], net: 0 }
+    map[b.from_player_id].owes.push({ to: b.to_name,   toId: b.to_player_id,   amount: amt })
+    map[b.from_player_id].net -= amt
+    map[b.to_player_id].gets.push({ from: b.from_name, fromId: b.from_player_id, amount: amt })
+    map[b.to_player_id].net += amt
   })
   return Object.values(map)
     .filter(p => Math.abs(p.net) >= 0.01)
@@ -162,6 +161,33 @@ const playerBalanceList = computed(() => {
       if (myPlayer.value?.id === b.id) return 1
       return Math.abs(b.net) - Math.abs(a.net)
     })
+})
+
+// ── Wallet debts: proportional settlement from net positions ───────────
+// Players with negative wallet balance owe those with positive balance.
+const walletDebtList = computed(() => {
+  const positions = walletData.value.player_balances ?? []
+  const creditors = positions.filter(p => Number(p.balance) > 0.01)
+  const debtors   = positions.filter(p => Number(p.balance) < -0.01)
+  if (!creditors.length || !debtors.length) return []
+
+  const totalCredit = creditors.reduce((s, p) => s + Number(p.balance), 0)
+  const debts = []
+  debtors.forEach(debtor => {
+    const owesTotal = Math.abs(Number(debtor.balance))
+    creditors.forEach(creditor => {
+      const share = Number(creditor.balance) / totalCredit
+      const amt   = Math.round(owesTotal * share * 100) / 100
+      if (amt >= 0.01) debts.push({
+        from_id:   debtor.player_id,
+        from_name: debtor.player_name,
+        to_id:     creditor.player_id,
+        to_name:   creditor.player_name,
+        amount:    amt
+      })
+    })
+  })
+  return debts
 })
 
 // ── Wallet: FIFO computation (frontend) ───────────────────────────────
@@ -586,12 +612,24 @@ const isMe = id => myPlayer.value?.id === id
             </span>
           </div>
 
-          <!-- Split summary -->
-          <div class="text-[10px] text-slate-600 mb-3">
-            Split equally among {{ exp.participants?.length ?? 0 }} people
-            <span v-if="exp.participants?.length">
-              · {{ aed(Number(exp.amount) / exp.participants.length) }} each
-            </span>
+          <!-- Split summary + participant names -->
+          <div class="mb-3">
+            <div class="text-[10px] text-slate-600 mb-1.5">
+              Split equally among {{ exp.participants?.length ?? 0 }} people
+              <span v-if="exp.participants?.length">
+                · {{ aed(Number(exp.amount) / exp.participants.length) }} each
+              </span>
+            </div>
+            <div v-if="exp.participants?.length" class="flex flex-wrap gap-1">
+              <span v-for="pt in exp.participants" :key="pt.player_id"
+                class="text-[9px] px-1.5 py-0.5 rounded-md"
+                :class="pt.player_id === myPlayer?.id
+                  ? 'text-neon font-semibold'
+                  : 'text-slate-400'"
+                style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09)">
+                {{ pt.player_id === myPlayer?.id ? 'You' : pt.name }}
+              </span>
+            </div>
           </div>
 
           <!-- Actions: only for creator or manager -->
@@ -609,65 +647,96 @@ const isMe = id => myPlayer.value?.id === id
     </div>
 
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
-    <div v-if="activeTab === 'balance'" class="fade-up">
-      <!-- Info: wallet expenses excluded -->
-      <div v-if="walletData.wallet_expenses.length"
-        class="flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-[10px] text-slate-500"
-        style="background:rgba(168,85,247,.08); border:1px solid rgba(168,85,247,.2)">
-        <span>💰</span>
-        <span>Wallet-paid expenses are tracked in the <strong class="text-violet-400">Wallet</strong> tab, not here.</span>
-      </div>
+    <div v-if="activeTab === 'balance'" class="fade-up space-y-4">
 
-      <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
-        <div class="text-4xl mb-3">⚖️</div>
-        <p class="font-semibold mb-1">All settled!</p>
-        <p class="text-sm">No outstanding balances from person-paid expenses.</p>
-      </div>
+      <!-- ── Person-paid balances ── -->
+      <div>
+        <div v-if="playerBalanceList.length"
+          class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-1">
+          Person-paid expenses
+        </div>
 
-      <div class="space-y-2">
-        <div v-for="p in playerBalanceList" :key="p.id"
-          class="card overflow-hidden"
-          :class="isMe(p.id) ? 'card-neon' : ''">
+        <div v-if="!playerBalanceList.length && !walletDebtList.length"
+          class="card p-10 text-center text-slate-400">
+          <div class="text-4xl mb-3">⚖️</div>
+          <p class="font-semibold mb-1">All settled!</p>
+          <p class="text-sm">No outstanding balances in this club.</p>
+        </div>
 
-          <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
-            @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
-            <div class="min-w-0">
-              <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
-                {{ isMe(p.id) ? 'You' : p.name }}
-              </span>
-              <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <div class="text-right">
-                <div class="text-xs font-bold"
-                  :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
-                  {{ p.net > 0.01 ? 'Gets back' : 'Owes' }} {{ aed(Math.abs(p.net)) }}
-                </div>
+        <div class="space-y-2">
+          <div v-for="p in playerBalanceList" :key="p.id"
+            class="card overflow-hidden"
+            :class="isMe(p.id) ? 'card-neon' : ''">
+
+            <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
+              @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
+              <div class="min-w-0">
+                <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
+                  {{ isMe(p.id) ? 'You' : p.name }}
+                </span>
+                <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
               </div>
-              <span class="text-slate-500 text-xs transition-transform duration-200"
-                :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
-            </div>
-          </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <div class="text-right">
+                  <div class="text-xs font-bold"
+                    :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
+                    {{ p.net > 0.01 ? 'Gets back' : 'Owes' }} {{ aed(Math.abs(p.net)) }}
+                  </div>
+                </div>
+                <span class="text-slate-500 text-xs transition-transform duration-200"
+                  :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
+              </div>
+            </button>
 
-          <div v-if="expandedPlayer === p.id"
-            class="border-t border-white/[0.06] px-4 py-3 space-y-2">
-            <div v-for="o in p.owes" :key="o.toId" class="flex items-center justify-between text-xs">
-              <span class="text-slate-400">
-                {{ isMe(p.id) ? 'You owe' : p.name + ' owes' }}
-                <span class="text-slate-300 font-medium">{{ o.to }}</span>
-              </span>
-              <span class="text-rose-400 font-semibold shrink-0 ml-3">-{{ aed(o.amount) }}</span>
-            </div>
-            <div v-for="g in p.gets" :key="g.fromId" class="flex items-center justify-between text-xs">
-              <span class="text-slate-400">
-                {{ isMe(p.id) ? 'You get back from' : p.name + ' gets back from' }}
-                <span class="text-slate-300 font-medium">{{ g.from }}</span>
-              </span>
-              <span class="text-emerald-400 font-semibold shrink-0 ml-3">+{{ aed(g.amount) }}</span>
+            <div v-if="expandedPlayer === p.id"
+              class="border-t border-white/[0.06] px-4 py-3 space-y-2">
+              <div v-for="o in p.owes" :key="o.toId"
+                class="flex items-center justify-between text-xs">
+                <span class="text-slate-400">
+                  {{ isMe(p.id) ? 'You owe' : p.name + ' owes' }}
+                  <span class="text-slate-300 font-medium">{{ o.to }}</span>
+                </span>
+                <span class="text-rose-400 font-semibold shrink-0 ml-3">−{{ aed(o.amount) }}</span>
+              </div>
+              <div v-for="g in p.gets" :key="g.fromId"
+                class="flex items-center justify-between text-xs">
+                <span class="text-slate-400">
+                  {{ isMe(p.id) ? 'You get back from' : p.name + ' gets back from' }}
+                  <span class="text-slate-300 font-medium">{{ g.from }}</span>
+                </span>
+                <span class="text-emerald-400 font-semibold shrink-0 ml-3">+{{ aed(g.amount) }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- ── Wallet debts ── -->
+      <div v-if="walletDebtList.length">
+        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-1">
+          💰 Wallet expenses
+        </div>
+        <div class="space-y-2">
+          <div v-for="d in walletDebtList" :key="d.from_id + d.to_id"
+            class="card px-4 py-3 flex items-center justify-between"
+            :class="isMe(d.from_id) ? 'card-neon' : ''">
+            <div class="text-sm">
+              <span class="font-semibold"
+                :class="isMe(d.from_id) ? 'text-neon' : 'text-slate-200'">
+                {{ isMe(d.from_id) ? 'You' : d.from_name }}
+              </span>
+              <span class="text-slate-500 text-xs"> owes </span>
+              <span class="font-semibold"
+                :class="isMe(d.to_id) ? 'text-neon' : 'text-slate-200'">
+                {{ isMe(d.to_id) ? 'you' : d.to_name }}
+              </span>
+              <span class="text-[10px] text-slate-600 ml-1">(wallet)</span>
+            </div>
+            <span class="font-bold text-rose-400 shrink-0 ml-3">{{ aed(d.amount) }}</span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->
