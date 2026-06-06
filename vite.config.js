@@ -6,9 +6,10 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'sw-push.js'],
       workbox: {
+        clientsClaim: true,
         importScripts: ['sw-push.js']
       },
       manifest: {

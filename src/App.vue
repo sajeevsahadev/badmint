@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter, RouterView, RouterLink } from 'vue-router'
+import { useRegisterSW } from 'virtual:pwa-register/vue'
 import { supabase } from './lib/supabase'
 import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
@@ -17,6 +18,19 @@ const router = useRouter()
 const pendingCount = ref(0)
 const showIOSHint  = ref(false)
 const showMenu     = ref(false)
+const updating     = ref(false)
+
+// ── PWA update detection ──────────────────────────────────────────────────────
+// If a new SW is already waiting when the app opens (during loading screen),
+// apply it silently — user sees the loading screen for ~1 extra second.
+// If detected while the app is running, show the update banner instead.
+const { needRefresh, updateServiceWorker } = useRegisterSW({ immediate: true })
+watch(needRefresh, (yes) => {
+  if (yes && !ready.value) {
+    updating.value = true
+    updateServiceWorker(true)   // skip-waiting + reload
+  }
+})
 
 // ── Hamburger menu sections ──────────────────────────────────────────────────
 // When Payments ships: move comingSoon items into a new menuSection entry.
@@ -113,11 +127,42 @@ const needsClub = computed(() =>
   <div v-if="!ready" class="grid min-h-screen place-items-center">
     <div class="text-center">
       <div class="text-5xl mb-4">🏸</div>
-      <div class="text-neon font-semibold text-sm animate-pulse">Loading Badmint…</div>
+      <div class="text-neon font-semibold text-sm animate-pulse">
+        {{ updating ? 'Applying update…' : 'Loading Badmint…' }}
+      </div>
+      <div v-if="updating" class="text-[11px] text-slate-400 mt-2">
+        Getting the latest version — one moment
+      </div>
     </div>
   </div>
 
   <template v-else>
+
+    <!-- ── PWA update banner ──────────────────────────────────────────────────
+         Shown when a new SW is waiting but the app was already past the loading
+         screen (so auto-reload didn't fire). User taps Update to reload. -->
+    <Teleport to="body">
+      <Transition name="update-slide">
+        <div v-if="needRefresh"
+          class="fixed top-0 inset-x-0 z-[90] flex items-center justify-between gap-3 px-4 py-2.5"
+          style="background:linear-gradient(90deg,#0077a8,#0099b8);
+                 box-shadow:0 2px 12px rgba(0,119,168,.3);">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-base shrink-0">🔄</span>
+            <div class="min-w-0">
+              <div class="text-xs font-semibold text-white leading-tight">New version available</div>
+              <div class="text-[10px] text-white/70 leading-tight">Tap to get the latest Badmint</div>
+            </div>
+          </div>
+          <button @click="updateServiceWorker(true)"
+            class="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-opacity hover:opacity-80"
+            style="background:rgba(255,255,255,.25); color:#fff;
+                   border:1px solid rgba(255,255,255,.35);">
+            Update
+          </button>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- ── Floating hamburger for public routes when logged in ────────────────
          Public views (Explore, Home, FacilityProfile) don't use this shell's
@@ -349,4 +394,9 @@ const needsClub = computed(() =>
 .menu-fade-enter-active .menu-panel { transition: transform 0.25s ease; }
 .menu-fade-leave-active .menu-panel { transition: transform 0.2s ease; }
 .menu-fade-enter-from .menu-panel, .menu-fade-leave-to .menu-panel { transform: translateX(-100%); }
+
+/* Update banner slides down from top */
+.update-slide-enter-active { transition: transform 0.3s ease, opacity 0.3s ease; }
+.update-slide-leave-active { transition: transform 0.2s ease, opacity 0.2s ease; }
+.update-slide-enter-from, .update-slide-leave-to { transform: translateY(-100%); opacity: 0; }
 </style>
