@@ -205,6 +205,13 @@ const fifoResult = computed(() => {
 
 const expandedConsumed = ref(null)
 
+// Auto-expand the current user's row when switching to the Balance tab
+watch(activeTab, tab => {
+  if (tab === 'balance' && myPlayer.value?.id && !expandedPlayer.value) {
+    expandedPlayer.value = myPlayer.value.id
+  }
+})
+
 const walletTotalContributed = computed(() =>
   walletData.value.contributions.reduce((s, c) => s + Number(c.amount), 0)
 )
@@ -638,39 +645,62 @@ const isMe = id => myPlayer.value?.id === id
           class="card overflow-hidden"
           :class="isMe(p.id) ? 'card-neon' : ''">
 
-          <button class="w-full flex items-center justify-between px-4 py-3.5 text-left"
+          <!-- Row header -->
+          <button class="w-full flex items-center gap-3 px-4 py-3.5 text-left"
             @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
-            <div class="min-w-0">
-              <span class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
+
+            <!-- Initials avatar -->
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+              :style="p.net > 0.01
+                ? 'background:rgba(52,211,153,.12); color:#34d399'
+                : 'background:rgba(248,113,113,.12); color:#f87171'">
+              {{ p.name.slice(0,2).toUpperCase() }}
+            </div>
+
+            <!-- Sentence: "Name owes/gets back AED X in total" -->
+            <div class="flex-1 min-w-0 text-sm leading-snug">
+              <span class="font-semibold" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
                 {{ isMe(p.id) ? 'You' : p.name }}
               </span>
-              <span v-if="isMe(p.id)" class="text-[10px] text-slate-500 ml-1.5">· {{ p.name }}</span>
+              <span :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
+                {{ p.net > 0.01 ? ' get back ' : ' owe ' }}
+              </span>
+              <span class="font-bold" :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
+                {{ aed(Math.abs(p.net)) }}
+              </span>
+              <span class="text-slate-500 text-xs"> in total</span>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <div class="text-xs font-bold"
-                :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
-                {{ p.net > 0.01 ? 'Gets back' : 'Owes' }} {{ aed(Math.abs(p.net)) }}
-              </div>
-              <span class="text-slate-500 text-xs transition-transform duration-200"
-                :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
-            </div>
+
+            <span class="text-slate-500 text-xs shrink-0 transition-transform duration-200"
+              :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
           </button>
 
+          <!-- Expanded breakdown -->
           <div v-if="expandedPlayer === p.id"
             class="border-t border-white/[0.06] px-4 py-3 space-y-2">
-            <div v-for="o in p.owes" :key="o.toId" class="flex items-center justify-between text-xs">
-              <span class="text-slate-400">
-                {{ isMe(p.id) ? 'You owe' : p.name + ' owes' }}
-                <span class="text-slate-300 font-medium">{{ o.to }}</span>
+
+            <!-- Debts this player owes to others -->
+            <div v-for="o in p.owes" :key="o.toId"
+              class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
+              style="background:rgba(248,113,113,.06); border:1px solid rgba(248,113,113,.12)">
+              <span>
+                <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'You' : p.name }}</span>
+                <span class="text-slate-500"> owe </span>
+                <span class="font-medium text-slate-200">{{ o.to }}</span>
               </span>
-              <span class="text-rose-400 font-semibold shrink-0 ml-3">−{{ aed(o.amount) }}</span>
+              <span class="text-rose-400 font-bold shrink-0 ml-3">{{ aed(o.amount) }}</span>
             </div>
-            <div v-for="g in p.gets" :key="g.fromId" class="flex items-center justify-between text-xs">
-              <span class="text-slate-400">
-                {{ isMe(p.id) ? 'You get back from' : p.name + ' gets back from' }}
-                <span class="text-slate-300 font-medium">{{ g.from }}</span>
+
+            <!-- Debts others owe to this player -->
+            <div v-for="g in p.gets" :key="g.fromId"
+              class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
+              style="background:rgba(52,211,153,.06); border:1px solid rgba(52,211,153,.12)">
+              <span>
+                <span class="font-medium text-slate-200">{{ g.from }}</span>
+                <span class="text-slate-500"> owes </span>
+                <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'you' : p.name }}</span>
               </span>
-              <span class="text-emerald-400 font-semibold shrink-0 ml-3">+{{ aed(g.amount) }}</span>
+              <span class="text-emerald-400 font-bold shrink-0 ml-3">{{ aed(g.amount) }}</span>
             </div>
           </div>
         </div>
