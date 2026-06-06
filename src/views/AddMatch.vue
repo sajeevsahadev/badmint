@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -51,11 +52,11 @@ async function checkScheduleAttendees(date) {
 async function loadPlayers() {
   if (!currentClub.value) return
   const { data } = await supabase.from('players')
-    .select('id, display_name, elo')
+    .select('id, display_name, elo, user_id')
     .eq('club_id', currentClub.value.club_id)
     .eq('is_active', true)
     .order('display_name')
-  players.value = data ?? []
+  players.value = await withNicknames(data ?? [])
 }
 
 onMounted(async () => { await loadPlayers(); await checkScheduleAttendees(playedOn.value) })

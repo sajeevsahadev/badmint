@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue'
 import { supabase } from '../lib/supabase'
+import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -16,11 +17,11 @@ async function load() {
   if (!currentClub.value) return
   const cid = currentClub.value.club_id
   const [{ data: pl }, { data: lb }, { data: bp }] = await Promise.all([
-    supabase.from('players').select('id, display_name').eq('club_id', cid).order('display_name'),
+    supabase.from('players').select('id, display_name, user_id').eq('club_id', cid).order('display_name'),
     supabase.from('v_leaderboard').select('id, club_rank, elo, composite, win_pct, days_played, games, wins').eq('club_id', cid),
     supabase.from('v_best_pairs').select('*').eq('club_id', cid).order('win_pct', { ascending: false }).limit(5)
   ])
-  players.value = pl ?? []
+  players.value = await withNicknames(pl ?? [])
   ranks.value = Object.fromEntries((lb ?? []).map(r => [r.id, r]))
   pairs.value = bp ?? []
 }

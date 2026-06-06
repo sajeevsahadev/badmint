@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { buildNameMap } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
@@ -35,7 +36,7 @@ async function load() {
     .order('created_at', { ascending: false })
     .limit(100)
 
-  matches.value = (data ?? []).map(m => {
+  const rawMatches = (data ?? []).map(m => {
     const sA = m.match_sides?.find(s => s.side === 'A')
     const sB = m.match_sides?.find(s => s.side === 'B')
     return {
@@ -58,6 +59,7 @@ async function load() {
         score: sB?.score ?? 0,
         winner: sB?.is_winner ?? false,
         players: (sB?.match_participants ?? []).map(mp => ({
+          id: mp.players?.id,
           name: mp.players?.display_name,
           delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
           elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
@@ -65,6 +67,18 @@ async function load() {
       }
     }
   })
+
+  // Resolve nicknames for all participants
+  const allIds = [...new Set(rawMatches.flatMap(m => [
+    ...m.sideA.players.map(p => p.id),
+    ...m.sideB.players.map(p => p.id)
+  ]).filter(Boolean))]
+  const nameMap = await buildNameMap(allIds)
+  matches.value = rawMatches.map(m => ({
+    ...m,
+    sideA: { ...m.sideA, players: m.sideA.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) },
+    sideB: { ...m.sideB, players: m.sideB.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) }
+  }))
   loading.value = false
 }
 onMounted(async () => {

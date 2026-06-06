@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { supabase } from '../lib/supabase'
+import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import { usePushNotifications } from '../composables/usePushNotifications'
@@ -159,12 +160,12 @@ async function loadVotes(scheduleId) {
 async function loadVotesAndAttendees(scheduleId) {
   const [aRes, pRes] = await Promise.all([
     supabase.rpc('get_schedule_attendees', { p_schedule_id: scheduleId }),
-    supabase.from('players').select('id, display_name, elo')
+    supabase.from('players').select('id, display_name, elo, user_id')
       .eq('club_id', currentClub.value.club_id).eq('is_active', true).order('display_name')
   ])
   await loadVotes(scheduleId)
   attendeeIds.value  = new Set((aRes.data ?? []).map(a => a.player_id))
-  allPlayers.value   = pRes.data ?? []
+  allPlayers.value   = await withNicknames(pRes.data ?? [])
   attendeesDirty.value = false
 }
 

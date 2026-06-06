@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { buildNameMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
 
 const route  = useRoute()
@@ -86,6 +87,16 @@ async function load() {
   clubName.value = clubRes.data?.name ?? ''
   emirates.value = profRes.data?.emirate ?? clubRes.data?.emirates ?? ''
 
+  // Collect all participant IDs for nickname resolution
+  const allParticipantIds = [...new Set(
+    (matchRes.data ?? []).flatMap(m =>
+      (m.match_sides ?? []).flatMap(s =>
+        (s.match_participants ?? []).map(mp => mp.players?.id)
+      )
+    ).filter(Boolean)
+  )]
+  const nameMap = await buildNameMap(allParticipantIds)
+
   // Filter matches that include this player
   matches.value = (matchRes.data ?? [])
     .filter(m => m.match_sides?.some(s =>
@@ -104,8 +115,8 @@ async function load() {
         won: mySide?.is_winner ?? false,
         myScore:  mySide?.score  ?? 0,
         oppScore: oppSide?.score ?? 0,
-        myTeam:  (mySide?.match_participants ?? []).map(mp => mp.players?.display_name).filter(Boolean),
-        oppTeam: (oppSide?.match_participants ?? []).map(mp => mp.players?.display_name).filter(Boolean),
+        myTeam:  (mySide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
+        oppTeam: (oppSide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
         eloDelta: (() => {
           const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
           return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
