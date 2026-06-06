@@ -138,22 +138,69 @@ function myContrib(exp) {
   return { type: 'split', net: -Number(part.share) }
 }
 
-// ── Balance tab: net position per player ───────────────────────────────
-// Built directly from balance data (names already resolved by SQL).
-// Does NOT depend on players.value so inactive/missing players still appear.
+// ── Wallet debt edges: greedy settlement of per-player wallet positions ──
+// Each player's wallet balance = contributed − their share of wallet expenses.
+// Positive = they over-contributed (others owe them). Negative = they under-contributed (they owe others).
+// Greedy matching turns these positions into minimum debt edges (from owers to getters).
+const walletDebtEdges = computed(() => {
+  const positions = (walletData.value.player_balances ?? [])
+    .map(b => ({
+      id:        b.player_id,
+      name:      b.player_name,
+      remaining: Math.round(Number(b.balance) * 100) / 100
+    }))
+    .filter(b => Math.abs(b.remaining) >= 0.01)
+
+  const getters = positions.filter(b => b.remaining > 0).map(b => ({ ...b })).sort((a, b) => b.remaining - a.remaining)
+  const owers   = positions.filter(b => b.remaining < 0).map(b => ({ ...b, remaining: Math.abs(b.remaining) })).sort((a, b) => b.remaining - a.remaining)
+
+  const edges = []
+  let gi = 0, oi = 0
+  while (gi < getters.length && oi < owers.length) {
+    const g = getters[gi], o = owers[oi]
+    const amount = Math.round(Math.min(g.remaining, o.remaining) * 100) / 100
+    if (amount >= 0.01) {
+      edges.push({ from_player_id: o.id, from_name: o.name, to_player_id: g.id, to_name: g.name, net_amount: amount })
+    }
+    g.remaining = Math.round((g.remaining - amount) * 100) / 100
+    o.remaining = Math.round((o.remaining - amount) * 100) / 100
+    if (g.remaining < 0.01) gi++
+    if (o.remaining < 0.01) oi++
+  }
+  return edges
+})
+
+// ── Balance tab: combined direct-pay + wallet debts, netted per pair ───
 const playerBalanceList = computed(() => {
+  // Accumulate all edges into a canonical (lo < hi) pair map, then resolve direction
+  const pairMap = {}
+  const addEdge = (fromId, fromName, toId, toName, amt) => {
+    const fwd = fromId < toId
+    const lo = fwd ? fromId : toId, hi = fwd ? toId : fromId
+    const key = `${lo}|${hi}`
+    if (!pairMap[key]) pairMap[key] = { lo, hi, loName: fwd ? fromName : toName, hiName: fwd ? toName : fromName, net: 0 }
+    pairMap[key].net += fwd ? amt : -amt
+  }
+
+  balances.value.forEach(b => addEdge(b.from_player_id, b.from_name, b.to_player_id, b.to_name, Number(b.net_amount)))
+  walletDebtEdges.value.forEach(e => addEdge(e.from_player_id, e.from_name, e.to_player_id, e.to_name, e.net_amount))
+
   const map = {}
-  balances.value.forEach(b => {
-    const amt = Number(b.net_amount)
-    if (!map[b.from_player_id])
-      map[b.from_player_id] = { id: b.from_player_id, name: b.from_name, owes: [], gets: [], net: 0 }
-    if (!map[b.to_player_id])
-      map[b.to_player_id]   = { id: b.to_player_id,   name: b.to_name,   owes: [], gets: [], net: 0 }
-    map[b.from_player_id].owes.push({ to: b.to_name,   toId: b.to_player_id,   amount: amt })
-    map[b.from_player_id].net -= amt
-    map[b.to_player_id].gets.push({ from: b.from_name, fromId: b.from_player_id, amount: amt })
-    map[b.to_player_id].net += amt
+  Object.values(pairMap).forEach(({ lo, hi, loName, hiName, net }) => {
+    if (Math.abs(net) < 0.01) return
+    const fromId   = net > 0 ? lo : hi
+    const fromName = net > 0 ? loName : hiName
+    const toId     = net > 0 ? hi : lo
+    const toName   = net > 0 ? hiName : loName
+    const amount   = Math.round(Math.abs(net) * 100) / 100
+    if (!map[fromId]) map[fromId] = { id: fromId, name: fromName, owes: [], gets: [], net: 0 }
+    if (!map[toId])   map[toId]   = { id: toId,   name: toName,   owes: [], gets: [], net: 0 }
+    map[fromId].owes.push({ to: toName, toId, amount })
+    map[fromId].net -= amount
+    map[toId].gets.push({ from: fromName, fromId, amount })
+    map[toId].net += amount
   })
+
   return Object.values(map)
     .filter(p => Math.abs(p.net) >= 0.01)
     .sort((a, b) => {
@@ -163,7 +210,6 @@ const playerBalanceList = computed(() => {
     })
 })
 
-// ── Wallet debts: proportional settlement from net positions ───────────
 // ── Wallet: FIFO computation (frontend) ───────────────────────────────
 // Oldest contribution depleted first. Returns separate active / consumed lists.
 const fifoResult = computed(() => {
