@@ -37,6 +37,7 @@ const menuSections = [
   {
     label: 'Match Day',
     items: [
+      { to: '/match',   icon: '➕', label: 'Add Match' },
       { to: '/compare', icon: '📊', label: 'Compare Players' },
       { to: '/guide',   icon: '📖', label: 'Ranking Guide' },
     ]
@@ -59,7 +60,6 @@ const menuSections = [
     label: 'Account',
     items: [
       { to: '/profile', icon: '👤', label: 'My Profile' },
-      { to: '/',        icon: '🏠', label: 'Home' },
     ]
   }
 ]
@@ -113,7 +113,7 @@ function onSwitch(e) {
 const nav = computed(() => [
   { to: '/schedule',  label: 'Schedule',  icon: '📅' },
   { to: '/dashboard', label: 'Rankings',  icon: '🏆' },
-  { to: '/match',     label: 'Add Match', icon: '➕' },
+  { to: '/matches',   label: 'Matches',   icon: '📋' },
   { to: '/players',   label: 'Players',   icon: '👥' },
   { to: '/splits',    label: 'Splits',    icon: '💰' },
 ])
@@ -330,6 +330,17 @@ const needsClub = computed(() =>
 
             <!-- Nav sections -->
             <div class="flex-1 overflow-y-auto py-3">
+
+              <!-- Home — always first -->
+              <RouterLink to="/" @click="closeMenu"
+                class="flex items-center gap-3 px-5 py-3 text-sm font-semibold text-slate-700
+                       hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
+                exact-active-class="!text-cyan-700 bg-cyan-50">
+                <span class="text-base w-6 text-center shrink-0">🏠</span>
+                Home
+              </RouterLink>
+
+              <div class="mx-5 my-1" style="border-top:1px solid rgba(0,0,0,.07)" />
 
               <div v-for="section in menuSections" :key="section.label" class="mb-1">
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2 font-semibold">

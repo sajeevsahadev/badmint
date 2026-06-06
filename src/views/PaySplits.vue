@@ -360,8 +360,21 @@ async function saveExpense() {
                                          { formError.value = 'Select who paid'; return }
   if (!form.value.participant_ids.length){ formError.value = 'Select at least one participant'; return }
 
-  formSaving.value = true
   const isWallet = form.value.paymentSource === 'wallet'
+
+  if (isWallet) {
+    let available = walletBalance.value
+    if (editingId.value) {
+      const old = expenses.value.find(e => e.id === editingId.value)
+      if (old?.paid_from_wallet) available += Number(old.amount)
+    }
+    if (amt > available + 0.005) {
+      formError.value = `Wallet balance is ${aed(available)} — not enough to cover this expense.`
+      return
+    }
+  }
+
+  formSaving.value = true
   const params = {
     p_club_id:          currentClub.value.club_id,
     p_title:            form.value.title.trim(),
@@ -1040,16 +1053,17 @@ const isMe = id => myPlayer.value?.id === id
                 </button>
                 <button
                   @click="form.paymentSource = 'wallet'"
-                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
-                  :class="form.paymentSource === 'wallet' ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl text-xs font-semibold transition-all"
+                  :class="form.paymentSource === 'wallet' ? 'text-white' : walletBalance <= 0 ? 'text-slate-300 border border-slate-100' : 'text-slate-500 border border-slate-200'"
                   :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed)' : ''">
-                  💰 Common Wallet
+                  <span>💰 Common Wallet</span>
+                  <span class="text-[9px] font-normal opacity-80">{{ aed(walletBalance) }} available</span>
                 </button>
               </div>
               <!-- Wallet balance hint -->
               <div v-if="form.paymentSource === 'wallet'"
                 class="mt-2 text-[10px] px-3 py-2 rounded-lg"
-                :style="walletBalance >= 0
+                :style="walletBalance > 0
                   ? 'background:rgba(0,153,184,.08); color:#0077a0; border:1px solid rgba(0,153,184,.2)'
                   : 'background:rgba(220,38,38,.06); color:#dc2626; border:1px solid rgba(220,38,38,.2)'">
                 Wallet balance: {{ aed(walletBalance) }}
