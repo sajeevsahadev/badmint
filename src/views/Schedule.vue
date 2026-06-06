@@ -335,13 +335,13 @@ function timeAgo(ts) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// ── dot colour for calendar cell ──
-function dotClass(schedule) {
+// ── circle colour for scheduled calendar cell ──
+function scheduleBg(schedule) {
   if (!schedule) return ''
-  if (schedule.status === 'cancelled') return 'bg-slate-600'
-  if (schedule.my_vote === 'attending') return 'bg-emerald-400'
-  if (schedule.my_vote === 'not_attending') return 'bg-rose-400'
-  return 'bg-cyan-400'
+  if (schedule.status === 'cancelled')      return 'bg-slate-500 text-white'
+  if (schedule.my_vote === 'attending')     return 'bg-emerald-500 text-white'
+  if (schedule.my_vote === 'not_attending') return 'bg-rose-500 text-white'
+  return 'bg-cyan-400 text-slate-900'
 }
 
 // ── Init ──
@@ -417,29 +417,29 @@ watch(currentClub, async () => {
         class="aspect-square"
         :class="!cell ? 'pointer-events-none' : ''">
         <button v-if="cell"
-          class="w-full h-full flex flex-col items-center justify-center rounded-xl text-sm font-medium transition relative"
-          :class="[
-            cell.dateStr === selectedDate
-              ? 'bg-cyan-50 border border-cyan-400 text-cyan-700'
-              : cell.isToday
-                ? 'border border-slate-400 text-slate-900 font-bold bg-slate-50'
-                : 'border border-transparent text-slate-500 hover:border-slate-200',
-            scheduleMap[cell.dateStr] ? 'text-slate-800 font-semibold' : ''
-          ]"
+          class="w-full h-full flex items-center justify-center rounded-xl transition hover:bg-white/[0.04]"
           @click="selectDate(cell.dateStr)">
-          <span class="leading-none">{{ cell.day }}</span>
-          <span v-if="scheduleMap[cell.dateStr]"
-            class="w-1.5 h-1.5 rounded-full mt-0.5"
-            :class="dotClass(scheduleMap[cell.dateStr])" />
+          <span class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition"
+            :class="[
+              cell.dateStr === selectedDate
+                ? 'bg-cyan-500 text-white font-bold ring-2 ring-cyan-300'
+                : scheduleMap[cell.dateStr]
+                  ? scheduleBg(scheduleMap[cell.dateStr])
+                  : cell.isToday
+                    ? 'ring-2 ring-slate-400 text-slate-200 font-bold'
+                    : 'text-slate-400'
+            ]">
+            {{ cell.day }}
+          </span>
         </button>
       </div>
     </div>
 
     <!-- Legend -->
     <div class="flex gap-4 text-[10px] text-slate-600 mb-5">
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>You're in</span>
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-400"></span>Can't make it</span>
-      <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-400"></span>Planned</span>
+      <span class="flex items-center gap-1"><span class="w-4 h-4 rounded-full bg-emerald-500 inline-block"></span>You're in</span>
+      <span class="flex items-center gap-1"><span class="w-4 h-4 rounded-full bg-rose-500 inline-block"></span>Can't make it</span>
+      <span class="flex items-center gap-1"><span class="w-4 h-4 rounded-full bg-cyan-400 inline-block"></span>Planned</span>
     </div>
 
     <!-- Selected day panel -->
