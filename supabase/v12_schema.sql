@@ -167,6 +167,7 @@ END;
 $$;
 
 -- ── RPC: get_expenses (updated — returns paid_from_wallet) ─────────────
+DROP FUNCTION IF EXISTS get_expenses(uuid);
 CREATE OR REPLACE FUNCTION get_expenses(p_club_id uuid)
 RETURNS TABLE(
   id               uuid,
