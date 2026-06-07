@@ -252,7 +252,7 @@ BEGIN
     registered_by, notes
   ) VALUES (
     p_tournament_id, trim(p_team_name), trim(p_player_a_name),
-    NULLIF(trim(p_player_b_name),''), p_notes, auth.uid()
+    NULLIF(trim(p_player_b_name),''), auth.uid(), p_notes
   ) RETURNING id INTO v_id;
 
   RETURN v_id;
