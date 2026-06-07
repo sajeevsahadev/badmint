@@ -23,6 +23,9 @@ const routes = [
   { path: '/tournaments',           component: () => import('../views/Tournaments.vue'),         meta: { public: true } },
   { path: '/tournament/:id',        component: () => import('../views/TournamentView.vue'),      meta: { public: true } },
   { path: '/tournament/:id/manage', component: () => import('../views/ManageTournament.vue') },
+  { path: '/clubs',                 component: () => import('../views/MyClubs.vue') },
+  { path: '/book',                  component: () => import('../views/BookCourt.vue') },
+  { path: '/admin',                 component: () => import('../views/AdminPanel.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

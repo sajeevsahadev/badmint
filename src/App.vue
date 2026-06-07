@@ -19,6 +19,7 @@ const pendingCount = ref(0)
 const showIOSHint  = ref(false)
 const showMenu     = ref(false)
 const updating     = ref(false)
+const isAdmin      = ref(false)
 
 // ── PWA update detection ──────────────────────────────────────────────────────
 // If a new SW is already waiting when the app opens (during loading screen),
@@ -65,7 +66,8 @@ const menuSections = [
   {
     label: 'Account',
     items: [
-      { to: '/profile', icon: '👤', label: 'My Profile' },
+      { to: '/profile',  icon: '👤', label: 'My Profile' },
+      { to: '/schedule', icon: '📅', label: 'Schedule' },
     ]
   }
 ]
@@ -82,6 +84,8 @@ async function init() {
     await loadClubs()
     await refreshPending()
     await startSession()
+    const { data: roles } = await supabase.rpc('get_my_roles')
+    isAdmin.value = (roles ?? []).some(r => r.role === 'app_admin')
   } catch {}
 }
 
@@ -118,13 +122,13 @@ function onSwitch(e) {
 // ── Bottom nav ───────────────────────────────────────────────────────────────
 const nav = computed(() => [
   { to: '/dashboard',   label: 'Home',        icon: '🏠' },
-  { to: '/matches',     label: 'Club',        icon: '🏸' },
-  { to: '/schedule',    label: 'Book',        icon: '🏢' },
+  { to: '/clubs',       label: 'My Clubs',    icon: '🏸' },
+  { to: '/splits',      label: 'PaySplits',   icon: '💰' },
+  { to: '/book',        label: 'Book Court',  icon: '🏢' },
   { to: '/tournaments', label: 'Tournaments', icon: '🏆' },
-  { to: '/profile',     label: 'Me',          icon: '👤' },
 ])
 
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/tournaments']
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/tournaments', '/clubs', '/book', '/splits']
 const needsClub = computed(() =>
   !currentClub.value &&
   !clubFreeRoutes.includes(route.path) &&
@@ -366,6 +370,21 @@ const needsClub = computed(() =>
                            px-1.5 py-0.5 font-bold leading-none">
                     {{ pendingCount > 9 ? '9+' : pendingCount }}
                   </span>
+                </RouterLink>
+              </div>
+
+              <!-- Admin Panel (app_admin only) -->
+              <div v-if="isAdmin" class="mb-1 mt-2">
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2 font-semibold">
+                  Platform Admin
+                </div>
+                <RouterLink to="/admin" @click="closeMenu"
+                  class="flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
+                         hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
+                  active-class="!text-cyan-700 bg-cyan-50">
+                  <span class="text-base w-6 text-center shrink-0">🛡️</span>
+                  Admin Panel
+                  <span class="ml-auto text-[9px] bg-rose-100 text-rose-600 rounded px-1.5 py-0.5 font-bold">ADMIN</span>
                 </RouterLink>
               </div>
 
