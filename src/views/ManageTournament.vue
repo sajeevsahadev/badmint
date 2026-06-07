@@ -191,6 +191,21 @@ const matchStatusClass = s => ({
   bye: 'border-slate-100 bg-slate-50 opacity-60',
   scheduled: 'border-cyan-200/50 bg-white',
 }[s] ?? 'border-slate-200 bg-white')
+
+// ── Delete tournament ──
+const showDeleteModal   = ref(false)
+const deleteConfirmText = ref('')
+const deletingTour      = ref(false)
+
+async function deleteTournament() {
+  deletingTour.value = true
+  const { error } = await supabase.rpc('delete_tournament', {
+    p_tournament_id: tour.value.id
+  })
+  deletingTour.value = false
+  if (error) { err.value = error.message; showDeleteModal.value = false; return }
+  router.push('/tournaments')
+}
 </script>
 
 <template>
@@ -496,9 +511,66 @@ const matchStatusClass = s => ({
         <button class="btn-primary w-full" :disabled="settingsBusy" @click="saveSettings">
           {{ settingsBusy ? 'Saving…' : 'Save Changes' }}
         </button>
+
+        <!-- Danger zone -->
+        <div class="border-t border-red-100 pt-4 mt-2">
+          <p class="text-[10px] uppercase tracking-widest text-rose-400 font-bold mb-2">Danger Zone</p>
+          <button class="w-full rounded-xl border border-rose-200 text-rose-500 text-sm py-2.5
+                         hover:bg-rose-50 hover:border-rose-300 transition"
+            @click="deleteConfirmText = ''; showDeleteModal = true">
+            🗑 Delete Tournament
+          </button>
+        </div>
       </div>
     </template>
   </div>
+
+  <!-- ── Delete Tournament Modal ── -->
+  <Teleport to="body">
+    <div v-if="showDeleteModal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
+      @click.self="showDeleteModal = false">
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
+        style="background:#f8fafc; border:1px solid rgba(239,68,68,.3)">
+
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shrink-0"
+            style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2)">🗑</div>
+          <div>
+            <h3 class="font-display font-bold text-slate-800">Delete Tournament</h3>
+            <p class="text-xs text-rose-500">This cannot be undone</p>
+          </div>
+          <button class="ml-auto text-slate-400 hover:text-slate-700 text-xl"
+            @click="showDeleteModal = false">✕</button>
+        </div>
+
+        <div class="rounded-xl px-4 py-3 mb-4 text-sm space-y-1"
+          style="background:rgba(239,68,68,.06); border:1px solid rgba(239,68,68,.15)">
+          <p class="font-semibold text-slate-700">{{ tour.name }}</p>
+          <p class="text-xs text-slate-500">All registrations and match results will be permanently deleted.</p>
+        </div>
+
+        <label class="text-xs text-slate-500 block mb-1">
+          Type <strong class="text-slate-700">{{ tour.name }}</strong> to confirm
+        </label>
+        <input v-model="deleteConfirmText" class="input mb-4"
+          :placeholder="tour.name" @keyup.enter="deleteConfirmText === tour.name && deleteTournament()" />
+
+        <div class="flex gap-3">
+          <button class="btn-ghost flex-1" @click="showDeleteModal = false">Cancel</button>
+          <button class="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all"
+            :class="deleteConfirmText === tour.name && !deletingTour
+              ? 'bg-rose-600 hover:bg-rose-500 text-white'
+              : 'bg-rose-100 text-rose-300 cursor-not-allowed'"
+            :disabled="deleteConfirmText !== tour.name || deletingTour"
+            @click="deleteTournament">
+            {{ deletingTour ? 'Deleting…' : '🗑 Delete Permanently' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- ── Score Modal ── -->
   <Teleport to="body">
