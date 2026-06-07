@@ -70,7 +70,7 @@ async function doSearch() {
 
 function switchMyClub(clubId) {
   const c = clubs.value.find(x => x.club_id === clubId)
-  if (c) { selectClub(c); router.push('/dashboard') }
+  if (c) { selectClub(c); router.push('/club/' + clubId) }
 }
 
 onMounted(load)
