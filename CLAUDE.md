@@ -162,6 +162,7 @@ badmint/
 16. `supabase/v15_schema.sql` — App-level roles (app_admin), admin panel, tournament quota guard
 17. `supabase/v16_schema.sql` — delete_club RPC + fix get_tournaments ambiguous `status` column
 18. `supabase/v17_schema.sql` — delete_tournament RPC
+19. `supabase/v18_schema.sql` — fix register_for_tournament: registered_by/notes swapped in VALUES
 
 ---
 
