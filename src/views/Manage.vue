@@ -253,6 +253,43 @@ const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: 
 const leaving   = ref(null)   // club_id in progress
 const leaveNote = ref(null)
 
+// ── Delete club ──
+const deleteTarget      = ref(null)   // club object to delete
+const deleteConfirmText = ref('')     // user must type club name
+const deleteBusy        = ref(false)
+const deleteNote        = ref(null)
+const deleteMatchCount  = ref(0)
+
+function openDeleteModal(c) {
+  deleteTarget.value      = c
+  deleteConfirmText.value = ''
+  deleteNote.value        = null
+  deleteMatchCount.value  = 0
+}
+function closeDeleteModal() {
+  deleteTarget.value = null
+}
+
+async function confirmDeleteClub() {
+  if (!deleteTarget.value) return
+  deleteBusy.value = true; deleteNote.value = null
+  const { error } = await supabase.rpc('delete_club', { p_club_id: deleteTarget.value.club_id })
+  deleteBusy.value = false
+  if (error) {
+    const matchMatch = error.message.match(/MATCH_COUNT:(\d+)/)
+    if (matchMatch) {
+      deleteMatchCount.value = Number(matchMatch[1])
+      deleteNote.value = { ok: false, t: `This club has ${deleteMatchCount.value} recorded match(es). Delete all of them from the Matches page first.` }
+    } else {
+      deleteNote.value = { ok: false, t: error.message }
+    }
+  } else {
+    closeDeleteModal()
+    await loadClubs()
+    leaveNote.value = { ok: true, t: 'Club deleted successfully.' }
+  }
+}
+
 async function leaveClub(clubId) {
   const name = clubs.value.find(c => c.club_id === clubId)?.clubs?.name ?? 'this club'
   if (!confirm(`Leave "${name}"?\n\nYou can rejoin later by submitting a new request.`)) return
@@ -594,7 +631,10 @@ async function leaveClub(clubId) {
       <!-- Club info -->
       <div class="flex-1 min-w-0">
         <div class="text-sm font-semibold text-slate-100 truncate">{{ c.clubs?.name }}</div>
-        <div class="text-[10px] text-slate-500">{{ roleLabel(c.role) }}</div>
+        <div class="text-[10px] capitalize"
+          :class="c.role === 'owner' ? 'text-amber-500' : 'text-slate-500'">
+          {{ roleLabel(c.role) }}
+        </div>
       </div>
 
       <!-- Active badge -->
@@ -612,8 +652,98 @@ async function leaveClub(clubId) {
         {{ leaving === c.club_id ? '…' : 'Leave' }}
       </button>
 
-      <!-- Owner can't leave label -->
-      <span v-else class="shrink-0 text-[10px] text-slate-700 italic">Owner</span>
+      <!-- Owner: Delete button -->
+      <button v-else
+        class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-150
+               border-rose-500/30 text-rose-500/60 hover:border-rose-400/60 hover:text-rose-400"
+        @click="openDeleteModal(c)">
+        🗑 Delete
+      </button>
     </div>
   </div>
+
+  <!-- ── Delete Club Modal ── -->
+  <Teleport to="body">
+    <div v-if="deleteTarget"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.7); backdrop-filter:blur(4px)"
+      @click.self="closeDeleteModal">
+
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden"
+        style="background:#0d1829; border:1px solid rgba(239,68,68,.25)">
+
+        <!-- Header -->
+        <div class="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+          <div class="flex items-center gap-3 mb-1">
+            <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shrink-0"
+              style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
+              🗑
+            </div>
+            <div>
+              <h3 class="font-display font-bold text-slate-100">Delete Club</h3>
+              <p class="text-[11px] text-rose-400">This action is permanent and cannot be undone</p>
+            </div>
+            <button class="ml-auto text-slate-500 hover:text-slate-300 text-xl transition"
+              @click="closeDeleteModal">✕</button>
+          </div>
+        </div>
+
+        <div class="px-5 py-4 space-y-4">
+
+          <!-- Club name -->
+          <div class="rounded-xl px-4 py-3"
+            style="background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2)">
+            <p class="text-xs text-slate-400 mb-0.5">Club to delete</p>
+            <p class="font-bold text-rose-300 text-base">{{ deleteTarget.clubs?.name }}</p>
+          </div>
+
+          <!-- What gets deleted -->
+          <div class="space-y-1.5 text-xs text-slate-400">
+            <p class="font-semibold text-slate-300 mb-1">The following will be permanently deleted:</p>
+            <p>• All players and their Elo history</p>
+            <p>• All PaySplits expenses, wallet, and balances</p>
+            <p>• All schedules, polls, and attendees</p>
+            <p>• All join requests and invites</p>
+            <p>• All facility bookings for this club</p>
+          </div>
+
+          <!-- Error / match blocker -->
+          <div v-if="deleteNote" class="rounded-xl px-4 py-3 text-xs"
+            :class="deleteNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
+            <p class="font-semibold mb-1">{{ deleteNote.ok ? '✅ Done' : '⚠️ Cannot delete yet' }}</p>
+            <p>{{ deleteNote.t }}</p>
+            <RouterLink v-if="deleteMatchCount > 0" to="/matches"
+              class="mt-2 inline-block underline text-rose-400 hover:text-rose-300"
+              @click="closeDeleteModal">
+              Go to Matches →
+            </RouterLink>
+          </div>
+
+          <!-- Confirm by typing name (only shown when no match blocker) -->
+          <div v-if="!deleteMatchCount">
+            <label class="label text-slate-400">
+              Type <strong class="text-slate-200">{{ deleteTarget.clubs?.name }}</strong> to confirm
+            </label>
+            <input v-model="deleteConfirmText" class="input"
+              :placeholder="deleteTarget.clubs?.name" />
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex gap-3 pt-1">
+            <button class="btn-ghost flex-1" @click="closeDeleteModal">Cancel</button>
+            <button v-if="!deleteMatchCount"
+              class="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all"
+              :class="deleteConfirmText === deleteTarget.clubs?.name && !deleteBusy
+                ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                : 'bg-rose-900/40 text-rose-700 cursor-not-allowed'"
+              :disabled="deleteConfirmText !== deleteTarget.clubs?.name || deleteBusy"
+              @click="confirmDeleteClub">
+              {{ deleteBusy ? 'Deleting…' : '🗑 Delete Club Permanently' }}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </Teleport>
 </template>
