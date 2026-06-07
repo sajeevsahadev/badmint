@@ -117,16 +117,18 @@ function onSwitch(e) {
 
 // ── Bottom nav ───────────────────────────────────────────────────────────────
 const nav = computed(() => [
-  { to: '/schedule',  label: 'Schedule',  icon: '📅' },
-  { to: '/dashboard', label: 'Rankings',  icon: '🏆' },
-  { to: '/matches',   label: 'Matches',   icon: '📋' },
-  { to: '/players',   label: 'Players',   icon: '👥' },
-  { to: '/splits',    label: 'Splits',    icon: '💰' },
+  { to: '/dashboard',   label: 'Home',        icon: '🏠' },
+  { to: '/matches',     label: 'Club',        icon: '🏸' },
+  { to: '/schedule',    label: 'Book',        icon: '🏢' },
+  { to: '/tournaments', label: 'Tournaments', icon: '🏆' },
+  { to: '/profile',     label: 'Me',          icon: '👤' },
 ])
 
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule']
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/tournaments']
 const needsClub = computed(() =>
-  !currentClub.value && !clubFreeRoutes.includes(route.path)
+  !currentClub.value &&
+  !clubFreeRoutes.includes(route.path) &&
+  !route.path.startsWith('/tournament')
 )
 </script>
 
