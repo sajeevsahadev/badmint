@@ -51,6 +51,12 @@ const menuSections = [
     ]
   },
   {
+    label: 'Competitions',
+    items: [
+      { to: '/tournaments', icon: '🏆', label: 'Tournaments' },
+    ]
+  },
+  {
     label: 'Finances',
     items: [
       { to: '/splits',  icon: '💰', label: 'PaySplits' },

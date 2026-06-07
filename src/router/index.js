@@ -19,7 +19,10 @@ const routes = [
   { path: '/profile',   component: () => import('../views/Profile.vue') },
   { path: '/player/:id', component: () => import('../views/PlayerProfile.vue') },
   { path: '/club/:id',     component: () => import('../views/ClubProfile.vue') },
-  { path: '/facility/:id', component: () => import('../views/FacilityProfile.vue'), meta: { public: true } },
+  { path: '/facility/:id',          component: () => import('../views/FacilityProfile.vue'),    meta: { public: true } },
+  { path: '/tournaments',           component: () => import('../views/Tournaments.vue'),         meta: { public: true } },
+  { path: '/tournament/:id',        component: () => import('../views/TournamentView.vue'),      meta: { public: true } },
+  { path: '/tournament/:id/manage', component: () => import('../views/ManageTournament.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
