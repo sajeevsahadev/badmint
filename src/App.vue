@@ -39,6 +39,7 @@ const menuSections = [
     label: 'Match Day',
     items: [
       { to: '/match',   icon: '➕', label: 'Add Match' },
+      { to: '/matches', icon: '📋', label: 'Matches' },
       { to: '/compare', icon: '📊', label: 'Compare Players' },
       { to: '/guide',   icon: '📖', label: 'Ranking Guide' },
     ]
