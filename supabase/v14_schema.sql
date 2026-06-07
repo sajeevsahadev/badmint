@@ -582,10 +582,10 @@ BEGIN
     t.name, t.description, t.format, t.status,
     t.max_teams, t.entry_fee, t.prize_info, t.venue, t.emirate,
     t.registration_end, t.start_date, t.end_date,
-    (SELECT COUNT(*) FROM tournament_registrations
-     WHERE tournament_id = t.id AND status = 'confirmed')  AS confirmed_teams,
-    (SELECT COUNT(*) FROM tournament_registrations
-     WHERE tournament_id = t.id AND status = 'pending')    AS pending_teams,
+    (SELECT COUNT(*) FROM tournament_registrations r
+     WHERE r.tournament_id = t.id AND r.status = 'confirmed') AS confirmed_teams,
+    (SELECT COUNT(*) FROM tournament_registrations r
+     WHERE r.tournament_id = t.id AND r.status = 'pending')   AS pending_teams,
     (SELECT tr.team_name FROM tournament_registrations tr
      WHERE tr.id = t.winner_registration_id)               AS winner_team_name,
     t.created_by, t.created_at
