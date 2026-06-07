@@ -75,9 +75,9 @@ ALTER TABLE tournaments              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournament_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tournament_matches       ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "tournaments_read"       ON tournaments              FOR SELECT USING (true);
-CREATE POLICY "tournament_regs_read"   ON tournament_registrations FOR SELECT USING (true);
-CREATE POLICY "tournament_matches_read" ON tournament_matches      FOR SELECT USING (true);
+DO $$ BEGIN CREATE POLICY "tournaments_read"        ON tournaments              FOR SELECT USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "tournament_regs_read"    ON tournament_registrations FOR SELECT USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "tournament_matches_read" ON tournament_matches       FOR SELECT USING (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Standings view (round-robin) ──────────────────────────────────────
 CREATE OR REPLACE VIEW v_tournament_standings AS
