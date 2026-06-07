@@ -153,7 +153,15 @@ badmint/
 7. `supabase/v6_schema.sql` — facility master
 8. `supabase/v7_schema.sql` — leave_club RPC
 9. `supabase/v8_schema.sql` — 10-club limit + revoke_join_request RPC
-10. `supabase/v9_schema.sql` — Playing schedule, poll, attendees, push_subscriptions (**run this if not yet applied**)
+10. `supabase/v9_schema.sql` — Playing schedule, poll, attendees, push_subscriptions
+11. `supabase/v10_schema.sql` — Nickname-first display names in all views
+12. `supabase/v11_schema.sql` — PaySplits: expense tracking & equal cost splitting
+13. `supabase/v12_schema.sql` — Wallet: shared expense pool with FIFO contribution queue
+14. `supabase/v13_schema.sql` — Open match recording to all members; delete = creator or owner
+15. `supabase/v14_schema.sql` — Tournament module (tournaments, registrations, bracket matches)
+16. `supabase/v15_schema.sql` — App-level roles (app_admin), admin panel, tournament quota guard
+17. `supabase/v16_schema.sql` — delete_club RPC + fix get_tournaments ambiguous `status` column
+18. `supabase/v17_schema.sql` — delete_tournament RPC
 
 ---
 
@@ -593,18 +601,25 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Playing Schedule** — Calendar view, plan match days, pick/create venue, team poll (Attending/Not Attending), actual attendee tracking, shareable poll URL, WhatsApp share
 - **Add Match** — Schedule-aware player filter: if schedule has saved attendees for the date, only those players appear (with override toggle)
 - K-factor locked at 24 for all clubs (cross-club Elo comparability)
+- **Nickname-first display names** (v10) — all views use `COALESCE(nickname, display_name)`; guest players still show roster name
+- **PaySplits** (v11) — expense tracking & equal cost splitting per session
+- **Wallet** (v12) — shared expense pool with FIFO contribution queue; players pre-contribute
+- **Open match recording** (v13) — any club member can record matches (not just managers); delete allowed for creator or owner
+- **Tournament module** (v14) — `tournaments`, `tournament_registrations`, `tournament_matches` tables; single_elimination + round_robin formats; `TournamentView.vue` with bracket UI; register team, approve/reject, generate bracket, record match results
+- **App-level roles** (v15) — `app_roles` table, `is_app_admin()` helper, tournament creation quota, admin panel route `/admin`
+- **delete_club RPC** (v16) — owner or app_admin can delete a club (CASCADE); also fixed ambiguous `status` column bug in `get_tournaments`
+- **delete_tournament RPC** (v17) — tournament creator, club owner/manager, or app_admin can delete
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
-- **Admin role / Admin dashboard** — tables exist; UI pending
+- **Admin dashboard UI** — `app_roles` table exists; admin panel route exists but UI is basic
 - **Facility admin role** — creator is currently the de-facto owner; formal role pending
 - **Online court booking** — schedule visible but can't reserve online
-- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable); requires VAPID key setup and a Supabase Edge Function to send (see push notification setup guide in session 5 notes)
+- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable); requires VAPID key setup and a Supabase Edge Function to send
 - **Season reset** — snapshot Elo, reset to 1000 for new season
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days
 - **Export to PDF** — monthly leaderboard report
-- **Payment / Splitwise integration** — cost sharing for court bookings
 
 ---
 
