@@ -110,3 +110,19 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION delete_club(uuid) TO authenticated;
+
+-- ── rename_club ───────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION rename_club(p_club_id uuid, p_name text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT is_manager(p_club_id) THEN
+    RAISE EXCEPTION 'Only managers and owners can rename a club';
+  END IF;
+  IF trim(p_name) = '' THEN
+    RAISE EXCEPTION 'Club name cannot be blank';
+  END IF;
+  UPDATE clubs SET name = trim(p_name) WHERE id = p_club_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION rename_club(uuid, text) TO authenticated;

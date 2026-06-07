@@ -44,6 +44,35 @@ onMounted(load)
 
 const initials = name => (name ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 const onlineColor = s => s === 'online' ? '#10b981' : s === 'recent' ? '#f59e0b' : '#475569'
+
+// ── Rename ──
+const renaming    = ref(false)
+const renameValue = ref('')
+const renameBusy  = ref(false)
+const renameNote  = ref(null)
+
+function startRename() {
+  renameValue.value = club.value?.name ?? ''
+  renameNote.value  = null
+  renaming.value    = true
+}
+async function saveRename() {
+  if (!renameValue.value.trim() || renameValue.value.trim() === club.value.name) {
+    renaming.value = false; return
+  }
+  renameBusy.value = true; renameNote.value = null
+  const { error } = await supabase.rpc('rename_club', {
+    p_club_id: clubId,
+    p_name:    renameValue.value.trim(),
+  })
+  renameBusy.value = false
+  if (error) {
+    renameNote.value = error.message
+  } else {
+    club.value = { ...club.value, name: renameValue.value.trim() }
+    renaming.value = false
+  }
+}
 </script>
 
 <template>
@@ -72,7 +101,26 @@ const onlineColor = s => s === 'online' ? '#10b981' : s === 'recent' ? '#f59e0b'
           {{ initials(club.name) }}
         </div>
         <div class="flex-1 min-w-0">
-          <h2 class="font-display text-xl font-extrabold gradient-text leading-tight">{{ club.name }}</h2>
+          <!-- Rename inline form -->
+          <div v-if="renaming" class="flex items-center gap-2 mb-1">
+            <input v-model="renameValue" class="input text-sm flex-1 py-1.5"
+              maxlength="50" @keyup.enter="saveRename" @keyup.escape="renaming = false"
+              ref="renameInput" />
+            <button class="btn-primary text-xs px-3 py-1.5 shrink-0"
+              :disabled="renameBusy || !renameValue.trim()"
+              @click="saveRename">
+              {{ renameBusy ? '…' : 'Save' }}
+            </button>
+            <button class="btn-ghost text-xs px-2.5 py-1.5 shrink-0"
+              @click="renaming = false">✕</button>
+          </div>
+          <div v-else class="flex items-center gap-2">
+            <h2 class="font-display text-xl font-extrabold gradient-text leading-tight">{{ club.name }}</h2>
+            <button v-if="isManager" class="shrink-0 text-slate-600 hover:text-neon transition text-sm"
+              title="Rename club" @click="startRename">✏️</button>
+          </div>
+          <p v-if="renameNote" class="text-xs text-rose-400 mt-1">{{ renameNote }}</p>
+
           <div class="flex flex-wrap gap-1.5 mt-1">
             <span v-if="club.emirates" class="badge-member text-[9px]">{{ club.emirates }}</span>
             <span v-if="isMyClub" class="badge-approved text-[9px]">{{ myRole }}</span>
