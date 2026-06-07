@@ -12,6 +12,7 @@ const { currentClub, isManager } = useClub()
 
 const tournaments = ref([])
 const loading     = ref(true)
+const loadErr     = ref('')
 const filterStatus = ref('all')
 const showCreate  = ref(false)
 
@@ -26,6 +27,7 @@ const createErr = ref('')
 
 const statusOptions = [
   { v: 'all',              l: 'All' },
+  { v: 'draft',            l: 'Draft' },
   { v: 'registration_open', l: 'Open' },
   { v: 'live',             l: 'Live' },
   { v: 'completed',        l: 'Done' },
@@ -35,10 +37,17 @@ const emirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al 
 
 async function load() {
   loading.value = true
+  loadErr.value = ''
   const { data, error } = await supabase.rpc('get_tournaments', {
-    p_status: filterStatus.value === 'all' ? null : filterStatus.value
+    p_club_id: null,
+    p_status:  filterStatus.value === 'all' ? null : filterStatus.value,
+    p_emirate: null,
   })
-  if (!error) tournaments.value = data ?? []
+  if (error) {
+    loadErr.value = error.message
+  } else {
+    tournaments.value = data ?? []
+  }
   loading.value = false
 }
 
@@ -123,6 +132,16 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
     <!-- Loading -->
     <div v-if="loading" class="space-y-3">
       <div v-for="i in 4" :key="i" class="h-24 shimmer rounded-2xl" />
+    </div>
+
+    <!-- Error (e.g. SQL migration not yet run) -->
+    <div v-else-if="loadErr" class="card p-5 fade-up border-rose-200">
+      <p class="text-sm font-semibold text-rose-600 mb-1">Could not load tournaments</p>
+      <p class="text-xs text-slate-500 font-mono">{{ loadErr }}</p>
+      <p class="text-xs text-slate-400 mt-2">
+        Make sure <code class="bg-slate-100 px-1 rounded">v14_schema.sql</code> has been run
+        in the Supabase SQL Editor.
+      </p>
     </div>
 
     <!-- Empty -->

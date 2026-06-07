@@ -16,6 +16,7 @@ const bestPairs       = ref([])
 const myPlayer        = ref(null)
 const nickName        = ref('')
 const weeklyDelta     = ref(null)
+const allTournaments  = ref([])   // every tournament returned (for club-own section)
 const openTournaments = ref([])
 const liveTournaments = ref([])
 const facilities      = ref([])
@@ -89,9 +90,10 @@ async function loadClubData() {
 
 async function loadTournaments() {
   const { data } = await supabase.rpc('get_tournaments', {
-    p_status: null, p_club_id: null, p_emirate: null
+    p_club_id: null, p_status: null, p_emirate: null
   })
   const all = data ?? []
+  allTournaments.value  = all
   openTournaments.value = all.filter(t => t.status === 'registration_open').slice(0, 2)
   liveTournaments.value = all.filter(t => t.status === 'live').slice(0, 3)
 }
@@ -119,6 +121,13 @@ const miniBoard = computed(() => {
 
 const medals = ['🥇','🥈','🥉']
 const trendColor = elo => elo >= 1050 ? 'text-neon' : elo <= 950 ? 'text-rose-400' : 'text-slate-400'
+
+// Tournaments for THIS club (all statuses, so draft ones are visible to manager)
+const myClubTournaments = computed(() =>
+  allTournaments.value
+    .filter(t => t.club_id === currentClub.value?.club_id)
+    .slice(0, 5)
+)
 
 const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 
@@ -385,7 +394,47 @@ const fmtDate = d => d
       </div>
     </div>
 
-    <!-- ── 5. Live Tournaments ──────────────────────────────────────── -->
+    <!-- ── 5a. My Club's Tournaments (all statuses) ────────────────── -->
+    <div v-if="myClubTournaments.length">
+      <div class="flex items-center justify-between mb-2">
+        <p class="label">🏆 My Club Tournaments</p>
+        <RouterLink to="/tournaments" class="text-[10px] text-neon hover:opacity-75 transition">
+          See All →
+        </RouterLink>
+      </div>
+      <div class="space-y-2">
+        <div v-for="t in myClubTournaments" :key="t.id"
+          class="card p-4 cursor-pointer hover:border-violet-400/40 transition-all active:scale-[0.99]"
+          @click="router.push('/tournament/' + t.id)">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
+                <span :class="{
+                  'badge-pending':  t.status === 'draft',
+                  'badge-approved': t.status === 'registration_open',
+                  'badge bg-rose-50 text-rose-600 border border-rose-200': t.status === 'live',
+                  'badge bg-slate-100 text-slate-500 border border-slate-200': t.status === 'completed',
+                }">
+                  {{ { draft:'Draft', registration_open:'Open', live:'🔴 Live', completed:'Done', cancelled:'Cancelled', registration_closed:'Closed' }[t.status] ?? t.status }}
+                </span>
+                <span class="text-[10px] text-slate-400">
+                  {{ t.format === 'single_elimination' ? 'Knock-out' : 'Round Robin' }}
+                </span>
+              </div>
+              <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">
+                {{ t.confirmed_teams }} confirmed
+                <span v-if="t.pending_teams"> · {{ t.pending_teams }} pending</span>
+                <span v-if="t.start_date"> · {{ fmtDate(t.start_date) }}</span>
+              </p>
+            </div>
+            <span class="text-slate-300 text-sm shrink-0">→</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 5b. Live Tournaments ──────────────────────────────────────── -->
     <div v-if="liveTournaments.length">
       <p class="label mb-2">🔴 Live Tournaments</p>
       <div class="space-y-2">
