@@ -53,10 +53,13 @@ const expandedPlayer = ref(null)
 
 // ── Load all data ──────────────────────────────────────────────────────
 async function load() {
-  if (!currentClub.value || !user.value) return
+  if (!currentClub.value || !user.value) {
+    loading.value = false   // don't stay stuck; no-club handled in template
+    return
+  }
   loading.value = true
   const cid = currentClub.value.club_id
-
+  try {
   const [plRes, expRes, balRes, noteRes, myPlRes, wRes] = await Promise.all([
     supabase.rpc('get_club_players', { p_club_id: cid }),
     supabase.rpc('get_expenses', { p_club_id: cid }),
@@ -88,8 +91,9 @@ async function load() {
       player_balances: wRes.data.player_balances ?? []
     }
   }
-
-  loading.value = false
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)
@@ -519,7 +523,15 @@ const isMe = id => myPlayer.value?.id === id
 </script>
 
 <template>
-  <div v-if="loading" class="space-y-3">
+  <!-- No club selected -->
+  <div v-if="!currentClub && !loading" class="card p-10 text-center fade-up">
+    <div class="text-4xl mb-3">💰</div>
+    <p class="font-bold text-slate-600 text-lg mb-1">No club selected</p>
+    <p class="text-slate-400 text-sm mb-4">Select a club from <strong>My Clubs</strong> or the top bar to view PaySplits.</p>
+    <RouterLink to="/clubs" class="btn-primary inline-block px-6 py-2">Go to My Clubs</RouterLink>
+  </div>
+
+  <div v-else-if="loading" class="space-y-3">
     <div v-for="i in 4" :key="i" class="h-20 shimmer rounded-2xl" />
   </div>
 

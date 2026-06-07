@@ -83,10 +83,12 @@ async function init() {
   try {
     await loadClubs()
     await refreshPending()
-    await startSession()
-    const { data: roles } = await supabase.rpc('get_my_roles')
-    isAdmin.value = (roles ?? []).some(r => r.role === 'app_admin')
   } catch {}
+  // Non-blocking: session + admin check don't need to hold up club/page loading
+  startSession().catch(() => {})
+  supabase.rpc('get_my_roles').then(({ data }) => {
+    isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
+  }).catch(() => {})
 }
 
 async function refreshPending() {

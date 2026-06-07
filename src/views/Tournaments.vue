@@ -146,10 +146,15 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
     <!-- Empty -->
     <div v-else-if="!filtered.length" class="card p-10 text-center fade-up">
-      <div class="text-4xl mb-3">🏸</div>
-      <p class="font-bold text-slate-600 text-lg mb-1">No tournaments yet</p>
-      <p class="text-slate-400 text-sm">
-        {{ isManager() ? 'Create the first tournament for your club.' : 'Check back soon for upcoming events.' }}
+      <div class="text-4xl mb-3">🏆</div>
+      <p class="font-bold text-slate-600 text-lg mb-1">
+        {{ filterStatus === 'all' ? 'No tournaments yet' : 'No ' + filterStatus.replace('_',' ') + ' tournaments' }}
+      </p>
+      <p class="text-slate-400 text-sm mb-3">
+        {{ filterStatus !== 'all' ? 'Try the "All" filter to see other tournaments.' : isManager() ? 'Create the first tournament for your club.' : 'Check back soon for upcoming events.' }}
+      </p>
+      <p v-if="filterStatus === 'all' && !isManager()" class="text-xs text-slate-300 italic">
+        Tournaments are created by directors. Contact your club admin if you'd like to run one.
       </p>
     </div>
 
