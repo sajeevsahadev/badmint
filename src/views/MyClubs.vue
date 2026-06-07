@@ -30,7 +30,7 @@ onMounted(async () => {
 
 function switchTo(c) {
   selectClub(c)
-  router.push('/dashboard')
+  router.push('/club/' + c.club_id)
 }
 
 const medals = ['🥇','🥈','🥉']
