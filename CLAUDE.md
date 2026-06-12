@@ -1,14 +1,14 @@
-# CLAUDE.md — Badmint Complete Project Context
+# CLAUDE.md — Badminton 360 Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v9 and all UI work through session 5.
+> Last updated: June 2026 — reflects all migrations v1–v18 and the Badminton 360 rebrand (commit bfbb092).
 
 ---
 
 ## 1. Business Context
 
-### What is Badmint?
-A free, installable **Progressive Web App (PWA)** for badminton doubles ranking in the UAE.
+### What is Badminton 360?
+A free, installable **Progressive Web App (PWA)** for badminton club management and doubles ranking — usable by clubs anywhere in the world. Branded **Badminton 360** (short form **B360**). Formerly named "Badmint" with a UAE-only focus; the repo, Supabase project and some internal identifiers still use the old `badmint` name.
 
 **Typical use-case:**
 A group of 6–30 friends books a badminton court at a sports academy or school facility every Saturday morning 6–8am, or weekday evenings. When they arrive, a manager opens the app, picks 4 players, assigns them to Side A / Side B, enters the score, and hits Record. The app calculates Elo ratings automatically. Everyone can see the leaderboard on their phone.
@@ -18,7 +18,7 @@ A group of 6–30 friends books a badminton court at a sports academy or school 
 - Managers/Owners — record matches, manage roster, invite players, set up clubs
 - Future: Facility admins, App Administrators
 
-**Vision:** Free for every badminton group in the UAE (and globally). Multi-club from day one — each court/group is an isolated "club". Clubs can link to real facility profiles so anyone can see who is playing where.
+**Vision:** Free for every badminton group globally. Multi-club from day one — each court/group is an isolated "club". Clubs can link to real facility profiles so anyone can see who is playing where. The app auto-detects the visitor's country from their internet connection (`useGeo` composable) instead of assuming UAE.
 
 ---
 
@@ -33,18 +33,17 @@ A group of 6–30 friends books a badminton court at a sports academy or school 
 | Database | Supabase (PostgreSQL) |
 | Hosting | Vercel (free tier, auto-deploy from GitHub) |
 | Repo | `https://github.com/sajeevsahadev/badmint` |
-| Live URL | `https://badmint.vercel.app` |
+| Live URL | `https://badminton360.app` (custom domain via Cloudflare DNS) · `https://badmint.vercel.app` (Vercel default) |
 
 **Design system:**
 - Background: `#050d1a` (deep navy)
 - Primary/neon: `#00e5ff` (electric cyan)
 - Secondary: `#a855f7` (violet)
 - Accent: `#fbbf24` (gold/amber)
-- UAE flag colours used in hero: `#00732F` green · `#FFFFFF` white · `#000000` black · `#FF0000` red
 - Fonts: Bricolage Grotesque (display) + Outfit (body)
 - Cards: glassmorphism — `bg-white/[0.03]` + `backdrop-blur-xl`
 - Custom CSS classes: `.card`, `.card-neon`, `.card-violet`, `.card-amber`, `.btn-primary`, `.btn-ghost`, `.btn-violet`, `.btn-success`, `.btn-danger`, `.gradient-text`, `.text-neon`, `.text-violet`, `.text-gold`, `.badge-*`, `.shimmer`, `.fade-up`
-- Custom keyframe: `@keyframes flagWave` (Home.vue hero background animation)
+- (The UAE flag hero and `@keyframes flagWave` were removed in the B360 rebrand — Home hero is now a global cyan/violet/amber gradient theme)
 
 ---
 
@@ -79,7 +78,7 @@ badmint/
 └── src/
     ├── main.js
     ├── App.vue                     # Shell: top bar, nav, PWA banners, session tracking
-    ├── style.css                   # Design system (neo theme) + @keyframes flagWave
+    ├── style.css                   # Design system (neo theme)
     ├── router/
     │   └── index.js                # All routes + auth guard + sessionStorage redirect
     ├── lib/
@@ -88,12 +87,13 @@ badmint/
     │   ├── useAuth.js              # user, ready, signInWithGoogle, signOut
     │   ├── useClub.js              # clubs, currentClub, loadClubs, selectClub, createClub, isManager
     │   ├── useInstall.js           # PWA install prompt (Android + iOS detection + isInstalled)
+    │   ├── useGeo.js               # Auto country detection (ipapi.co + locale fallback, localStorage cache)
     │   └── useSession.js           # startSession, trackPage, trackAction, endSession
     ├── components/
     │   ├── InfoTip.vue             # Inline ? tooltip (positioned right-0 top-6 to avoid overflow)
     │   └── PageHeader.vue          # icon + title + subtitle + collapsible #help slot
     └── views/
-        ├── Home.vue                # Public landing: UAE flag hero, Top Clubs, Top Players, PWA install
+        ├── Home.vue                # Public landing: global hero, story landing (logged out), Top Clubs/Players (logged in)
         ├── Login.vue               # Google sign-in, feature grid
         ├── Schedule.vue            # Calendar, match-day planning, poll voting, attendee tracking
         ├── PollView.vue            # Public poll page — shareable /poll/:id URL (WhatsApp link target)
@@ -512,15 +512,15 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 ## 11. Views — Key Behaviours
 
 ### Home.vue (public, `/`)
-- UAE flag hero: waving flag animation (12 CSS strips with staggered `animation-delay`, `@keyframes flagWave`), flag-colour top band + right strip, glow orbs
+- Global hero: cyan/violet/amber gradient + glow orbs + dot grid; shows auto-detected country with flag emoji ("🇦🇪 United Arab Emirates · Elo Rankings · Free Forever", falls back to "🌍 Worldwide") via `useGeo`
 - Search bar: real-time search across clubs and facilities
-- My Teams section: shown for logged-in users; click switches club + navigates to /dashboard
-- PWA Install section (hidden once `isInstalled = true`):
+- **Logged-out landing**: sign-in CTA card + 5-chapter story timeline (club management → match tracking/Elo → PaySplits/Wallet → discover tournaments → host tournaments); every story card is a button → `/login`; finale CTA card ("The whole game. The whole club. One app. 360°.")
+- **Top Clubs and Top Players are hidden for logged-out visitors** — shown only when logged in
+- My Teams section: shown for logged-in users; click switches club + navigates to club profile
+- PWA Install section — kept at the **bottom** of the page (native iOS/Android apps planned); hidden once `isInstalled = true`:
   - Android card: calls `promptInstall()` when `canInstall` is true; otherwise opens Android guide bottom-sheet modal
   - iPhone/iPad card: always opens iOS guide bottom-sheet modal
-- Emirate filter chips for clubs
-- Top Clubs grid (own clubs highlighted, card-neon)
-- Top Players list (all RouterLinks to /player/:id)
+- No emirate filter chips (removed in globalization)
 
 ### Dashboard.vue
 - Leaderboard rows: clicking navigates to `/player/:id` (RouterLink on player name column)
@@ -597,7 +597,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - Session tracking + activity log (backend, admin UI coming later)
 - SEO: meta tags, OG, Twitter Card, JSON-LD, robots.txt, sitemap.xml
 - **PWA**: real shuttlecock brand icon (192 + 512 PNG), Android one-tap install, iOS guide bottom-sheet
-- **Home page** (`/`) public landing with UAE flag animation, top clubs/players, search, install section
+- **Home page** (`/`) public landing — story landing for logged-out visitors, top clubs/players + search for logged-in users, install section at bottom
 - **Bottom nav on all pages** for logged-in users (Schedule | Rankings | Matches | Players | Manage)
 - **Playing Schedule** — Calendar view, plan match days, pick/create venue, team poll (Attending/Not Attending), actual attendee tracking, shareable poll URL, WhatsApp share
 - **Add Match** — Schedule-aware player filter: if schedule has saved attendees for the date, only those players appear (with override toggle)
@@ -610,6 +610,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **App-level roles** (v15) — `app_roles` table, `is_app_admin()` helper, tournament creation quota, admin panel route `/admin`
 - **delete_club RPC** (v16) — owner or app_admin can delete a club (CASCADE); also fixed ambiguous `status` column bug in `get_tournaments`
 - **delete_tournament RPC** (v17) — tournament creator, club owner/manager, or app_admin can delete
+- **Badminton 360 rebrand + globalization** (commit bfbb092) — all branding renamed to Badminton 360 / B360; UAE flag hero, emirate chips and UAE-specific copy removed; `useGeo` auto country detection; JoinClub emirate dropdown → free-text City/Region; canonical domain badminton360.app
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
@@ -621,6 +622,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days
 - **Export to PDF** — monthly leaderboard report
+- **Full globalization of deeper forms** — Tournaments, ManageTournament, Manage (facility), BookCourt and Explore still have hardcoded UAE emirate dropdowns/filters; the DB `emirate`/`emirates` columns now hold free-text region strings
 
 ---
 
@@ -717,11 +719,11 @@ UPDATE players SET elo = 1000 WHERE club_id = 'CLUB-ID';
 
 ## 16. Branding
 
-- **App name:** Badmint
-- **Tagline:** "Smart rankings for UAE badminton teams"
-- **Domain:** badmint.vercel.app
+- **App name:** Badminton 360 (short form: B360 — used as PWA short_name and icon monogram)
+- **Tagline:** "Your Club · Your Game · One App"
+- **Domain:** badminton360.app (Cloudflare DNS → Vercel; badmint.vercel.app still works)
 - **GitHub:** github.com/sajeevsahadev/badmint
 - **Owner email:** sajeevsahadev@gmail.com
-- **Target market:** UAE badminton clubs — all 7 emirates
+- **Target market:** Badminton clubs worldwide (launched in the UAE)
 - **Monetisation:** Free (Phase 1). Future: facility booking fees, premium features.
-- **Icon**: Shuttlecock silhouette in neon cyan on dark navy rounded square. Source: `public/icon.svg`. Regenerate PNGs with `npm run generate:icons`.
+- **Icon**: Shuttlecock silhouette in neon cyan on dark navy rounded square with "B360" monogram. Source: `public/icon.svg`. Regenerate PNGs with `npm run generate:icons`.
