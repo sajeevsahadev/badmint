@@ -163,6 +163,7 @@ badmint/
 17. `supabase/v16_schema.sql` — delete_club RPC + fix get_tournaments ambiguous `status` column
 18. `supabase/v17_schema.sql` — delete_tournament RPC
 19. `supabase/v18_schema.sql` — fix register_for_tournament: registered_by/notes swapped in VALUES
+20. `supabase/v19_schema.sql` — PaySplits opening balances (paysplit_opening_balances table + set/delete/get RPCs)
 
 ---
 
@@ -396,6 +397,9 @@ elo_score, part_score, composite, club_rank
 | `get_top_scorers(p_limit?)` | Public | Global Elo leaderboard (security definer) |
 | `get_facilities(p_emirate?, p_search?)` | Public | All facilities with stats |
 | `get_facility_detail(p_facility_id)` | Public | Full facility JSON (schedule + bookings + clubs) |
+| `set_opening_balance(p_club_id, p_player_id, p_amount, p_notes?)` | Manager | Upsert a player's PaySplits opening balance (±, one per player; |amount|<0.01 deletes) |
+| `delete_opening_balance(p_club_id, p_player_id)` | Manager | Remove a player's opening balance |
+| `get_opening_balances(p_club_id)` | Member | Opening balances with resolved names |
 | `create_facility(...)` | Any auth | Creates a facility master record |
 | `update_facility(p_id, ...)` | Creator | Updates facility info |
 | `set_club_facility(p_club_id, p_facility_id)` | Manager | Links/unlinks club ↔ facility |
@@ -611,6 +615,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **delete_club RPC** (v16) — owner or app_admin can delete a club (CASCADE); also fixed ambiguous `status` column bug in `get_tournaments`
 - **delete_tournament RPC** (v17) — tournament creator, club owner/manager, or app_admin can delete
 - **Badminton 360 rebrand + globalization** (commit bfbb092) — all branding renamed to Badminton 360 / B360; UAE flag hero, emirate chips and UAE-specific copy removed; `useGeo` auto country detection; JoinClub emirate dropdown → free-text City/Region; canonical domain badminton360.app
+- **PaySplits: Simplify debts toggle + opening balances** (v19) — Splitwise-style toggle in Balance tab (ON = fewest payments via greedy netting incl. wallet + opening balances; OFF = debts as recorded, wallet/opening shown vs "Club Pool"); admin-only per-player opening balance (± amount, one entry per player, for migrating from another app); warning when opening balances don't net to zero
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL

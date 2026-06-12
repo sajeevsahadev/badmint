@@ -41,15 +41,21 @@ const timeAgo = ts => {
 }
 
 // ── State ──────────────────────────────────────────────────────────────
-const expenses       = ref([])
-const balances       = ref([])
-const players        = ref([])
-const notes          = ref([])
-const myPlayer       = ref(null)
-const walletData     = ref({ contributions: [], wallet_expenses: [], player_balances: [] })
-const loading        = ref(true)
-const activeTab      = ref('activities')
-const expandedPlayer = ref(null)
+const expenses        = ref([])
+const balances        = ref([])
+const players         = ref([])
+const notes           = ref([])
+const myPlayer        = ref(null)
+const walletData      = ref({ contributions: [], wallet_expenses: [], player_balances: [] })
+const openingBalances = ref([])
+const loading         = ref(true)
+const activeTab       = ref('activities')
+const expandedPlayer  = ref(null)
+
+// Splitwise-style "simplify debts" toggle — ON restructures who-pays-whom
+// into the fewest payments; OFF shows debts exactly as recorded.
+const simplifyOn = ref(localStorage.getItem('b360_simplify_debts') !== '0')
+watch(simplifyOn, v => localStorage.setItem('b360_simplify_debts', v ? '1' : '0'))
 
 // ── Load all data ──────────────────────────────────────────────────────
 async function load() {
@@ -60,7 +66,7 @@ async function load() {
   loading.value = true
   const cid = currentClub.value.club_id
   try {
-  const [plRes, expRes, balRes, noteRes, myPlRes, wRes] = await Promise.all([
+  const [plRes, expRes, balRes, noteRes, myPlRes, wRes, obRes] = await Promise.all([
     supabase.rpc('get_club_players', { p_club_id: cid }),
     supabase.rpc('get_expenses', { p_club_id: cid }),
     supabase.rpc('get_balance_summary', { p_club_id: cid }),
@@ -70,7 +76,8 @@ async function load() {
     supabase.from('players')
       .select('id, display_name, user_id')
       .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle(),
-    supabase.rpc('get_wallet_data', { p_club_id: cid })
+    supabase.rpc('get_wallet_data', { p_club_id: cid }),
+    supabase.rpc('get_opening_balances', { p_club_id: cid })
   ])
 
   players.value  = plRes.data  ?? []
@@ -91,6 +98,9 @@ async function load() {
       player_balances: wRes.data.player_balances ?? []
     }
   }
+
+  // Tolerate the v19 migration not being applied yet
+  openingBalances.value = obRes.error ? [] : (obRes.data ?? [])
   } finally {
     loading.value = false
   }
@@ -104,29 +114,18 @@ function canModify(item) {
   return item.created_by === user.value?.id || isManager()
 }
 
-// ── Settle-up: minimum transactions to clear ALL debts ────────────────
-// 1. Compute each player's net position from direct-pay expenses + wallet.
-// 2. Greedy: match biggest getter with biggest ower, repeat.
-// Result: fewest possible payment edges — like Splitwise.
-const settledEdges = computed(() => {
-  const netMap = {}
-  const addNet = (id, name, delta) => {
-    if (!netMap[id]) netMap[id] = { id, name, net: 0 }
-    netMap[id].net = Math.round((netMap[id].net + delta) * 100) / 100
-  }
+// ── Net positions feeding settle-up ────────────────────────────────────
+// "Club Pool" pseudo-party used in the unsimplified view for debts that have
+// no single counterparty (wallet consumption, opening balances).
+const POOL_ID = '__pool__'
 
-  // Direct-pay expense debts (from DB summary)
-  balances.value.forEach(b => {
-    addNet(b.from_player_id, b.from_name, -Number(b.net_amount))
-    addNet(b.to_player_id,   b.to_name,   +Number(b.net_amount))
-  })
-
-  // Wallet net positions — using consumed fraction only so the sum = 0.
-  // player_balances.balance = contributed − expense_share, but this does NOT
-  // sum to zero when the wallet has unspent money (remaining > 0). That breaks
-  // greedy settle-up. Fix: scale each player's credit by the consumed fraction
-  // (totalWalletExpenses / totalContributed). Proof: sum(consumed_credit) =
-  // ratio × totalContributed = totalWalletExpenses = sum(expense_share). ✓
+// Wallet net positions — using consumed fraction only so the sum = 0.
+// player_balances.balance = contributed − expense_share, but this does NOT
+// sum to zero when the wallet has unspent money (remaining > 0). That breaks
+// greedy settle-up. Fix: scale each player's credit by the consumed fraction
+// (totalWalletExpenses / totalContributed). Proof: sum(consumed_credit) =
+// ratio × totalContributed = totalWalletExpenses = sum(expense_share). ✓
+const walletNets = computed(() => {
   const totalContributed = walletData.value.contributions
     .reduce((s, c) => s + Number(c.amount), 0)
   const totalWalletExp = walletData.value.wallet_expenses
@@ -134,13 +133,47 @@ const settledEdges = computed(() => {
   const consumedRatio = totalContributed > 0
     ? Math.min(1, totalWalletExp / totalContributed)
     : 0
-
+  const nets = []
   ;(walletData.value.player_balances ?? []).forEach(b => {
     const consumedCredit = Math.round(Number(b.contributed) * consumedRatio * 100) / 100
     const expenseShare   = Math.round(Number(b.expense_share) * 100) / 100
-    const netDebt = Math.round((consumedCredit - expenseShare) * 100) / 100
-    if (Math.abs(netDebt) >= 0.01) addNet(b.player_id, b.player_name, netDebt)
+    const net = Math.round((consumedCredit - expenseShare) * 100) / 100
+    if (Math.abs(net) >= 0.01) nets.push({ id: b.player_id, name: b.player_name, net })
   })
+  return nets
+})
+
+// Opening balances (v19): admin-entered starting position per player.
+// Positive = player gets back, negative = player owes.
+const openingNets = computed(() =>
+  openingBalances.value
+    .map(ob => ({ id: ob.player_id, name: ob.player_name, net: Math.round(Number(ob.amount) * 100) / 100 }))
+    .filter(o => Math.abs(o.net) >= 0.01)
+)
+
+// When opening balances don't net to zero, the group can't fully settle —
+// surfaced as a warning so the admin can correct the migration entries.
+const openingSum = computed(() =>
+  Math.round(openingNets.value.reduce((s, o) => s + o.net, 0) * 100) / 100
+)
+
+// ── Simplified: minimum transactions to clear ALL debts ───────────────
+// 1. Compute each player's net from direct-pay expenses + wallet + opening.
+// 2. Greedy: match biggest getter with biggest ower, repeat.
+// Result: fewest possible payment edges — like Splitwise "simplify debts".
+const settledEdges = computed(() => {
+  const netMap = {}
+  const addNet = (id, name, delta) => {
+    if (!netMap[id]) netMap[id] = { id, name, net: 0 }
+    netMap[id].net = Math.round((netMap[id].net + delta) * 100) / 100
+  }
+
+  balances.value.forEach(b => {
+    addNet(b.from_player_id, b.from_name, -Number(b.net_amount))
+    addNet(b.to_player_id,   b.to_name,   +Number(b.net_amount))
+  })
+  walletNets.value.forEach(w => addNet(w.id, w.name, w.net))
+  openingNets.value.forEach(o => addNet(o.id, o.name, o.net))
 
   const positions = Object.values(netMap).filter(p => Math.abs(p.net) >= 0.01)
   const getters   = positions.filter(p => p.net > 0).map(p => ({ ...p })).sort((a, b) => b.net - a.net)
@@ -151,7 +184,7 @@ const settledEdges = computed(() => {
   while (gi < getters.length && oi < owers.length) {
     const g = getters[gi], o = owers[oi]
     const amount = Math.round(Math.min(g.net, o.net) * 100) / 100
-    if (amount >= 0.01) edges.push({ fromId: o.id, fromName: o.name, toId: g.id, toName: g.name, amount })
+    if (amount >= 0.01) edges.push({ fromId: o.id, fromName: o.name, toId: g.id, toName: g.name, amount, kind: 'settle' })
     g.net = Math.round((g.net - amount) * 100) / 100
     o.net = Math.round((o.net - amount) * 100) / 100
     if (g.net < 0.01) gi++
@@ -160,12 +193,34 @@ const settledEdges = computed(() => {
   return edges
 })
 
-// ── My balance summary — derived from settled edges ───────────────────
+// ── Unsimplified: debts exactly as recorded ────────────────────────────
+// Person-paid expenses stay pairwise; wallet and opening-balance positions
+// are shown against the "Club Pool" since they have no single counterparty.
+const directEdges = computed(() => {
+  const edges = balances.value.map(b => ({
+    fromId: b.from_player_id, fromName: b.from_name,
+    toId:   b.to_player_id,   toName:   b.to_name,
+    amount: Number(b.net_amount), kind: 'direct'
+  }))
+  walletNets.value.forEach(w => {
+    if (w.net > 0) edges.push({ fromId: POOL_ID, fromName: 'Club Pool', toId: w.id, toName: w.name, amount: w.net, kind: 'wallet' })
+    else           edges.push({ fromId: w.id, fromName: w.name, toId: POOL_ID, toName: 'Club Pool', amount: Math.abs(w.net), kind: 'wallet' })
+  })
+  openingNets.value.forEach(o => {
+    if (o.net > 0) edges.push({ fromId: POOL_ID, fromName: 'Club Pool', toId: o.id, toName: o.name, amount: o.net, kind: 'opening' })
+    else           edges.push({ fromId: o.id, fromName: o.name, toId: POOL_ID, toName: 'Club Pool', amount: Math.abs(o.net), kind: 'opening' })
+  })
+  return edges
+})
+
+const activeEdges = computed(() => simplifyOn.value ? settledEdges.value : directEdges.value)
+
+// ── My balance summary — derived from the active edge set ─────────────
 const myBalance = computed(() => {
   const mid = myPlayer.value?.id
   if (!mid) return null
-  const owe  = settledEdges.value.filter(e => e.fromId === mid).map(e => ({ name: e.toName,   amount: e.amount }))
-  const gets = settledEdges.value.filter(e => e.toId   === mid).map(e => ({ name: e.fromName, amount: e.amount }))
+  const owe  = activeEdges.value.filter(e => e.fromId === mid).map(e => ({ name: e.toName,   amount: e.amount }))
+  const gets = activeEdges.value.filter(e => e.toId   === mid).map(e => ({ name: e.fromName, amount: e.amount }))
   const totalOwe  = owe.reduce((s, x)  => s + x.amount, 0)
   const totalGets = gets.reduce((s, x) => s + x.amount, 0)
   return { owe, gets, totalOwe, totalGets, net: totalGets - totalOwe }
@@ -194,16 +249,25 @@ function myContrib(exp) {
   return { type: 'split', net: -Number(part.share) }
 }
 
-// ── Balance tab list — derived from settled edges ─────────────────────
+// ── Balance tab list — derived from the active edge set ───────────────
+// "Club Pool" never gets its own row; pool edges appear inside player rows.
 const playerBalanceList = computed(() => {
   const map = {}
-  settledEdges.value.forEach(({ fromId, fromName, toId, toName, amount }) => {
-    if (!map[fromId]) map[fromId] = { id: fromId, name: fromName, owes: [], gets: [], net: 0 }
-    if (!map[toId])   map[toId]   = { id: toId,   name: toName,   owes: [], gets: [], net: 0 }
-    map[fromId].owes.push({ to: toName, toId, amount })
-    map[fromId].net = Math.round((map[fromId].net - amount) * 100) / 100
-    map[toId].gets.push({ from: fromName, fromId, amount })
-    map[toId].net = Math.round((map[toId].net + amount) * 100) / 100
+  const ensure = (id, name) => {
+    if (!map[id]) map[id] = { id, name, owes: [], gets: [], net: 0 }
+    return map[id]
+  }
+  activeEdges.value.forEach(({ fromId, fromName, toId, toName, amount, kind }) => {
+    if (fromId !== POOL_ID) {
+      const p = ensure(fromId, fromName)
+      p.owes.push({ to: toName, toId, amount, kind })
+      p.net = Math.round((p.net - amount) * 100) / 100
+    }
+    if (toId !== POOL_ID) {
+      const p = ensure(toId, toName)
+      p.gets.push({ from: fromName, fromId, amount, kind })
+      p.net = Math.round((p.net + amount) * 100) / 100
+    }
   })
   return Object.values(map)
     .filter(p => Math.abs(p.net) >= 0.01)
@@ -490,6 +554,61 @@ async function doDeleteContrib() {
   await load()
 }
 
+// ── Opening balances (v19) — club admin only ───────────────────────────
+const showObForm   = ref(false)
+const obFormError  = ref(null)
+const obFormSaving = ref(false)
+const confirmDelOb = ref(null)   // player_id pending delete
+
+const blankObForm = () => ({ player_id: '', direction: 'gets', amount: '', notes: '' })
+const obForm = ref(blankObForm())
+
+function openObAddForm() {
+  obForm.value      = blankObForm()
+  obFormError.value = null
+  showObForm.value  = true
+}
+
+function openObEditForm(ob) {
+  obForm.value = {
+    player_id: ob.player_id,
+    direction: Number(ob.amount) >= 0 ? 'gets' : 'owes',
+    amount:    String(Math.abs(Number(ob.amount))),
+    notes:     ob.notes ?? ''
+  }
+  obFormError.value = null
+  showObForm.value  = true
+}
+
+async function saveOb() {
+  obFormError.value = null
+  const amt = parseFloat(obForm.value.amount)
+  if (!obForm.value.player_id) { obFormError.value = 'Select a player'; return }
+  if (!amt || amt <= 0)        { obFormError.value = 'Enter a valid amount'; return }
+
+  obFormSaving.value = true
+  const { error } = await supabase.rpc('set_opening_balance', {
+    p_club_id:   currentClub.value.club_id,
+    p_player_id: obForm.value.player_id,
+    p_amount:    obForm.value.direction === 'owes' ? -amt : amt,
+    p_notes:     obForm.value.notes.trim() || null
+  })
+  obFormSaving.value = false
+  if (error) { obFormError.value = error.message; return }
+  showObForm.value = false
+  await load()
+}
+
+async function doDeleteOb() {
+  const pid = confirmDelOb.value
+  if (!pid) return
+  confirmDelOb.value = null
+  await supabase.rpc('delete_opening_balance', {
+    p_club_id: currentClub.value.club_id, p_player_id: pid
+  })
+  await load()
+}
+
 // ── Notes ──────────────────────────────────────────────────────────────
 const noteText   = ref('')
 const noteSaving = ref(false)
@@ -540,7 +659,8 @@ const isMe = id => myPlayer.value?.id === id
       <template #help>
         <div class="text-xs space-y-1.5">
           <p><strong class="text-slate-800">Activities</strong> — Full expense list with your contribution per item. Only the person who added an entry (or a manager) can edit or delete it.</p>
-          <p><strong class="text-slate-800">Balance</strong> — Who owes whom across person-paid expenses. Tap a name to expand.</p>
+          <p><strong class="text-slate-800">Balance</strong> — Who owes whom. With <strong>Simplify debts ON</strong>, the app restructures debts into the fewest possible payments (totals never change). OFF shows debts exactly as recorded. Tap a name to expand.</p>
+          <p><strong class="text-slate-800">Opening Balances</strong> — Migrating from another app? A club admin can record each player's starting balance once (positive = gets back, negative = owes).</p>
           <p><strong class="text-slate-800">Wallet</strong> — Shared cash pool. Contributions are consumed oldest-first (FIFO) when a wallet expense is recorded.</p>
           <p><strong class="text-slate-800">Totals</strong> — Monthly spending charts and all-time summary.</p>
           <p><strong class="text-slate-800">Notes</strong> — Shared notepad for payment reminders.</p>
@@ -692,10 +812,37 @@ const isMe = id => myPlayer.value?.id === id
 
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
     <div v-if="activeTab === 'balance'" class="fade-up">
+
+      <!-- Simplify debts toggle (Splitwise-style) -->
+      <div class="card px-4 py-3 mb-3 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-xs font-semibold text-slate-200">🔀 Simplify debts</div>
+          <div class="text-[10px] text-slate-500 leading-snug mt-0.5">
+            {{ simplifyOn
+              ? 'Debts restructured into the fewest payments — totals stay the same'
+              : 'Debts shown exactly as recorded (wallet & opening vs Club Pool)' }}
+          </div>
+        </div>
+        <button @click="simplifyOn = !simplifyOn"
+          class="shrink-0 px-4 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-200"
+          :class="simplifyOn ? 'text-slate-950 border-transparent' : 'text-slate-400 border-white/15 hover:border-white/30'"
+          :style="simplifyOn ? 'background:linear-gradient(135deg,#00e5ff,#0099cc); box-shadow:0 0 14px rgba(0,229,255,.25)' : ''">
+          {{ simplifyOn ? 'ON' : 'OFF' }}
+        </button>
+      </div>
+
+      <!-- Opening balances don't net to zero — group can't fully settle -->
+      <div v-if="Math.abs(openingSum) >= 0.01"
+        class="mb-3 px-3.5 py-2.5 rounded-xl text-[11px] leading-relaxed"
+        style="background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25); color:#fbbf24">
+        ⚠️ Opening balances net to <strong>{{ aed(openingSum) }}</strong> instead of zero,
+        so the group can't fully settle. Ask an admin to adjust them below.
+      </div>
+
       <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
         <div class="text-4xl mb-3">⚖️</div>
         <p class="font-semibold mb-1">All settled!</p>
-        <p class="text-sm">No outstanding person-paid balances in this club.</p>
+        <p class="text-sm">No outstanding balances in this club.</p>
       </div>
 
       <div class="space-y-2">
@@ -737,30 +884,80 @@ const isMe = id => myPlayer.value?.id === id
           <div v-if="expandedPlayer === p.id"
             class="border-t border-white/[0.06] px-4 py-3 space-y-2">
 
-            <div v-for="o in p.owes" :key="o.toId"
+            <div v-for="o in p.owes" :key="o.toId + (o.kind ?? '')"
               class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
               style="background:rgba(248,113,113,.06); border:1px solid rgba(248,113,113,.12)">
               <span>
                 <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'You' : p.name }}</span>
                 <span class="text-slate-500"> → pay → </span>
                 <span class="font-medium text-slate-200">{{ o.to }}</span>
+                <span v-if="o.kind === 'wallet'" class="text-[9px] text-violet ml-1">💰 wallet</span>
+                <span v-else-if="o.kind === 'opening'" class="text-[9px] text-amber-400 ml-1">⚖️ opening</span>
               </span>
               <span class="text-rose-400 font-bold shrink-0 ml-3">{{ aed(o.amount) }}</span>
             </div>
 
-            <div v-for="g in p.gets" :key="g.fromId"
+            <div v-for="g in p.gets" :key="g.fromId + (g.kind ?? '')"
               class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
               style="background:rgba(52,211,153,.06); border:1px solid rgba(52,211,153,.12)">
               <span>
                 <span class="font-medium text-slate-200">{{ g.from }}</span>
                 <span class="text-slate-500"> → pays → </span>
                 <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'you' : p.name }}</span>
+                <span v-if="g.kind === 'wallet'" class="text-[9px] text-violet ml-1">💰 wallet</span>
+                <span v-else-if="g.kind === 'opening'" class="text-[9px] text-amber-400 ml-1">⚖️ opening</span>
               </span>
               <span class="text-emerald-400 font-bold shrink-0 ml-3">{{ aed(g.amount) }}</span>
             </div>
 
             <div v-if="!p.owes.length && !p.gets.length"
               class="text-xs text-slate-500 text-center py-1">Settled up ✓</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Opening Balances (migration from another app) ── -->
+      <div class="card overflow-hidden mt-4">
+        <div class="px-4 py-3 border-b border-white/[.06] flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
+            <div class="text-[10px] text-slate-500 leading-snug mt-0.5">
+              Starting balances carried over from another app — set once per player by a club admin.
+              <span class="text-emerald-400">Positive = gets back</span> ·
+              <span class="text-rose-400">negative = owes</span>
+            </div>
+          </div>
+          <button v-if="isManager()" class="btn-primary text-[11px] px-3 py-1.5 shrink-0"
+            @click="openObAddForm">➕ Set</button>
+        </div>
+
+        <div v-if="!openingBalances.length" class="px-4 py-6 text-center text-sm text-slate-500">
+          No opening balances recorded.
+          <span v-if="isManager()" class="block text-[11px] text-slate-600 mt-1">
+            Migrating from Splitwise or another app? Tap "Set" to carry over each player's balance.
+          </span>
+        </div>
+
+        <div v-for="ob in openingBalances" :key="ob.player_id"
+          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[.04] last:border-0">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold"
+              :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
+              {{ isMe(ob.player_id) ? 'You' : ob.player_name }}
+            </div>
+            <div v-if="ob.notes" class="text-[10px] text-slate-500 truncate">{{ ob.notes }}</div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="font-bold text-sm"
+              :class="Number(ob.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ Number(ob.amount) >= 0 ? '+' : '' }}{{ aed(ob.amount) }}
+            </span>
+            <template v-if="isManager()">
+              <button class="text-[11px] text-slate-500 hover:text-neon transition"
+                @click="openObEditForm(ob)">✏️</button>
+              <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
+                @click="confirmDelOb = ob.player_id">🗑️</button>
+            </template>
           </div>
         </div>
       </div>
@@ -1193,6 +1390,111 @@ const isMe = id => myPlayer.value?.id === id
               @click="saveContrib">
               {{ walletFormSaving ? 'Saving…' : walletEditId ? '✓ Update Contribution' : '💰 Record Contribution' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════ OPENING BALANCE FORM ═══════════════════ -->
+    <Teleport to="body">
+      <div v-if="showObForm" class="fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-black/70" @click="showObForm = false" />
+        <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
+          style="background:#ffffff; border-top:1px solid rgba(251,191,36,.4); max-height:85vh">
+
+          <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
+            style="background:#ffffff; border-bottom:1px solid rgba(0,0,0,.07)">
+            <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-3" />
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-slate-800">⚖️ Set Opening Balance</span>
+              <button @click="showObForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+          </div>
+
+          <div class="overflow-y-auto px-4 pb-8 space-y-4 pt-4" style="max-height: calc(85vh - 72px)">
+
+            <p class="text-[11px] text-slate-500 leading-relaxed -mt-1">
+              Carry over a player's balance from another app. One entry per player —
+              saving again replaces the previous value. Admins only.
+            </p>
+
+            <!-- Player -->
+            <div>
+              <label class="label">Player</label>
+              <select v-model="obForm.player_id" class="input">
+                <option value="" disabled>Select player</option>
+                <option v-for="p in players" :key="p.id" :value="p.id">
+                  {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Direction -->
+            <div>
+              <label class="label">Starting Position</label>
+              <div class="flex gap-2">
+                <button
+                  @click="obForm.direction = 'gets'"
+                  class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all"
+                  :class="obForm.direction === 'gets' ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="obForm.direction === 'gets' ? 'background:linear-gradient(135deg,#10b981,#059669)' : ''">
+                  ➕ Gets back (group owes them)
+                </button>
+                <button
+                  @click="obForm.direction = 'owes'"
+                  class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all"
+                  :class="obForm.direction === 'owes' ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="obForm.direction === 'owes' ? 'background:linear-gradient(135deg,#f43f5e,#dc2626)' : ''">
+                  ➖ Owes (they owe the group)
+                </button>
+              </div>
+            </div>
+
+            <!-- Amount -->
+            <div>
+              <label class="label">Amount (AED)</label>
+              <input v-model="obForm.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
+            </div>
+
+            <!-- Notes -->
+            <div>
+              <label class="label">Notes <span class="text-slate-400 normal-case tracking-normal">(optional)</span></label>
+              <input v-model="obForm.notes" class="input" placeholder="e.g. Splitwise balance as of June 2026" maxlength="100" />
+            </div>
+
+            <p v-if="obFormError" class="text-xs text-rose-600 px-1">{{ obFormError }}</p>
+
+            <button class="w-full py-3 rounded-xl font-bold text-white text-sm transition active:scale-[.98]"
+              style="background:linear-gradient(135deg,#f59e0b,#d97706)"
+              :disabled="obFormSaving"
+              @click="saveOb">
+              {{ obFormSaving ? 'Saving…' : '⚖️ Save Opening Balance' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════ DELETE OPENING BALANCE CONFIRM ═════════ -->
+    <Teleport to="body">
+      <div v-if="confirmDelOb"
+        class="fixed inset-0 z-50 flex items-center justify-center px-5"
+        style="background:rgba(0,0,0,.75); backdrop-filter:blur(6px)"
+        @click.self="confirmDelOb = null">
+        <div class="w-full max-w-sm rounded-2xl p-6"
+          style="background:#0d1a2e; border:1px solid rgba(251,191,36,.25); box-shadow:0 0 40px rgba(251,191,36,.1)">
+          <div class="text-center mb-4">
+            <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
+              style="background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.25)">⚖️</div>
+            <h3 class="font-display text-lg font-bold text-slate-100">Remove Opening Balance?</h3>
+            <p class="text-sm text-slate-400 mt-1">The player's balance will be recalculated without it.</p>
+          </div>
+          <div class="flex gap-3">
+            <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
+              @click="confirmDelOb = null">Cancel</button>
+            <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
+              style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
+              @click="doDeleteOb">Yes, Remove</button>
           </div>
         </div>
       </div>
