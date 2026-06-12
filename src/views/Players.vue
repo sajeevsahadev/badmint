@@ -82,14 +82,14 @@ function copyLink() {
 }
 
 function whatsappLink() {
-  const text = `Hi ${invite.value.name}! 🏸 You've been invited to join "${invite.value.club}" on Badmint — the free rankings app for UAE badminton teams.\n\nClick here to join and set up your profile:\n${invite.value.link}\n\nThe link expires in 7 days.`
+  const text = `Hi ${invite.value.name}! 🏸 You've been invited to join "${invite.value.club}" on Badminton 360 — the free rankings app for badminton teams.\n\nClick here to join and set up your profile:\n${invite.value.link}\n\nThe link expires in 7 days.`
   return `https://wa.me/?text=${encodeURIComponent(text)}`
 }
 
 function mailtoLink() {
-  const subj = encodeURIComponent(`You're invited to join ${invite.value.club} on Badmint 🏸`)
+  const subj = encodeURIComponent(`You're invited to join ${invite.value.club} on Badminton 360 🏸`)
   const body = encodeURIComponent(
-    `Hi ${invite.value.name}!\n\nYou've been invited to join "${invite.value.club}" on Badmint — the free Elo rankings app for UAE badminton teams.\n\nClick the link below to join and set up your profile:\n${invite.value.link}\n\nThe link expires in 7 days. See you on the court! 🏸`
+    `Hi ${invite.value.name}!\n\nYou've been invited to join "${invite.value.club}" on Badminton 360 — the free Elo rankings app for badminton teams.\n\nClick the link below to join and set up your profile:\n${invite.value.link}\n\nThe link expires in 7 days. See you on the court! 🏸`
   )
   return `mailto:${invite.value.email}?subject=${subj}&body=${body}`
 }

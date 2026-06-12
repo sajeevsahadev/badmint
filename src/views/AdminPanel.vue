@@ -133,7 +133,7 @@ const statItems = computed(() => stats.value ? [
         <span class="badge bg-rose-50 text-rose-700 border border-rose-200">👑 Super Admin</span>
       </div>
       <h1 class="font-display text-2xl font-extrabold gradient-text">Admin Panel</h1>
-      <p class="text-xs text-slate-400 mt-1">Platform management — Badmint UAE</p>
+      <p class="text-xs text-slate-400 mt-1">Platform management — Badminton 360</p>
     </div>
 
     <!-- Alerts -->

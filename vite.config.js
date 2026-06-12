@@ -13,9 +13,9 @@ export default defineConfig({
         importScripts: ['sw-push.js']
       },
       manifest: {
-        name: 'Badmint – UAE Badminton Rankings',
-        short_name: 'Badmint',
-        description: 'Free Elo ranking app for UAE badminton clubs. Track skill, attendance and match history.',
+        name: 'Badminton 360 – Club Manager & Rankings',
+        short_name: 'B360',
+        description: 'Free app for badminton clubs worldwide. Elo rankings, match tracking, expense splitting and tournaments.',
         theme_color: '#00e5ff',
         background_color: '#050d1a',
         display: 'standalone',

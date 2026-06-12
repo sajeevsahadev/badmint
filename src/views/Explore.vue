@@ -313,8 +313,8 @@ const activityColor = (m30) =>
     <!-- Join prompt for non-logged-in users -->
     <div v-if="!user" class="card-neon p-6 text-center mt-4">
       <div class="text-3xl mb-3">🏸</div>
-      <p class="font-bold gradient-text text-lg mb-1">Join Your Team on Badmint</p>
-      <p class="text-slate-400 text-sm mb-4">Free Elo rankings for UAE badminton courts. Sign in with Google to get started.</p>
+      <p class="font-bold gradient-text text-lg mb-1">Join Your Team on Badminton 360</p>
+      <p class="text-slate-400 text-sm mb-4">Free Elo rankings for badminton courts everywhere. Sign in with Google to get started.</p>
       <button class="btn-primary px-8" @click="router.push('/login')">Sign In Free →</button>
     </div>
   </div>

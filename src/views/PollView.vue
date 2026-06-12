@@ -119,8 +119,8 @@ onMounted(loadSchedule)
       <!-- App brand -->
       <div class="text-center mb-6">
         <div class="text-3xl mb-1" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🏸</div>
-        <div class="font-display font-extrabold text-lg gradient-text">Badmint</div>
-        <div class="text-[10px] text-slate-600 tracking-widest uppercase">UAE Badminton Rankings</div>
+        <div class="font-display font-extrabold text-lg gradient-text">Badminton 360</div>
+        <div class="text-[10px] text-slate-600 tracking-widest uppercase">Your Club · Your Game · One App</div>
       </div>
 
       <!-- Schedule card -->

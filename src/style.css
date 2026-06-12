@@ -205,12 +205,6 @@ body {
 /* ── Safe-area padding for iOS bottom nav ── */
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0); }
 
-/* ── UAE flag wave (Home hero background) ── */
-@keyframes flagWave {
-  0%, 100% { transform: translateY(0px) scaleY(1); }
-  50%       { transform: translateY(-9px) scaleY(0.97); }
-}
-
 /* ── Light-theme text remapping ──────────────────────────────────────────────
    Tailwind's near-white slate shades (100–300) are invisible on the light
    background. These overrides — placed AFTER @tailwind utilities — remap

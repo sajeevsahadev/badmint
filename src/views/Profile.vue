@@ -56,7 +56,7 @@ async function save() {
     p_phone:     form.value.phone.trim() || null,
     p_bio:       form.value.bio.trim()   || null,
     p_emirate:   profile.value?.emirate  ?? null,
-    p_country:   profile.value?.country  ?? 'UAE',
+    p_country:   profile.value?.country  ?? null,
   })
   saving.value = false
   if (err) { error.value = err.message }

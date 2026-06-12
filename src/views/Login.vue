@@ -27,8 +27,8 @@ const router = useRouter()
       <!-- Logo -->
       <div class="text-center mb-8">
         <div class="text-7xl mb-4 leading-none" style="filter:drop-shadow(0 0 28px rgba(0,229,255,.5));">🏸</div>
-        <h1 class="font-display text-5xl font-extrabold tracking-tight gradient-text mb-1">Badmint</h1>
-        <p class="text-slate-400 text-sm">Smart rankings for UAE badminton teams</p>
+        <h1 class="font-display text-5xl font-extrabold tracking-tight gradient-text mb-1">Badminton 360</h1>
+        <p class="text-slate-400 text-sm">Your club · Your game · One app</p>
       </div>
 
       <!-- Feature grid -->
@@ -40,8 +40,8 @@ const router = useRouter()
         </div>
         <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
           <div class="text-2xl mb-1.5">🌍</div>
-          <div class="text-xs font-semibold text-slate-200">UAE Clubs</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">All 7 emirates</div>
+          <div class="text-xs font-semibold text-slate-200">Clubs Worldwide</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Any court, any country</div>
         </div>
         <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
           <div class="text-2xl mb-1.5">📋</div>
@@ -57,7 +57,7 @@ const router = useRouter()
 
       <!-- Explore without login -->
       <button class="btn-ghost w-full mb-3 text-sm" @click="$router.push('/explore')">
-        🌍 Browse UAE Clubs
+        🌍 Browse Clubs
       </button>
 
       <!-- Google sign-in -->
@@ -83,7 +83,7 @@ const router = useRouter()
       </div>
 
       <p class="text-center text-xs text-slate-600">
-        🇦🇪 Built for UAE courts
+        🌍 Built for badminton clubs everywhere
       </p>
     </div>
   </div>

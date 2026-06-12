@@ -4,11 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { useGeo } from '../composables/useGeo'
 
 const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, loadClubs, selectClub } = useClub()
+const { country, detectCountry } = useGeo()
 
 // ── State ──
 const allClubs     = ref([])
@@ -23,8 +25,7 @@ const inviteStep   = ref(null)  // null | 'onboarding' | 'accepting' | 'success'
 const inviteError  = ref('')
 
 // Onboarding form (shown for new users coming via invite link)
-const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
-const form = ref({ fullName: '', nickname: '', phone: '', emirate: '', country: 'UAE' })
+const form = ref({ fullName: '', nickname: '', phone: '', emirate: '', country: '' })
 const formErrors = ref({})
 const search = ref('')
 
@@ -67,9 +68,10 @@ async function handleToken(token) {
     // Returning user — skip onboarding, accept directly
     await acceptInvite(token)
   } else {
-    // New user — pre-fill what we know from Google
+    // New user — pre-fill what we know from Google + auto-detected country
     form.value.fullName  = user.value.user_metadata?.full_name ?? ''
     form.value.nickname  = (user.value.user_metadata?.full_name ?? '').split(' ')[0]
+    detectCountry().then(() => { if (!form.value.country) form.value.country = country.value })
     inviteStep.value = 'onboarding'
   }
 }
@@ -91,7 +93,7 @@ async function submitOnboarding() {
     p_phone:     form.value.phone.trim()   || null,
     p_bio:       null,
     p_emirate:   form.value.emirate        || null,
-    p_country:   form.value.country        || 'UAE',
+    p_country:   form.value.country        || null,
   })
   if (profErr) { inviteError.value = profErr.message; inviteStep.value = 'error'; busy.value = false; return }
 
@@ -192,7 +194,7 @@ onMounted(async () => {
       <!-- Header -->
       <div class="text-center mb-6">
         <div class="text-5xl mb-3" style="filter:drop-shadow(0 0 20px rgba(0,229,255,.5))">🏸</div>
-        <h2 class="font-display text-2xl font-extrabold gradient-text mb-1">Welcome to Badmint!</h2>
+        <h2 class="font-display text-2xl font-extrabold gradient-text mb-1">Welcome to Badminton 360!</h2>
         <p class="text-slate-400 text-sm">Set up your profile before joining the club</p>
       </div>
 
@@ -233,19 +235,16 @@ onMounted(async () => {
           <p class="text-[10px] text-slate-500 mt-1">Only visible to you — never shown to others.</p>
         </div>
 
-        <!-- Emirates -->
+        <!-- City / Region -->
         <div>
-          <label class="label">Emirate <span class="text-slate-600">(optional)</span></label>
-          <select v-model="form.emirate" class="input">
-            <option value="">— Select your emirate —</option>
-            <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
-          </select>
+          <label class="label">City / Region <span class="text-slate-600">(optional)</span></label>
+          <input v-model="form.emirate" class="input" placeholder="e.g. Dubai, Singapore, London" maxlength="60" />
         </div>
 
-        <!-- Country -->
+        <!-- Country (auto-detected from your connection) -->
         <div>
           <label class="label">Country</label>
-          <input v-model="form.country" class="input" placeholder="UAE" maxlength="40" />
+          <input v-model="form.country" class="input" placeholder="Auto-detected" maxlength="40" />
         </div>
 
       </div>

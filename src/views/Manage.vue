@@ -159,9 +159,9 @@ function copyLink() {
 
 function mailtoLink() {
   const club = currentClub.value?.clubs?.name ?? 'our club'
-  const subj = encodeURIComponent(`You're invited to join ${club} on Badmint`)
+  const subj = encodeURIComponent(`You're invited to join ${club} on Badminton 360`)
   const body = encodeURIComponent(
-    `Hi!\n\nYou've been invited to join "${club}" on Badmint — the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! 🏸`
+    `Hi!\n\nYou've been invited to join "${club}" on Badminton 360 — the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! 🏸`
   )
   return `mailto:${inviteEmail.value}?subject=${subj}&body=${body}`
 }

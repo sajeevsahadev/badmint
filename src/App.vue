@@ -145,7 +145,7 @@ const needsClub = computed(() =>
     <div class="text-center">
       <div class="text-5xl mb-4">🏸</div>
       <div class="text-neon font-semibold text-sm animate-pulse">
-        {{ updating ? 'Applying update…' : 'Loading Badmint…' }}
+        {{ updating ? 'Applying update…' : 'Loading Badminton 360…' }}
       </div>
       <div v-if="updating" class="text-[11px] text-slate-400 mt-2">
         Getting the latest version — one moment
@@ -168,7 +168,7 @@ const needsClub = computed(() =>
             <span class="text-base shrink-0">🔄</span>
             <div class="min-w-0">
               <div class="text-xs font-semibold text-white leading-tight">New version available</div>
-              <div class="text-[10px] text-white/70 leading-tight">Tap to get the latest Badmint</div>
+              <div class="text-[10px] text-white/70 leading-tight">Tap to get the latest Badminton 360</div>
             </div>
           </div>
           <button @click="updateServiceWorker(true)"
@@ -208,7 +208,7 @@ const needsClub = computed(() =>
       <div v-if="canInstall && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
         <span class="text-2xl shrink-0">📲</span>
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-bold text-slate-800">Install Badmint on Android</div>
+          <div class="text-xs font-bold text-slate-800">Install Badminton 360 on Android</div>
           <div class="text-[10px] text-slate-500">Works offline · No app store needed</div>
         </div>
         <button class="btn-primary text-xs px-3 py-1.5 shrink-0" @click="promptInstall">Install</button>
@@ -253,8 +253,8 @@ const needsClub = computed(() =>
           <RouterLink to="/" class="flex items-center gap-2 hover:opacity-75 transition">
             <span class="text-2xl leading-none">🏸</span>
             <div>
-              <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badmint</h1>
-              <div class="text-[9px] text-slate-400 tracking-[0.2em] uppercase">UAE Badminton Rankings</div>
+              <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badminton 360</h1>
+              <div class="text-[9px] text-slate-400 tracking-[0.2em] uppercase">Your Club · Your Game · One App</div>
             </div>
           </RouterLink>
         </div>
@@ -286,7 +286,7 @@ const needsClub = computed(() =>
       <!-- No club state -->
       <div v-if="needsClub" class="card-neon p-8 text-center fade-up">
         <div class="text-4xl mb-4">👋</div>
-        <h2 class="font-display text-xl font-bold gradient-text mb-1">Welcome to Badmint!</h2>
+        <h2 class="font-display text-xl font-bold gradient-text mb-1">Welcome to Badminton 360!</h2>
         <p class="text-sm text-slate-500 mb-6">Join your team's club or create a new one to get started.</p>
         <div class="flex flex-col gap-3">
           <RouterLink to="/explore" class="btn-primary w-full py-3 text-sm">🌍 Browse &amp; Join a Club</RouterLink>
@@ -336,7 +336,7 @@ const needsClub = computed(() =>
               style="border-bottom:1px solid rgba(0,0,0,.07)">
               <div class="flex items-center gap-2">
                 <span class="text-xl">🏸</span>
-                <span class="font-display font-extrabold gradient-text">Badmint</span>
+                <span class="font-display font-extrabold gradient-text">Badminton 360</span>
               </div>
               <button @click="closeMenu"
                 class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400

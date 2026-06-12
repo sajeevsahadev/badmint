@@ -4,7 +4,7 @@ const steps = [
   {
     icon: '🏁',
     title: 'Everyone starts at 1,000 Elo',
-    body: 'When you join Badmint, your skill score begins at 1,000. Think of this as your starting bank balance. It goes up when you win and down when you lose — but by how much depends on who you played against.'
+    body: 'When you join Badminton 360, your skill score begins at 1,000. Think of this as your starting bank balance. It goes up when you win and down when you lose — but by how much depends on who you played against.'
   },
   {
     icon: '⚡',
@@ -64,7 +64,7 @@ const faqs = [
 <template>
   <div>
     <PageHeader icon="📖" title="How Ranking Works"
-      subtitle="Everything you need to understand your Badmint rank" />
+      subtitle="Everything you need to understand your Badminton 360 rank" />
 
     <!-- Formula card -->
     <div class="card p-5 mb-5 ring-1 ring-teal-500/20">

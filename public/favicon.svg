@@ -72,10 +72,10 @@
   <ellipse cx="256" cy="354" rx="36" ry="10"
     fill="none" stroke="#b0f0ff" stroke-width="3.5" opacity="0.6"/>
 
-  <!-- ── "BM" monogram at bottom ── -->
-  <text x="256" y="464"
+  <!-- ── "B360" monogram at bottom ── -->
+  <text x="256" y="468"
     text-anchor="middle"
     font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
-    font-size="52" font-weight="900" letter-spacing="4"
-    fill="#00e5ff" opacity="0.85">BADMINT</text>
+    font-size="76" font-weight="900" letter-spacing="6"
+    fill="#00e5ff" opacity="0.9">B360</text>
 </svg>
