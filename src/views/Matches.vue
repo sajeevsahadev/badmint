@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { buildNameMap } from '../lib/playerNames'
@@ -137,7 +137,22 @@ async function confirmDoDelete() {
   await load()
 }
 
-const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short', year:'numeric' })
+const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
+
+// Group matches by played_on date (preserves order: newest date first)
+const groupedMatches = computed(() => {
+  const groups = []
+  const seen = new Map()
+  for (const m of matches.value) {
+    if (!seen.has(m.played_on)) {
+      const g = { date: m.played_on, matches: [] }
+      groups.push(g)
+      seen.set(m.played_on, g)
+    }
+    seen.get(m.played_on).matches.push(m)
+  }
+  return groups
+})
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
 const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
@@ -180,12 +195,26 @@ const canDelete = m =>
     </button>
   </div>
 
-  <!-- Match list -->
-  <div v-else class="space-y-2 fade-up">
-    <div v-for="m in matches" :key="m.id"
-      :id="'match-' + m.id"
-      class="card overflow-hidden transition-all duration-200"
-      :class="expanded === m.id ? 'card-neon' : 'hover:border-white/15'">
+  <!-- Match list grouped by date -->
+  <div v-else class="fade-up">
+    <div v-for="group in groupedMatches" :key="group.date" class="mb-5">
+
+      <!-- Date header -->
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-bold text-slate-300">{{ fmt(group.date) }}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full text-slate-500 font-medium"
+          style="background:rgba(255,255,255,.06)">
+          {{ group.matches.length }} {{ group.matches.length === 1 ? 'match' : 'matches' }}
+        </span>
+        <div class="flex-1 h-px" style="background:rgba(255,255,255,.06)"></div>
+      </div>
+
+      <!-- Matches for this date -->
+      <div class="space-y-2">
+      <div v-for="m in group.matches" :key="m.id"
+        :id="'match-' + m.id"
+        class="card overflow-hidden transition-all duration-200"
+        :class="expanded === m.id ? 'card-neon' : 'hover:border-white/15'">
 
       <!-- Summary row -->
       <button class="w-full px-4 py-3 flex items-center gap-3 text-left" @click="toggle(m.id)">
@@ -285,9 +314,11 @@ const canDelete = m =>
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+      </div><!-- closes expanded detail -->
+      </div><!-- closes match card -->
+      </div><!-- end space-y-2 -->
+    </div><!-- end date group -->
+  </div><!-- end grouped list -->
 
   <!-- ── Delete confirmation modal ── -->
   <Teleport to="body">

@@ -5,11 +5,10 @@ import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 
-const { clubs, currentClub, loadClubs, createClub, isManager } = useClub()
+const { clubs, currentClub, loadClubs, isManager } = useClub()
 
 const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
-const newClub      = ref('')
 const cfg          = ref(null)
 const members      = ref([])
 const requests     = ref([])
@@ -89,20 +88,6 @@ async function load() {
 
 onMounted(() => { loadClubs(); load() })
 watch(currentClub, load)
-
-// ── Create club ──
-async function make() {
-  if (!newClub.value.trim()) return
-  busy.value = true; note.value = null
-  try {
-    await createClub(newClub.value.trim())
-    newClub.value = ''
-    note.value = { ok: true, t: '✅ Club created! You are now the owner.' }
-  } catch (e) {
-    note.value = { ok: false, t: e.message }
-  }
-  busy.value = false
-}
 
 // ── Ranking config ──
 async function saveCfg() {
@@ -399,25 +384,6 @@ async function leaveClub(clubId) {
     <p v-if="inviteNote" class="text-xs rounded-xl px-3 py-2"
       :class="inviteNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
       {{ inviteNote.t }}
-    </p>
-  </div>
-
-  <!-- ── Create club ── -->
-  <div class="card p-4 mb-4 fade-up">
-    <div class="label">Create a New Club</div>
-    <div class="flex gap-2">
-      <input v-model="newClub" class="input" placeholder="e.g. Kore Smashers, Court B…"
-        @keyup.enter="make" maxlength="50" />
-      <button class="btn-primary shrink-0 px-4" :disabled="busy || !newClub.trim()" @click="make">
-        Create
-      </button>
-    </div>
-    <p class="text-[11px] text-slate-500 mt-2">
-      Each club has its own players, matches, and leaderboard. Switch between clubs using the selector at the top.
-    </p>
-    <p v-if="note" class="mt-2 text-xs rounded-xl px-3 py-2"
-      :class="note.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
-      {{ note.t }}
     </p>
   </div>
 

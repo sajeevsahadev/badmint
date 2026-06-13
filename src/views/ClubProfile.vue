@@ -10,11 +10,12 @@ const router = useRouter()
 const { user } = useAuth()
 const { clubs } = useClub()
 
-const clubId  = route.params.id
-const club    = ref(null)
-const ranking = ref(null)
-const members = ref([])
-const loading = ref(true)
+const clubId     = route.params.id
+const club       = ref(null)
+const ranking    = ref(null)
+const members    = ref([])
+const leaderboard = ref([])
+const loading    = ref(true)
 
 const isMyClub = computed(() => clubs.value.some(c => c.club_id === clubId))
 const myRole   = computed(() => clubs.value.find(c => c.club_id === clubId)?.role)
@@ -22,18 +23,24 @@ const isManager = computed(() => ['owner','manager'].includes(myRole.value))
 
 async function load() {
   loading.value = true
-  const [clubRes, rankRes, memberRes] = await Promise.all([
+  const [clubRes, rankRes, memberRes, lbRes] = await Promise.all([
     supabase.from('clubs')
       .select('id, name, emirates, facility_name, facility_address, maps_url, description, created_at')
       .eq('id', clubId).single(),
 
     supabase.rpc('get_public_clubs'),
 
-    supabase.rpc('get_club_players', { p_club_id: clubId })
+    supabase.rpc('get_club_players', { p_club_id: clubId }),
+
+    supabase.from('v_leaderboard')
+      .select('id, display_name, elo, composite, club_rank, win_pct, games, days_played, wins')
+      .eq('club_id', clubId)
+      .order('club_rank'),
   ])
 
-  club.value    = clubRes.data
-  members.value = memberRes.data ?? []
+  club.value        = clubRes.data
+  members.value     = memberRes.data ?? []
+  leaderboard.value = lbRes.data ?? []
 
   // Find this club's ranking from the public list
   ranking.value = (rankRes.data ?? []).find(c => c.id === clubId) ?? null
@@ -150,10 +157,11 @@ async function saveRename() {
         <div class="text-lg font-extrabold text-slate-200">{{ ranking.total_members }}</div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Members</div>
       </div>
-      <div class="card p-3 text-center">
+      <button class="card p-3 text-center cursor-pointer hover:border-violet-400/40 transition-all active:scale-95"
+        @click="router.push('/matches')">
         <div class="text-lg font-extrabold text-violet">{{ ranking.matches_30d }}</div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Matches/mo</div>
-      </div>
+      </button>
     </div>
 
     <!-- Facility info -->
@@ -168,53 +176,75 @@ async function saveRename() {
       </a>
     </div>
 
-    <!-- Members list -->
+    <!-- Members leaderboard -->
     <div class="card overflow-hidden fade-up">
       <div class="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
         <span class="text-xs font-bold text-slate-200">
-          Members ({{ members.filter(m => m.is_active).length }} active)
+          🏆 Leaderboard
+          <span class="text-slate-500 font-normal ml-1">({{ members.filter(m => m.is_active).length }} active)</span>
         </span>
         <RouterLink v-if="isManager" to="/players"
           class="text-xs text-neon hover:opacity-80 transition">
-          + Add Member
+          + Add Player
+        </RouterLink>
+      </div>
+
+      <!-- Leaderboard table for ranked players -->
+      <div v-if="leaderboard.length">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/[0.06]">
+              <th class="pl-4 pr-2 py-2 text-left text-xs uppercase tracking-wider text-slate-500">#</th>
+              <th class="pl-2 pr-2 py-2 text-left text-xs uppercase tracking-wider text-slate-500">Player</th>
+              <th class="px-2 py-2 text-right text-xs uppercase tracking-wider text-slate-500">Elo</th>
+              <th class="px-2 py-2 text-right text-xs uppercase tracking-wider text-slate-500">W%</th>
+              <th class="pl-2 pr-4 py-2 text-right text-xs uppercase tracking-wider text-slate-500">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(p, i) in leaderboard" :key="p.id"
+              class="border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02]">
+              <td class="pl-4 pr-2 py-3">
+                <span class="text-sm">{{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}</span>
+              </td>
+              <td class="pl-2 pr-2 py-3">
+                <RouterLink :to="'/player/' + p.id"
+                  class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate block max-w-[110px]">
+                  {{ p.display_name }}
+                </RouterLink>
+              </td>
+              <td class="px-2 py-3 text-right text-xs font-bold text-neon">{{ p.elo }}</td>
+              <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
+              <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-500">{{ p.days_played }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Unranked members (guests/no matches yet) not in leaderboard -->
+      <div v-if="members.filter(m => m.is_active && !leaderboard.some(l => l.id === m.id)).length"
+        class="border-t border-white/[0.06]">
+        <div class="px-4 py-2 text-[10px] uppercase tracking-widest text-slate-600">No matches yet</div>
+        <RouterLink v-for="m in members.filter(m => m.is_active && !leaderboard.some(l => l.id === m.id))"
+          :key="m.id" :to="'/player/' + m.id"
+          class="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0
+                 hover:bg-white/[0.02] transition-colors">
+          <div class="relative shrink-0">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black"
+              style="background:rgba(255,255,255,0.06); color:#94a3b8">
+              {{ initials(m.display_name) }}
+            </div>
+            <span v-if="m.user_id" class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-slate-900"
+              :style="'background:' + onlineColor(m.online_status)" />
+          </div>
+          <span class="text-sm text-slate-400 flex-1 truncate">{{ m.display_name }}</span>
+          <span class="text-slate-600 text-xs">›</span>
         </RouterLink>
       </div>
 
       <div v-if="!members.length" class="px-4 py-6 text-center text-sm text-slate-500">
         No players yet.
       </div>
-
-      <RouterLink v-for="(m, i) in members" :key="m.id" :to="'/player/' + m.id"
-        class="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0
-               hover:bg-white/[0.02] transition-colors"
-        :class="m.is_active ? '' : 'opacity-40'">
-
-        <!-- Avatar with online dot -->
-        <div class="relative shrink-0">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black text-slate-950"
-            :style="m.is_active && i < 3
-              ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)'
-              : 'background:rgba(255,255,255,0.08); color:#94a3b8'">
-            {{ initials(m.display_name) }}
-          </div>
-          <!-- Online dot -->
-          <span v-if="m.user_id && m.is_active" class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-slate-900"
-            :style="'background:' + onlineColor(m.online_status)" />
-        </div>
-
-        <!-- Info -->
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display_name }}</div>
-          <div class="text-[10px] text-slate-500">Elo {{ Math.round(m.elo) }}</div>
-        </div>
-
-        <!-- Inactive badge -->
-        <span v-if="!m.is_active"
-          class="text-[9px] text-slate-600 border border-slate-700 rounded-full px-1.5 py-0.5 shrink-0">
-          Inactive
-        </span>
-        <span v-else class="text-slate-700 text-xs shrink-0">›</span>
-      </RouterLink>
     </div>
 
   </template>

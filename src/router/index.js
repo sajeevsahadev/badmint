@@ -26,6 +26,7 @@ const routes = [
   { path: '/clubs',                 component: () => import('../views/MyClubs.vue') },
   { path: '/book',                  component: () => import('../views/BookCourt.vue') },
   { path: '/admin',                 component: () => import('../views/AdminPanel.vue') },
+  { path: '/create-club',           component: () => import('../views/CreateClub.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

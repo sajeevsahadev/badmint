@@ -1,11 +1,11 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
-import PageHeader from '../components/PageHeader.vue'
 
+const router = useRouter()
 const { currentClub } = useClub()
 const players      = ref([])
 const sideA        = ref([])
@@ -19,10 +19,13 @@ const nextMatchNum = ref(null)
 const msg          = ref(null)
 const saving       = ref(false)
 
+// Guided picking: 'A' = filling Side A, 'B' = filling Side B
+const pickingFor = ref('A')
+
 // Schedule-aware player filter
-const scheduleId         = ref(null)
+const scheduleId          = ref(null)
 const scheduleAttendeeIds = ref(new Set())
-const showAllPlayers     = ref(false)
+const showAllPlayers      = ref(false)
 
 const displayPlayers = computed(() => {
   if (!scheduleId.value || showAllPlayers.value || scheduleAttendeeIds.value.size === 0) return players.value
@@ -81,16 +84,26 @@ onMounted(async () => {
 watch(currentClub, () => { reset(); loadPlayers(); loadNextMatchNum() })
 watch(playedOn, (date) => checkScheduleAttendees(date))
 
-const chosen = computed(() => new Set([...sideA.value, ...sideB.value]))
-
-function toggle(side, id) {
-  const arr   = side === 'A' ? sideA : sideB
-  const other = side === 'A' ? sideB : sideA
-  if (arr.value.includes(id)) { arr.value = arr.value.filter(x => x !== id); return }
-  if (other.value.includes(id)) other.value = other.value.filter(x => x !== id)
-  if (arr.value.length >= 2) return
-  arr.value = [...arr.value, id]
+// Wizard-style assignment: tap a player to add to active side; tap assigned player to remove
+function assignPlayer(id) {
+  if (sideA.value.includes(id)) {
+    sideA.value = sideA.value.filter(x => x !== id)
+    pickingFor.value = 'A'
+    return
+  }
+  if (sideB.value.includes(id)) {
+    sideB.value = sideB.value.filter(x => x !== id)
+    return
+  }
+  if (pickingFor.value === 'A' && sideA.value.length < 2) {
+    sideA.value = [...sideA.value, id]
+    if (sideA.value.length === 2) pickingFor.value = 'B'
+  } else if (pickingFor.value === 'B' && sideB.value.length < 2) {
+    sideB.value = [...sideB.value, id]
+  }
 }
+
+const playerSide = id => sideA.value.includes(id) ? 'A' : sideB.value.includes(id) ? 'B' : null
 
 const ready = computed(() =>
   sideA.value.length === 2 && sideB.value.length === 2 &&
@@ -101,12 +114,11 @@ const eloOf  = id => players.value.find(p => p.id === id)?.elo
 
 const avgElo = arr => arr.length
   ? Math.round(arr.reduce((s, id) => s + (eloOf(id) ?? 1000), 0) / arr.length)
-  : '—'
-
-const abbrev = id => (nameOf(id) ?? '').slice(0, 2).toUpperCase()
+  : null
 
 const autoMatchName = computed(() => {
   if (sideA.value.length < 2 || sideB.value.length < 2) return ''
+  const abbrev = id => (nameOf(id) ?? '').slice(0, 2).toUpperCase()
   const a   = sideA.value.map(abbrev).join('-')
   const b   = sideB.value.map(abbrev).join('-')
   const num = nextMatchNum.value ? `#${nextMatchNum.value} ` : ''
@@ -121,9 +133,10 @@ function reset() {
   sideA.value = []; sideB.value = []
   scoreA.value = 21; scoreB.value = 0
   matchName.value = ''; matchNameEdited.value = false; msg.value = null
+  pickingFor.value = 'A'
 }
 
-async function submit() {
+async function doSubmit() {
   msg.value = null; saving.value = true
   const { error } = await supabase.rpc('record_match', {
     p_club_id:      currentClub.value.club_id,
@@ -135,25 +148,40 @@ async function submit() {
     p_display_name: matchName.value.trim() || null
   })
   saving.value = false
+  return error
+}
+
+async function submitAndGo() {
+  const error = await doSubmit()
   if (error) { msg.value = { ok: false, t: error.message }; return }
-  msg.value = { ok: true, t: '✅ Match saved! Elo + attendance updated for all 4 players.' }
+  router.push('/matches')
+}
+
+async function submitAndStay() {
+  const error = await doSubmit()
+  if (error) { msg.value = { ok: false, t: error.message }; return }
+  msg.value = { ok: true, t: '✅ Match saved! Elo updated for all 4 players.' }
   reset(); loadPlayers(); loadNextMatchNum()
 }
 </script>
 
 <template>
   <div>
-    <PageHeader icon="➕" title="Add Match" subtitle="Record a doubles result — Elo updates instantly">
-      <template #help>
-        <div class="text-xs space-y-1.5">
-          <p><strong class="text-slate-800">Step 1</strong> — Set the date (defaults to today).</p>
-          <p><strong class="text-slate-800">Step 2</strong> — Tap <span class="text-teal-400">A</span> or <span class="text-amber-400">B</span> next to each player to assign them to a side. Each side needs exactly 2 players.</p>
-          <p><strong class="text-slate-800">Step 3</strong> — Enter the final score for each side.</p>
-          <p><strong class="text-slate-800">Step 4</strong> — Hit Record. Elo is recalculated and attendance is marked for all 4 players automatically.</p>
-          <p class="text-slate-500">Scores cannot be equal (a match must have a winner). Badminton standard: first to 21.</p>
-        </div>
-      </template>
-    </PageHeader>
+
+    <!-- Back link -->
+    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4 fade-up"
+      @click="router.push('/matches')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+      Match History
+    </button>
+
+    <!-- Title -->
+    <div class="mb-4 fade-up">
+      <h2 class="font-display text-xl font-bold gradient-text">Record Match</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Elo ratings update instantly for all 4 players</p>
+    </div>
 
     <!-- Date + Name row -->
     <div class="grid grid-cols-2 gap-3 mb-4">
@@ -163,39 +191,8 @@ async function submit() {
       </div>
       <div>
         <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
-        <input v-model="matchName" class="input" placeholder="Auto-generated from player names" maxlength="40"
-          @input="matchNameEdited = true" />
-      </div>
-    </div>
-
-    <!-- Side panels -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-      <div class="card p-3 border-teal-500/30 border">
-        <div class="text-[10px] uppercase tracking-widest text-teal-400 mb-2">Side A</div>
-        <div class="text-xs text-slate-400 mb-2">{{ sideA.length }}/2 players • Avg Elo {{ avgElo(sideA) }}</div>
-        <div v-if="sideA.length" class="space-y-1">
-          <div v-for="id in sideA" :key="id" class="text-xs font-medium truncate text-slate-200">{{ nameOf(id) }}</div>
-        </div>
-        <div v-else class="text-xs text-slate-600 italic">Tap A to assign</div>
-        <div class="mt-3">
-          <label class="text-[10px] text-slate-500">Score</label>
-          <input v-model="scoreA" type="number" min="0" max="30"
-            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
-        </div>
-      </div>
-
-      <div class="card p-3 border-amber-500/30 border">
-        <div class="text-[10px] uppercase tracking-widest text-amber-400 mb-2">Side B</div>
-        <div class="text-xs text-slate-400 mb-2">{{ sideB.length }}/2 players • Avg Elo {{ avgElo(sideB) }}</div>
-        <div v-if="sideB.length" class="space-y-1">
-          <div v-for="id in sideB" :key="id" class="text-xs font-medium truncate text-slate-200">{{ nameOf(id) }}</div>
-        </div>
-        <div v-else class="text-xs text-slate-600 italic">Tap B to assign</div>
-        <div class="mt-3">
-          <label class="text-[10px] text-slate-500">Score</label>
-          <input v-model="scoreB" type="number" min="0" max="30"
-            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
-        </div>
+        <input v-model="matchName" class="input" placeholder="Auto-generated"
+          maxlength="40" @input="matchNameEdited = true" />
       </div>
     </div>
 
@@ -213,47 +210,150 @@ async function submit() {
       </button>
     </div>
 
-    <!-- Player list -->
-    <div class="label mb-2">Tap to assign players to sides</div>
-    <div class="space-y-1.5 mb-4">
-      <div v-for="p in displayPlayers" :key="p.id"
-        class="card flex items-center justify-between px-3 py-2.5 transition"
-        :class="chosen.has(p.id) ? 'bg-slate-50' : ''">
-        <div>
-          <span class="font-medium text-sm" :class="chosen.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'">
-            {{ p.display_name }}
+    <!-- Team summary panels -->
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      <!-- Side A panel -->
+      <div class="rounded-2xl p-3 border-2 transition-all"
+        :style="pickingFor === 'A' && sideA.length < 2
+          ? 'border-color:#00e5ff; background:rgba(0,229,255,.06)'
+          : 'border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.02)'">
+        <div class="flex items-center gap-1.5 mb-2">
+          <span class="w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center text-slate-950"
+            style="background:#00e5ff">A</span>
+          <span class="text-xs font-bold text-slate-300">Side A</span>
+          <span class="ml-auto text-xs font-bold"
+            :class="sideA.length === 2 ? 'text-neon' : 'text-slate-500'">
+            {{ sideA.length }}/2
           </span>
-          <span class="ml-2 text-[10px] text-slate-600">Elo {{ Math.round(p.elo) }}</span>
         </div>
-        <div class="flex gap-1.5">
-          <button class="w-8 h-8 rounded-lg text-xs font-bold transition"
-            :class="sideA.includes(p.id) ? 'bg-teal-500 text-slate-950' : 'border border-slate-200 text-slate-500 hover:border-teal-400'"
-            @click="toggle('A', p.id)">A</button>
-          <button class="w-8 h-8 rounded-lg text-xs font-bold transition"
-            :class="sideB.includes(p.id) ? 'bg-amber-400 text-slate-950' : 'border border-slate-200 text-slate-500 hover:border-amber-400'"
-            @click="toggle('B', p.id)">B</button>
+        <div v-if="sideA.length" class="space-y-1 mb-2">
+          <div v-for="id in sideA" :key="id"
+            class="text-xs font-medium text-slate-200 truncate">{{ nameOf(id) }}</div>
+        </div>
+        <div v-else class="text-xs text-slate-600 italic mb-2">Tap players below</div>
+        <div v-if="avgElo(sideA)" class="text-[10px] text-slate-500">Avg Elo {{ avgElo(sideA) }}</div>
+        <div class="mt-2">
+          <label class="text-[10px] text-slate-500 block mb-1">Score</label>
+          <input v-model="scoreA" type="number" min="0" max="30"
+            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
         </div>
       </div>
-      <div v-if="!displayPlayers.length" class="card p-4 text-center text-sm text-slate-500">
-        <span v-if="scheduleId && !showAllPlayers">
-          No attendees saved for this schedule yet.
-          <RouterLink to="/schedule" class="text-neon underline ml-1">Set attendees →</RouterLink>
-        </span>
-        <span v-else>No players yet. Go to 👥 Players tab to add your team roster first.</span>
+
+      <!-- Side B panel -->
+      <div class="rounded-2xl p-3 border-2 transition-all"
+        :style="pickingFor === 'B' && sideB.length < 2
+          ? 'border-color:#fbbf24; background:rgba(251,191,36,.06)'
+          : 'border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.02)'">
+        <div class="flex items-center gap-1.5 mb-2">
+          <span class="w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center text-slate-950"
+            style="background:#fbbf24">B</span>
+          <span class="text-xs font-bold text-slate-300">Side B</span>
+          <span class="ml-auto text-xs font-bold"
+            :class="sideB.length === 2 ? 'text-gold' : 'text-slate-500'">
+            {{ sideB.length }}/2
+          </span>
+        </div>
+        <div v-if="sideB.length" class="space-y-1 mb-2">
+          <div v-for="id in sideB" :key="id"
+            class="text-xs font-medium text-slate-200 truncate">{{ nameOf(id) }}</div>
+        </div>
+        <div v-else class="text-xs text-slate-600 italic mb-2">Tap players below</div>
+        <div v-if="avgElo(sideB)" class="text-[10px] text-slate-500">Avg Elo {{ avgElo(sideB) }}</div>
+        <div class="mt-2">
+          <label class="text-[10px] text-slate-500 block mb-1">Score</label>
+          <input v-model="scoreB" type="number" min="0" max="30"
+            class="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center font-bold text-lg text-slate-800" />
+        </div>
       </div>
     </div>
 
-    <!-- Validation hints -->
-    <div v-if="sideA.length < 2 || sideB.length < 2" class="text-xs text-slate-500 mb-3 text-center">
-      Assign 2 players to each side to enable recording.
+    <!-- Guided prompt -->
+    <div class="text-center text-xs mb-3"
+      :class="sideA.length < 2 || sideB.length < 2 ? 'text-slate-400' : 'text-slate-600'">
+      <template v-if="sideA.length < 2">
+        Tap {{ 2 - sideA.length }} player{{ 2 - sideA.length > 1 ? 's' : '' }} to add to
+        <span class="font-bold text-neon">Side A</span>
+      </template>
+      <template v-else-if="sideB.length < 2">
+        Tap {{ 2 - sideB.length }} player{{ 2 - sideB.length > 1 ? 's' : '' }} to add to
+        <span class="font-bold text-gold">Side B</span>
+      </template>
+      <template v-else>
+        All 4 players assigned · Tap any player card to remove them
+      </template>
     </div>
-    <div v-else-if="Number(scoreA) === Number(scoreB)" class="text-xs text-amber-400 mb-3 text-center">
+
+    <!-- Player list -->
+    <div class="space-y-1.5 mb-4">
+      <button v-for="p in displayPlayers" :key="p.id"
+        class="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl border text-left transition-all active:scale-[0.98]"
+        :class="{
+          'border-cyan-400/60 bg-cyan-50/10':    playerSide(p.id) === 'A',
+          'border-amber-400/60 bg-amber-50/10':   playerSide(p.id) === 'B',
+          'border-white/[0.08] bg-white/[0.02] hover:border-white/20': !playerSide(p.id),
+        }"
+        @click="assignPlayer(p.id)">
+
+        <div class="flex items-center gap-2 min-w-0">
+          <!-- Team badge or slot indicator -->
+          <span v-if="playerSide(p.id) === 'A'"
+            class="w-6 h-6 rounded-lg shrink-0 text-[10px] font-black flex items-center justify-center text-slate-950"
+            style="background:#00e5ff">A</span>
+          <span v-else-if="playerSide(p.id) === 'B'"
+            class="w-6 h-6 rounded-lg shrink-0 text-[10px] font-black flex items-center justify-center text-slate-950"
+            style="background:#fbbf24">B</span>
+          <span v-else
+            class="w-6 h-6 rounded-lg shrink-0 border flex items-center justify-center text-slate-600"
+            style="border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04)">+</span>
+
+          <div class="min-w-0">
+            <span class="text-sm font-medium truncate block"
+              :class="{
+                'text-neon font-semibold':    playerSide(p.id) === 'A',
+                'text-amber-300 font-semibold': playerSide(p.id) === 'B',
+                'text-slate-300':               !playerSide(p.id),
+              }">
+              {{ p.display_name }}
+            </span>
+            <span class="text-[10px] text-slate-600">Elo {{ Math.round(p.elo) }}</span>
+          </div>
+        </div>
+
+        <span v-if="playerSide(p.id)"
+          class="text-[10px] text-slate-500 shrink-0 ml-2">tap to remove</span>
+      </button>
+
+      <div v-if="!displayPlayers.length" class="rounded-2xl p-4 text-center text-sm text-slate-500 border border-white/[0.08]">
+        <span v-if="scheduleId && !showAllPlayers">
+          No attendees saved for this schedule.
+          <RouterLink to="/schedule" class="text-neon underline ml-1">Set attendees →</RouterLink>
+        </span>
+        <span v-else>No players yet. Go to 👥 Players to add your roster first.</span>
+      </div>
+    </div>
+
+    <!-- Validation hint -->
+    <div v-if="sideA.length === 2 && sideB.length === 2 && Number(scoreA) === Number(scoreB)"
+      class="text-xs text-amber-400 mb-3 text-center">
       Scores cannot be equal — one side must win.
     </div>
 
-    <button class="btn-primary w-full py-3" :disabled="!ready || saving" @click="submit">
-      {{ saving ? 'Saving…' : '🏸 Record Match' }}
-    </button>
+    <!-- Submit buttons -->
+    <div class="grid grid-cols-2 gap-2">
+      <button class="btn-ghost py-3 text-sm font-semibold"
+        :disabled="!ready || saving"
+        @click="submitAndGo">
+        {{ saving ? 'Saving…' : '🏸 Record Match' }}
+      </button>
+      <button class="btn-primary py-3 text-sm font-semibold"
+        :disabled="!ready || saving"
+        @click="submitAndStay">
+        {{ saving ? 'Saving…' : '➕ Record &amp; Add New' }}
+      </button>
+    </div>
+    <p class="text-center text-xs text-slate-600 mt-1.5">
+      Record Match → goes to match list &nbsp;·&nbsp; Record &amp; Add New → stays here
+    </p>
 
     <p v-if="msg" class="mt-3 rounded-xl px-4 py-3 text-sm"
       :class="msg.ok ? 'bg-teal-500/15 text-teal-300' : 'bg-rose-500/15 text-rose-300'">
