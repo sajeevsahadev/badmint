@@ -70,11 +70,6 @@ const menuSections = [
   }
 ]
 
-const comingSoon = [
-  { icon: '🏆', label: 'Tournaments' },
-  { icon: '🏟️', label: 'Court Booking' },
-]
-
 function closeMenu() { showMenu.value = false }
 
 async function init() {
@@ -122,18 +117,17 @@ function onSwitch(e) {
 
 // ── Bottom nav ───────────────────────────────────────────────────────────────
 const nav = computed(() => [
-  { to: '/dashboard',   label: 'Home',        icon: '🏠' },
-  { to: '/clubs',       label: 'My Clubs',    icon: '🏸' },
-  { to: '/splits',      label: 'PaySplits',   icon: '💰' },
-  { to: '/book',        label: 'Book Court',  icon: '🏢' },
-  { to: '/tournaments', label: 'Tournaments', icon: '🏆' },
+  { to: '/dashboard', label: 'Home',      icon: '🏠' },
+  { to: '/clubs',     label: 'My Clubs',  icon: '🏸' },
+  { to: '/splits',    label: 'PaySplits', icon: '💰' },
+  { to: '/schedule',  label: 'Schedule',  icon: '📅' },
+  { to: '/manage',    label: 'Manage',    icon: '⚙️' },
 ])
 
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/tournaments', '/clubs', '/book', '/splits']
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits']
 const needsClub = computed(() =>
   !currentClub.value &&
-  !clubFreeRoutes.includes(route.path) &&
-  !route.path.startsWith('/tournament')
+  !clubFreeRoutes.includes(route.path)
 )
 </script>
 
@@ -379,23 +373,6 @@ const needsClub = computed(() =>
                 </RouterLink>
               </div>
 
-              <!-- Coming soon items -->
-              <div v-if="comingSoon.length" class="mb-1 mt-2">
-                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2
-                            font-semibold flex items-center gap-2">
-                  Coming Soon
-                  <span class="text-[9px] bg-amber-100 text-amber-700 rounded px-1.5 py-0.5
-                               normal-case tracking-normal font-semibold">beta</span>
-                </div>
-                <div v-for="item in comingSoon" :key="item.label"
-                  class="flex items-center gap-3 px-5 py-3 text-sm font-medium
-                         text-slate-400 cursor-default select-none">
-                  <span class="text-base w-6 text-center shrink-0 opacity-50">{{ item.icon }}</span>
-                  <span class="opacity-60">{{ item.label }}</span>
-                  <span class="ml-auto text-[9px] bg-slate-100 text-slate-400
-                               rounded px-1.5 py-0.5 font-medium">soon</span>
-                </div>
-              </div>
 
             </div>
 
