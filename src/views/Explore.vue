@@ -10,32 +10,22 @@ const { user } = useAuth()
 const { clubs, currentClub } = useClub()
 
 // ── Data ──
-const allClubs       = ref([])
-const topPlayers     = ref([])
-const allFacilities  = ref([])
-const myRequests     = ref([])
-const loadingClubs   = ref(true)
-const loadingPlayers = ref(true)
-const loadingFac     = ref(true)
-const playersError   = ref(null)
-const showAllPlayers = ref(false)
+const allClubs      = ref([])
+const allFacilities = ref([])
+const myRequests    = ref([])
+const loadingClubs  = ref(true)
+const loadingFac    = ref(true)
 
 // ── Filters ──
-const searchQ       = ref('')
-const emirateFilter = ref('')
-const activeTab     = ref('clubs')   // 'clubs' | 'players' | 'facilities'
-
-const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
+const searchQ   = ref('')
+const activeTab = ref('clubs')   // 'clubs' | 'facilities'
 
 // ── Computed ──
 const myClubIds = computed(() => clubs.value.map(c => c.club_id))
 
 const requestMap = computed(() => {
   const m = {}
-  // First: mark clubs the user currently belongs to
   myClubIds.value.forEach(id => { m[id] = 'member' })
-  // Second: mark ONLY pending requests — 'approved' requests where the user
-  // is no longer a member (they left) should fall through to the Join button.
   myRequests.value.forEach(r => {
     if (!m[r.club_id] && r.status === 'pending') m[r.club_id] = 'pending'
   })
@@ -44,8 +34,6 @@ const requestMap = computed(() => {
 
 const filteredClubs = computed(() => {
   let list = allClubs.value
-  if (emirateFilter.value)
-    list = list.filter(c => c.emirates === emirateFilter.value)
   if (searchQ.value.trim()) {
     const q = searchQ.value.trim().toLowerCase()
     list = list.filter(c =>
@@ -54,33 +42,16 @@ const filteredClubs = computed(() => {
       (c.facility_address || '').toLowerCase().includes(q)
     )
   }
-  // Own clubs always first, then sorted by club_score
   return [...list].sort((a, b) => {
     const aOwn = myClubIds.value.includes(a.id) ? 1 : 0
     const bOwn = myClubIds.value.includes(b.id) ? 1 : 0
     if (bOwn !== aOwn) return bOwn - aOwn
-    return (b.club_rank ?? 999) - (a.club_rank ?? 999) // lower rank number = better
+    return (b.club_rank ?? 999) - (a.club_rank ?? 999)
   })
 })
 
-const filteredPlayers = computed(() => {
-  let list = topPlayers.value
-  if (emirateFilter.value)
-    list = list.filter(p => p.emirates === emirateFilter.value)
-  if (searchQ.value.trim()) {
-    const q = searchQ.value.trim().toLowerCase()
-    list = list.filter(p =>
-      p.public_name.toLowerCase().includes(q) ||
-      p.club_name.toLowerCase().includes(q)
-    )
-  }
-  return showAllPlayers.value ? list : list.slice(0, 15)
-})
-
-// ── Facilities filtered ──
 const filteredFacilities = computed(() => {
   let list = allFacilities.value
-  if (emirateFilter.value) list = list.filter(f => f.emirate === emirateFilter.value)
   if (searchQ.value.trim()) {
     const q = searchQ.value.trim().toLowerCase()
     list = list.filter(f =>
@@ -93,20 +64,17 @@ const filteredFacilities = computed(() => {
 
 // ── Load ──
 async function loadData() {
-  loadingClubs.value = true; loadingPlayers.value = true; loadingFac.value = true
+  loadingClubs.value = true; loadingFac.value = true
   const tasks = [
     supabase.rpc('get_public_clubs'),
-    supabase.rpc('get_top_scorers', { p_limit: 200 }),
     supabase.rpc('get_facilities'),
   ]
   if (user.value) tasks.push(supabase.from('join_requests').select('club_id, status'))
-  const [clubsRes, playersRes, facRes, reqsRes] = await Promise.all(tasks)
-  allClubs.value      = clubsRes.data   ?? []
-  topPlayers.value    = playersRes.data ?? []
-  allFacilities.value = facRes.data     ?? []
-  myRequests.value    = reqsRes?.data   ?? []
-  if (playersRes.error) playersError.value = playersRes.error.message
-  loadingClubs.value = false; loadingPlayers.value = false; loadingFac.value = false
+  const [clubsRes, facRes, reqsRes] = await Promise.all(tasks)
+  allClubs.value      = clubsRes.data ?? []
+  allFacilities.value = facRes.data   ?? []
+  myRequests.value    = reqsRes?.data ?? []
+  loadingClubs.value = false; loadingFac.value = false
 }
 
 onMounted(loadData)
@@ -191,21 +159,10 @@ const activityColor = (m30) =>
 <template>
   <!-- Search bar -->
   <div class="mb-4 fade-up">
-    <div class="relative mb-3">
-      <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
-      <input v-model="searchQ" class="input pl-10"
-        :placeholder="activeTab === 'clubs' ? 'Search clubs or facilities…' : 'Search players or clubs…'" />
-    </div>
-    <!-- Emirate filter chips -->
-    <div class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-      <button v-for="e in ['', ...EMIRATES]" :key="e"
-        class="shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all duration-200"
-        :class="emirateFilter === e
-          ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-          : 'border-white/10 text-slate-500 hover:border-white/25'"
-        @click="emirateFilter = e">
-        {{ e || 'All UAE' }}
-      </button>
+    <div class="relative">
+      <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none select-none leading-none">🔍</span>
+      <input v-model="searchQ" class="input pl-11"
+        placeholder="Search clubs and facilities…" />
     </div>
   </div>
 
@@ -214,10 +171,9 @@ const activityColor = (m30) =>
     <button v-for="tab in [
         { id:'clubs',      label:'🏢 Clubs'      },
         { id:'facilities', label:'🏟️ Facilities' },
-        { id:'players',    label:'🏆 Players'    },
       ]"
       :key="tab.id"
-      class="flex-1 text-xs font-semibold py-2 rounded-lg transition-all duration-200"
+      class="flex-1 text-xs font-semibold py-2.5 rounded-lg transition-all duration-200"
       :class="activeTab === tab.id ? 'text-slate-950 shadow-sm' : 'text-slate-400 hover:text-slate-300'"
       :style="activeTab === tab.id ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''"
       @click="activeTab = tab.id">
@@ -371,63 +327,6 @@ const activityColor = (m30) =>
         @click="showCreateFacility = true">
         + Add Your Facility
       </button>
-    </div>
-  </div>
-
-  <!-- ══════════════ TOP PLAYERS TAB ══════════════ -->
-  <div v-else-if="activeTab === 'players'" class="fade-up">
-
-    <div v-if="loadingPlayers" class="space-y-2">
-      <div v-for="i in 8" :key="i" class="h-12 shimmer rounded-xl" />
-    </div>
-
-    <div v-else-if="playersError" class="card p-6 text-center fade-up"
-      style="border-color:rgba(244,63,94,.3)">
-      <div class="text-2xl mb-2">⚠️</div>
-      <p class="text-rose-400 text-sm font-semibold mb-1">Could not load players</p>
-      <p class="text-slate-500 text-xs">{{ playersError }}</p>
-      <p class="text-slate-600 text-xs mt-2">Run <code class="text-slate-400">v2_schema.sql</code> again in Supabase SQL Editor.</p>
-    </div>
-
-    <div v-else-if="!filteredPlayers.length" class="card p-8 text-center text-slate-400 text-sm">
-      <div class="text-3xl mb-3">🏆</div>
-      <p>No players yet. Record at least 1 match to appear here.</p>
-    </div>
-
-    <div v-else>
-      <!-- Header -->
-      <div class="card overflow-hidden">
-        <div class="px-4 py-2.5 border-b border-white/[0.06] grid grid-cols-12 text-[9px] uppercase tracking-wider text-slate-600">
-          <span class="col-span-1">#</span>
-          <span class="col-span-5">Player</span>
-          <span class="col-span-3 text-right">Club</span>
-          <span class="col-span-1 text-right">Elo</span>
-          <span class="col-span-2 text-right">W%</span>
-        </div>
-
-        <RouterLink v-for="(p, i) in filteredPlayers" :key="p.player_id"
-          :to="'/player/' + p.player_id"
-          class="grid grid-cols-12 items-center px-4 py-2.5 border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02]"
-          :class="i < 3 ? 'bg-white/[0.01]' : ''">
-          <span class="col-span-1 text-sm font-bold" :class="i < 3 ? 'text-gold' : 'text-slate-500'">
-            {{ ['🥇','🥈','🥉'][i] ?? p.global_rank }}
-          </span>
-          <div class="col-span-5">
-            <div class="text-sm font-semibold text-slate-100 truncate hover:text-neon transition-colors">{{ p.public_name }}</div>
-            <div class="text-[10px] text-slate-600">{{ p.emirates }}</div>
-          </div>
-          <div class="col-span-3 text-right text-[11px] text-slate-400 truncate pl-1">{{ p.club_name }}</div>
-          <div class="col-span-1 text-right text-sm font-bold text-neon">{{ p.elo }}</div>
-          <div class="col-span-2 text-right text-xs text-slate-400">{{ p.win_pct }}%</div>
-        </RouterLink>
-      </div>
-
-      <!-- Show all button -->
-      <div v-if="!showAllPlayers && topPlayers.length > 15" class="mt-3 text-center">
-        <button class="btn-ghost px-8 text-sm" @click="showAllPlayers = true">
-          Show All {{ topPlayers.length }} Players
-        </button>
-      </div>
     </div>
   </div>
 

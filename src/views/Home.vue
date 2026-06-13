@@ -118,43 +118,42 @@ onMounted(() => { load(); detectCountry() })
 <template>
   <div class="min-h-screen">
 
-    <!-- ── Global Hero ── -->
-    <div class="relative overflow-hidden" style="min-height:250px">
+    <!-- ── Global Hero (Professional Sport) ── -->
+    <div class="relative overflow-hidden" style="min-height:256px">
 
-      <!-- Base gradient -->
+      <!-- Professional sport blue gradient — bold, not black -->
       <div class="absolute inset-0"
-        style="background:linear-gradient(160deg,#03081a 0%,#06112a 45%,#0a1330 75%,#071a2e 100%);" />
+        style="background:linear-gradient(150deg,#0B2D6B 0%,#0D47A1 45%,#006064 100%)" />
 
-      <!-- Brand glow orbs -->
-      <div class="absolute top-6 -right-10 w-52 h-52 rounded-full opacity-[0.12]"
-        style="background:radial-gradient(circle,#00e5ff,transparent);"/>
-      <div class="absolute -bottom-8 -left-8 w-44 h-44 rounded-full opacity-[0.10]"
-        style="background:radial-gradient(circle,#a855f7,transparent);"/>
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full opacity-[0.05]"
-        style="background:radial-gradient(circle,#fbbf24,transparent);"/>
+      <!-- Diagonal stripe texture (sport jersey feel) -->
+      <div class="absolute inset-0"
+        style="background-image:repeating-linear-gradient(-55deg,rgba(255,255,255,.055) 0,rgba(255,255,255,.055) 1px,transparent 0,transparent 50%);background-size:20px 20px" />
 
-      <!-- Faint dot grid -->
-      <div class="absolute inset-0 opacity-[0.025]"
-        style="background-image:radial-gradient(circle,rgba(0,229,255,.8) 1px,transparent 1px);
-               background-size:28px 28px;"/>
+      <!-- Glow accents -->
+      <div class="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
+        style="background:radial-gradient(circle,rgba(0,229,255,.22),transparent);transform:translate(35%,-35%)"/>
+      <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none"
+        style="background:radial-gradient(circle,rgba(168,85,247,.15),transparent);transform:translate(-30%,30%)"/>
 
       <!-- Hero text + search -->
       <div class="relative px-4 pt-6 pb-7 mx-auto max-w-2xl">
         <div class="flex items-center gap-2.5 mb-0.5">
-          <span class="text-3xl" style="filter:drop-shadow(0 0 14px rgba(0,229,255,.7))">🏸</span>
+          <span class="text-3xl" style="filter:drop-shadow(0 0 18px rgba(255,255,255,.35))">🏸</span>
           <div>
             <h1 class="font-display text-3xl font-extrabold gradient-text leading-none">Badminton 360</h1>
-            <p class="text-[10px] text-slate-500 tracking-[0.2em] uppercase mt-0.5">Your Club · Your Game · One App</p>
+            <p class="text-xs text-white/50 tracking-[0.2em] uppercase mt-0.5">Your Club · Your Game · One App</p>
           </div>
         </div>
-        <p class="text-slate-400 text-xs mb-4 mt-2">
+        <p class="text-white/70 text-xs mb-4 mt-2">
           {{ country ? flagEmoji(countryCode) + ' ' + country : '🌍 Worldwide' }} · Elo Rankings · Free Forever
         </p>
 
-        <!-- Search -->
+        <!-- Search — glass style for colored hero -->
         <div class="relative">
-          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-          <input v-model="searchQ" class="input pl-10 bg-white/[0.08]"
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none select-none">🔍</span>
+          <input v-model="searchQ"
+            class="w-full rounded-xl py-3 pl-11 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-white/30"
+            style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px)"
             placeholder="Search clubs or facilities…"
             @input="doSearch" @keyup.enter="doSearch"/>
         </div>
@@ -167,7 +166,7 @@ onMounted(() => { load(); detectCountry() })
             <span class="text-base">{{ r.type === 'club' ? '🏢' : '🏟️' }}</span>
             <div class="min-w-0">
               <div class="text-sm font-semibold text-slate-100 truncate">{{ r.name }}</div>
-              <div class="text-[10px] text-slate-500">{{ r.type === 'club' ? 'Club' : 'Facility' }}{{ r.sub ? ' · ' + r.sub : '' }}</div>
+              <div class="text-xs text-slate-500">{{ r.type === 'club' ? 'Club' : 'Facility' }}{{ r.sub ? ' · ' + r.sub : '' }}</div>
             </div>
           </RouterLink>
         </div>

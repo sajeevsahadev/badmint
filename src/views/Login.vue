@@ -36,22 +36,22 @@ const router = useRouter()
         <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
           <div class="text-2xl mb-1.5">📊</div>
           <div class="text-xs font-semibold text-slate-200">Elo Rankings</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">Beat strong pairs, earn more</div>
+          <div class="text-xs text-slate-500 mt-0.5">Beat strong pairs, earn more</div>
+        </div>
+        <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
+          <div class="text-2xl mb-1.5">💸</div>
+          <div class="text-xs font-semibold text-slate-200">Split Payments</div>
+          <div class="text-xs text-slate-500 mt-0.5">Court fees, split equally</div>
         </div>
         <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
           <div class="text-2xl mb-1.5">🌍</div>
           <div class="text-xs font-semibold text-slate-200">Clubs Worldwide</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">Any court, any country</div>
+          <div class="text-xs text-slate-500 mt-0.5">Any court, any country</div>
         </div>
         <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
           <div class="text-2xl mb-1.5">📋</div>
           <div class="text-xs font-semibold text-slate-200">Match History</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">Every game recorded</div>
-        </div>
-        <div class="card p-3.5 text-center transition-all duration-300 hover:border-white/20">
-          <div class="text-2xl mb-1.5">🏆</div>
-          <div class="text-xs font-semibold text-slate-200">Top Players</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">Global leaderboard</div>
+          <div class="text-xs text-slate-500 mt-0.5">Every game recorded</div>
         </div>
       </div>
 
