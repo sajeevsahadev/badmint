@@ -166,6 +166,7 @@ badmint/
 20. `supabase/v19_schema.sql` — PaySplits opening balances (paysplit_opening_balances table + set/delete/get RPCs)
 21. `supabase/v20_schema.sql` — Open poll voting (any auth user, no club membership required) + public get_schedule_votes (grant to anon) + get_club_leaderboard security-definer RPC (bypasses v_leaderboard RLS for public club profiles)
 22. `supabase/v21_schema.sql` — get_schedule_votes: add auth.users join so Google display name shows for voters who haven't set up their profile
+23. `supabase/v22_schema.sql` — Super admin panel: admin_get_clubs, admin_rename_club, admin_get_facilities, admin_update_facility, admin_delete_facility, admin_get_tournaments; self-grant INSERT for sajeevsahadev@gmail.com; AdminPanel.vue expanded to 6 tabs (Stats/Users/Clubs/Facilities/Tournaments/Roles)
 
 ---
 
@@ -408,6 +409,18 @@ elo_score, part_score, composite, club_rank
 | `set_club_facility(p_club_id, p_facility_id)` | Manager | Links/unlinks club ↔ facility |
 | `add_facility_slot(...)` | Creator | Adds a weekly schedule slot |
 | `delete_facility_slot(p_slot_id)` | Creator | Removes a schedule slot |
+| `get_all_users(p_search?)` | App Admin | All users with roles + tournament count (SECURITY DEFINER) |
+| `get_platform_stats()` | App Admin | Platform-wide stats: total users/clubs/matches/etc |
+| `grant_role(p_user_id, p_role, ...)` | App Admin | Grant an app-level role to a user |
+| `revoke_role(p_user_id, p_role)` | App Admin | Remove an app-level role from a user |
+| `get_my_roles()` | Any auth | Returns current user's app_roles rows |
+| `is_app_admin()` | SECURITY DEFINER | Returns true if current user has app_admin role |
+| `admin_get_clubs()` | App Admin | All clubs with owner email + activity stats (v22) |
+| `admin_rename_club(p_club_id, p_name)` | App Admin | Rename any club bypassing ownership check (v22) |
+| `admin_get_facilities()` | App Admin | All facilities with creator email + linked clubs count (v22) |
+| `admin_update_facility(p_id, p_name, ...)` | App Admin | Edit any facility details (v22) |
+| `admin_delete_facility(p_id)` | App Admin | Delete facility + cascade unlink clubs/schedule/bookings (v22) |
+| `admin_get_tournaments()` | App Admin | All tournaments with club + creator email (v22) |
 
 ---
 
@@ -619,10 +632,11 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **delete_tournament RPC** (v17) — tournament creator, club owner/manager, or app_admin can delete
 - **Badminton 360 rebrand + globalization** (commit bfbb092) — all branding renamed to Badminton 360 / B360; UAE flag hero, emirate chips and UAE-specific copy removed; `useGeo` auto country detection; JoinClub emirate dropdown → free-text City/Region; canonical domain badminton360.app
 - **PaySplits: Simplify debts toggle + opening balances** (v19) — Splitwise-style toggle in Balance tab (ON = fewest payments via greedy netting incl. wallet + opening balances; OFF = debts as recorded, wallet/opening shown vs "Club Pool"); admin-only per-player opening balance (± amount, one entry per player, for migrating from another app); warning when opening balances don't net to zero
+- **Super Admin Panel** (v22) — `/admin` route guarded at router level; 6-tab panel (Stats | Users | Clubs | Facilities | Tournaments | Roles); admin can view, rename/delete clubs, edit/delete facilities, delete tournaments, grant/revoke roles; sajeevsahadev@gmail.com self-grant INSERT in v22_schema.sql
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
-- **Admin dashboard UI** — `app_roles` table exists; admin panel route exists but UI is basic
+- **Admin dashboard UI** — Full CRUD on all entities now implemented (v22)
 - **Facility admin role** — creator is currently the de-facto owner; formal role pending
 - **Online court booking** — schedule visible but can't reserve online
 - **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable); requires VAPID key setup and a Supabase Edge Function to send

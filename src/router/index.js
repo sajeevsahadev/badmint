@@ -59,6 +59,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.path === '/login' && loggedIn) return '/dashboard'
+
+  // Guard /admin to app_admin role only
+  if (to.path === '/admin' && loggedIn) {
+    const { data: roles } = await supabase.rpc('get_my_roles')
+    if (!(roles ?? []).some(r => r.role === 'app_admin')) return '/dashboard'
+  }
 })
 
 export default router
