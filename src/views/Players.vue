@@ -122,7 +122,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
     <button class="btn-primary w-full" :disabled="busy || !newName.trim()" @click="add">
       {{ busy ? 'Adding…' : newEmail.trim() ? '➕ Add & Generate Invite' : '➕ Add Player' }}
     </button>
-    <p class="mt-2 text-[11px] text-slate-500">
+    <p class="mt-2 text-xs text-slate-500">
       They don't need to have logged in yet. Add their name and start recording matches.
     </p>
     <p v-if="msg" class="mt-2 text-xs" :class="msg.startsWith('✅') ? 'text-emerald-400' : 'text-rose-400'">{{ msg }}</p>
@@ -145,7 +145,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
         ✉️ Email
       </a>
     </div>
-    <p class="text-[10px] text-slate-500 mt-2 text-center">
+    <p class="text-xs text-slate-500 mt-2 text-center">
       Link expires in 7 days · Player fills in full name, nickname & photo on arrival
     </p>
   </div>
@@ -197,7 +197,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
               Inactive
             </span>
           </div>
-          <div class="text-[11px] mt-0.5" :class="p.is_active ? eloColor(Math.round(p.elo)) : 'text-slate-600'">
+          <div class="text-xs mt-0.5" :class="p.is_active ? eloColor(Math.round(p.elo)) : 'text-slate-600'">
             Elo {{ Math.round(p.elo) }}{{ p.is_active ? ' · ' + eloLabel(Math.round(p.elo)) : '' }}
           </div>
         </div>
@@ -206,7 +206,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
       <!-- Manager actions -->
       <div v-if="isManager()" class="flex items-center gap-1 shrink-0 ml-2">
         <!-- Active / Inactive toggle -->
-        <button class="text-[10px] font-semibold px-2 py-1 rounded-lg transition border"
+        <button class="text-xs font-semibold px-2 py-1 rounded-lg transition border"
           :class="p.is_active
             ? 'text-slate-500 border-white/10 hover:text-amber-400 hover:border-amber-500/30'
             : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'"
@@ -215,7 +215,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
           {{ p.is_active ? 'Deactivate' : 'Reactivate' }}
         </button>
         <!-- Remove (only if no match history) -->
-        <button class="text-[11px] text-slate-600 hover:text-rose-400 transition px-1.5 py-1"
+        <button class="text-xs text-slate-600 hover:text-rose-400 transition px-1.5 py-1"
           @click.prevent="remove(p.id, p.display_name)">✕</button>
       </div>
     </div>

@@ -164,14 +164,14 @@ const fmtDate = d => d
           <!-- My rank + Elo -->
           <div v-if="myPlayer" class="mt-2 flex flex-wrap items-center gap-3">
             <div>
-              <p class="text-[10px] text-slate-400 uppercase tracking-widest">Your Rank</p>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">Your Rank</p>
               <p class="text-lg font-extrabold text-neon leading-none">
                 #{{ myPlayer.club_rank }}
                 <span class="text-xs text-slate-400 font-normal ml-0.5">in {{ clubName }}</span>
               </p>
             </div>
             <div>
-              <p class="text-[10px] text-slate-400 uppercase tracking-widest">Elo</p>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">Elo</p>
               <p class="text-lg font-extrabold text-slate-700 leading-none">
                 {{ myPlayer.elo }}
                 <span v-if="weeklyDelta !== null"
@@ -182,7 +182,7 @@ const fmtDate = d => d
               </p>
             </div>
             <div>
-              <p class="text-[10px] text-slate-400 uppercase tracking-widest">W%</p>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">W%</p>
               <p class="text-lg font-extrabold text-slate-700 leading-none">{{ myPlayer.win_pct }}%</p>
             </div>
           </div>
@@ -195,7 +195,7 @@ const fmtDate = d => d
 
         <!-- Club profile link -->
         <RouterLink v-if="currentClub" :to="'/club/' + currentClub.club_id"
-          class="shrink-0 text-[10px] text-neon hover:opacity-75 transition mt-1">
+          class="shrink-0 text-xs text-neon hover:opacity-75 transition mt-1">
           Club Profile →
         </RouterLink>
       </div>
@@ -209,7 +209,7 @@ const fmtDate = d => d
         @click="router.push('/tournament/' + t.id)">
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1 min-w-0">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-violet-500 mb-1">
+            <p class="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">
               🏆 Tournament · Registration Open
             </p>
             <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
@@ -233,7 +233,7 @@ const fmtDate = d => d
           <span class="text-2xl">➕</span>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Record Match</p>
-            <p class="text-[10px] text-slate-400">Log a doubles result</p>
+            <p class="text-xs text-slate-400">Log a doubles result</p>
           </div>
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-violet-400/50 transition-all active:scale-[0.97]"
@@ -241,7 +241,7 @@ const fmtDate = d => d
           <span class="text-2xl">🏆</span>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Tournaments</p>
-            <p class="text-[10px] text-slate-400">Join or browse events</p>
+            <p class="text-xs text-slate-400">Join or browse events</p>
           </div>
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-amber-400/50 transition-all active:scale-[0.97]"
@@ -249,7 +249,7 @@ const fmtDate = d => d
           <span class="text-2xl">📅</span>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Schedule Court</p>
-            <p class="text-[10px] text-slate-400">Plan match days</p>
+            <p class="text-xs text-slate-400">Plan match days</p>
           </div>
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-emerald-400/50 transition-all active:scale-[0.97]"
@@ -257,7 +257,7 @@ const fmtDate = d => d
           <span class="text-2xl">💰</span>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Pay Splits</p>
-            <p class="text-[10px] text-slate-400">Split court costs</p>
+            <p class="text-xs text-slate-400">Split court costs</p>
           </div>
         </button>
       </div>
@@ -267,7 +267,7 @@ const fmtDate = d => d
     <div v-if="currentClub">
       <div class="flex items-center justify-between mb-2">
         <p class="label">🏸 {{ clubName }}</p>
-        <button class="text-[10px] text-neon hover:opacity-75 transition"
+        <button class="text-xs text-neon hover:opacity-75 transition"
           @click="showFullBoard = !showFullBoard">
           {{ showFullBoard ? 'Show less ↑' : 'See Full Rankings →' }}
         </button>
@@ -281,7 +281,7 @@ const fmtDate = d => d
         <!-- Mini top 3 + me -->
         <div v-for="(p, i) in miniBoard" :key="p.id">
           <!-- Gap separator before "you" if not in top 3 -->
-          <div v-if="p._gap" class="px-4 py-1 text-center text-[9px] text-slate-400 border-t border-slate-100 tracking-widest">
+          <div v-if="p._gap" class="px-4 py-1 text-center text-xs text-slate-400 border-t border-slate-100 tracking-widest">
             · · ·
           </div>
           <RouterLink :to="'/player/' + p.id"
@@ -294,12 +294,12 @@ const fmtDate = d => d
               <p class="text-sm font-semibold truncate"
                 :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
                 {{ p.display_name }}
-                <span v-if="isMe(p)" class="text-[10px] font-normal text-cyan-500 ml-1">you</span>
+                <span v-if="isMe(p)" class="text-xs font-normal text-cyan-500 ml-1">you</span>
               </p>
             </div>
             <div class="text-right shrink-0">
               <p class="text-sm font-extrabold text-neon">{{ p.composite }} pts</p>
-              <p class="text-[10px] text-slate-400">Elo {{ p.elo }}</p>
+              <p class="text-xs text-slate-400">Elo {{ p.elo }}</p>
             </div>
           </RouterLink>
         </div>
@@ -321,11 +321,11 @@ const fmtDate = d => d
               class="text-xs font-bold truncate w-full text-center text-slate-700 hover:text-neon transition-colors">
               {{ p.display_name }}
             </RouterLink>
-            <div class="text-[11px] font-extrabold mt-0.5"
+            <div class="text-xs font-extrabold mt-0.5"
               :class="i === 0 ? 'text-gold' : 'text-neon'">
               {{ p.composite }} pts
             </div>
-            <div class="text-[10px] text-slate-400">Elo {{ p.elo }}</div>
+            <div class="text-xs text-slate-400">Elo {{ p.elo }}</div>
           </div>
         </div>
 
@@ -338,12 +338,12 @@ const fmtDate = d => d
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-100">
-                <th class="pl-4 pr-2 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400">#</th>
-                <th class="pl-2 pr-3 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400">Player</th>
-                <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400">Pts</th>
-                <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400">Elo</th>
-                <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400">W%</th>
-                <th class="pl-2 pr-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400">Days</th>
+                <th class="pl-4 pr-2 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">#</th>
+                <th class="pl-2 pr-3 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">Player</th>
+                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Pts</th>
+                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Elo</th>
+                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">W%</th>
+                <th class="pl-2 pr-4 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Days</th>
               </tr>
             </thead>
             <tbody>
@@ -355,7 +355,7 @@ const fmtDate = d => d
                   <RouterLink :to="'/player/' + p.id"
                     class="font-semibold text-slate-800 hover:text-neon transition-colors">
                     {{ p.display_name }}
-                    <span v-if="isMe(p)" class="text-[10px] text-cyan-500 ml-1">you</span>
+                    <span v-if="isMe(p)" class="text-xs text-cyan-500 ml-1">you</span>
                   </RouterLink>
                 </td>
                 <td class="px-2 py-3 text-right font-extrabold text-neon text-xs">{{ p.composite }}</td>
@@ -378,7 +378,7 @@ const fmtDate = d => d
             <span class="text-lg shrink-0 w-6 text-center">{{ ['🥇','🥈','🥉'][i] }}</span>
             <div class="flex-1 min-w-0">
               <p class="text-sm font-bold text-slate-700 truncate">{{ pair.p1_name }} + {{ pair.p2_name }}</p>
-              <p class="text-[10px] text-slate-400 mt-0.5">
+              <p class="text-xs text-slate-400 mt-0.5">
                 {{ pair.games }} games · {{ pair.wins }}W / {{ pair.games - pair.wins }}L
               </p>
             </div>
@@ -398,7 +398,7 @@ const fmtDate = d => d
     <div v-if="myClubTournaments.length">
       <div class="flex items-center justify-between mb-2">
         <p class="label">🏆 My Club Tournaments</p>
-        <RouterLink to="/tournaments" class="text-[10px] text-neon hover:opacity-75 transition">
+        <RouterLink to="/tournaments" class="text-xs text-neon hover:opacity-75 transition">
           See All →
         </RouterLink>
       </div>
@@ -417,7 +417,7 @@ const fmtDate = d => d
                 }">
                   {{ { draft:'Draft', registration_open:'Open', live:'🔴 Live', completed:'Done', cancelled:'Cancelled', registration_closed:'Closed' }[t.status] ?? t.status }}
                 </span>
-                <span class="text-[10px] text-slate-400">
+                <span class="text-xs text-slate-400">
                   {{ t.format === 'single_elimination' ? 'Knock-out' : 'Round Robin' }}
                 </span>
               </div>
@@ -463,7 +463,7 @@ const fmtDate = d => d
     <div v-if="facilities.length">
       <div class="flex items-center justify-between mb-2">
         <p class="label">🏢 Courts Near You</p>
-        <RouterLink to="/explore" class="text-[10px] text-neon hover:opacity-75 transition">
+        <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">
           Browse All →
         </RouterLink>
       </div>
@@ -488,7 +488,7 @@ const fmtDate = d => d
     <div>
       <div class="flex items-center justify-between mb-2">
         <p class="label">👥 Your Clubs</p>
-        <RouterLink to="/explore" class="text-[10px] text-neon hover:opacity-75 transition">
+        <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">
           + Join or Create
         </RouterLink>
       </div>
@@ -514,7 +514,7 @@ const fmtDate = d => d
             <p class="text-xs text-slate-400 capitalize">{{ c.role }}</p>
           </div>
           <span v-if="currentClub?.club_id === c.club_id"
-            class="shrink-0 text-[10px] font-bold text-cyan-600">Active</span>
+            class="shrink-0 text-xs font-bold text-cyan-600">Active</span>
           <span v-else class="shrink-0 text-slate-300 text-sm">→</span>
         </div>
       </div>

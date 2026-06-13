@@ -711,7 +711,7 @@ const isMe = id => myPlayer.value?.id === id
           { key: 'notes',      label: 'Notes' }
         ]" :key="t.key"
         @click="activeTab = t.key"
-        class="flex-1 py-2 rounded-xl text-[10px] font-semibold transition-all duration-200"
+        class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200"
         :class="activeTab === t.key ? 'text-slate-950' : 'text-slate-500 hover:text-slate-300'"
         :style="activeTab === t.key ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
         {{ t.label }}
@@ -723,6 +723,52 @@ const isMe = id => myPlayer.value?.id === id
       <button class="btn-primary w-full py-3 mb-4 text-sm" @click="openAddForm">
         ➕ Add Expense
       </button>
+
+      <!-- ── Opening Balances (migration from another app) ── -->
+      <div class="card overflow-hidden mb-4">
+        <div class="px-4 py-3 border-b border-white/[.06] flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
+            <div class="text-xs text-slate-500 leading-snug mt-0.5">
+              Starting balances carried over from another app — set once per player by a club admin.
+              <span class="text-emerald-400">Positive = gets back</span> ·
+              <span class="text-rose-400">negative = owes</span>
+            </div>
+          </div>
+          <button v-if="isManager()" class="btn-primary text-xs px-3 py-1.5 shrink-0"
+            @click="openObAddForm">➕ Set</button>
+        </div>
+
+        <div v-if="!openingBalances.length" class="px-4 py-5 text-center text-sm text-slate-500">
+          No opening balances recorded.
+          <span v-if="isManager()" class="block text-xs text-slate-600 mt-1">
+            Migrating from Splitwise or another app? Tap "Set" to carry over each player's balance.
+          </span>
+        </div>
+
+        <div v-for="ob in openingBalances" :key="ob.player_id"
+          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[.04] last:border-0">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold"
+              :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
+              {{ isMe(ob.player_id) ? 'You' : ob.player_name }}
+            </div>
+            <div v-if="ob.notes" class="text-xs text-slate-500 truncate">{{ ob.notes }}</div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="font-bold text-sm"
+              :class="Number(ob.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+              {{ Number(ob.amount) >= 0 ? '+' : '' }}{{ aed(ob.amount) }}
+            </span>
+            <template v-if="isManager()">
+              <button class="text-xs text-slate-500 hover:text-neon transition"
+                @click="openObEditForm(ob)">✏️</button>
+              <button class="text-xs text-rose-500/60 hover:text-rose-400 transition"
+                @click="confirmDelOb = ob.player_id">🗑️</button>
+            </template>
+          </div>
+        </div>
+      </div>
 
       <div v-if="!expenses.length" class="card p-10 text-center text-slate-400">
         <div class="text-4xl mb-3">💸</div>
@@ -816,8 +862,8 @@ const isMe = id => myPlayer.value?.id === id
       <!-- Simplify debts toggle (Splitwise-style) -->
       <div class="card px-4 py-3 mb-3 flex items-center justify-between gap-3">
         <div class="min-w-0">
-          <div class="text-xs font-semibold text-slate-200">🔀 Simplify debts</div>
-          <div class="text-[10px] text-slate-500 leading-snug mt-0.5">
+          <div class="text-sm font-semibold text-slate-200">🔀 Simplify debts</div>
+          <div class="text-xs text-slate-500 leading-snug mt-0.5">
             {{ simplifyOn
               ? 'Debts restructured into the fewest payments — totals stay the same'
               : 'Debts shown exactly as recorded (wallet & opening vs Club Pool)' }}
@@ -836,7 +882,7 @@ const isMe = id => myPlayer.value?.id === id
         class="mb-3 px-3.5 py-2.5 rounded-xl text-[11px] leading-relaxed"
         style="background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25); color:#fbbf24">
         ⚠️ Opening balances net to <strong>{{ aed(openingSum) }}</strong> instead of zero,
-        so the group can't fully settle. Ask an admin to adjust them below.
+        so the group can't fully settle. Ask an admin to adjust them in the Expenses tab.
       </div>
 
       <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
@@ -916,51 +962,6 @@ const isMe = id => myPlayer.value?.id === id
         </div>
       </div>
 
-      <!-- ── Opening Balances (migration from another app) ── -->
-      <div class="card overflow-hidden mt-4">
-        <div class="px-4 py-3 border-b border-white/[.06] flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
-            <div class="text-[10px] text-slate-500 leading-snug mt-0.5">
-              Starting balances carried over from another app — set once per player by a club admin.
-              <span class="text-emerald-400">Positive = gets back</span> ·
-              <span class="text-rose-400">negative = owes</span>
-            </div>
-          </div>
-          <button v-if="isManager()" class="btn-primary text-[11px] px-3 py-1.5 shrink-0"
-            @click="openObAddForm">➕ Set</button>
-        </div>
-
-        <div v-if="!openingBalances.length" class="px-4 py-6 text-center text-sm text-slate-500">
-          No opening balances recorded.
-          <span v-if="isManager()" class="block text-[11px] text-slate-600 mt-1">
-            Migrating from Splitwise or another app? Tap "Set" to carry over each player's balance.
-          </span>
-        </div>
-
-        <div v-for="ob in openingBalances" :key="ob.player_id"
-          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[.04] last:border-0">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold"
-              :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
-              {{ isMe(ob.player_id) ? 'You' : ob.player_name }}
-            </div>
-            <div v-if="ob.notes" class="text-[10px] text-slate-500 truncate">{{ ob.notes }}</div>
-          </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <span class="font-bold text-sm"
-              :class="Number(ob.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ Number(ob.amount) >= 0 ? '+' : '' }}{{ aed(ob.amount) }}
-            </span>
-            <template v-if="isManager()">
-              <button class="text-[11px] text-slate-500 hover:text-neon transition"
-                @click="openObEditForm(ob)">✏️</button>
-              <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
-                @click="confirmDelOb = ob.player_id">🗑️</button>
-            </template>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->

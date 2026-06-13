@@ -207,7 +207,7 @@ const canDelete = m =>
             </template>
             <span v-else class="text-sm font-semibold text-slate-200 truncate">{{ m.name }}</span>
           </div>
-          <div class="text-[11px] text-slate-500 mt-0.5">{{ fmt(m.played_on) }}</div>
+          <div class="text-xs text-slate-500 mt-0.5">{{ fmt(m.played_on) }}</div>
         </div>
 
         <!-- Scores -->
@@ -227,7 +227,7 @@ const canDelete = m =>
         <div class="grid grid-cols-2 gap-3">
           <!-- Side A -->
           <div :class="m.sideA.winner ? 'card-neon' : 'card'" class="p-3">
-            <div class="text-[9px] uppercase tracking-widest mb-2 font-bold"
+            <div class="text-xs uppercase tracking-widest mb-2 font-bold"
               :class="m.sideA.winner ? 'text-neon' : 'text-slate-500'">
               {{ m.sideA.winner ? '🏆 Winner' : 'Side A' }}
             </div>
@@ -239,7 +239,7 @@ const canDelete = m =>
               <RouterLink v-if="p.id" :to="'/player/' + p.id"
                 class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
               <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
-              <span v-if="p.delta != null" class="text-[11px] font-semibold ml-2 shrink-0"
+              <span v-if="p.delta != null" class="text-xs font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}
               </span>
@@ -248,7 +248,7 @@ const canDelete = m =>
 
           <!-- Side B -->
           <div :class="m.sideB.winner ? 'card-neon' : 'card'" class="p-3">
-            <div class="text-[9px] uppercase tracking-widest mb-2 font-bold"
+            <div class="text-xs uppercase tracking-widest mb-2 font-bold"
               :class="m.sideB.winner ? 'text-neon' : 'text-slate-500'">
               {{ m.sideB.winner ? '🏆 Winner' : 'Side B' }}
             </div>
@@ -260,7 +260,7 @@ const canDelete = m =>
               <RouterLink v-if="p.id" :to="'/player/' + p.id"
                 class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
               <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
-              <span v-if="p.delta != null" class="text-[11px] font-semibold ml-2 shrink-0"
+              <span v-if="p.delta != null" class="text-xs font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}
               </span>
@@ -270,15 +270,15 @@ const canDelete = m =>
 
         <!-- Match actions -->
         <div v-if="(isManager() || canDelete(m)) && renaming !== m.id" class="mt-2">
-          <p v-if="deleteError && deleting !== m.id" class="text-[10px] text-rose-400 mb-1.5 px-2">
+          <p v-if="deleteError && deleting !== m.id" class="text-xs text-rose-400 mb-1.5 px-2">
             ⚠️ {{ deleteError }}
           </p>
           <div class="flex justify-between items-center">
-            <button v-if="isManager()" class="text-[11px] text-slate-500 hover:text-neon transition px-2 py-1"
+            <button v-if="isManager()" class="text-xs text-slate-500 hover:text-neon transition px-2 py-1"
               @click="startRename(m)">✏️ Rename</button>
             <div v-else />
             <button v-if="canDelete(m)"
-              class="text-[11px] text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
+              class="text-xs text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
               :disabled="deleting === m.id"
               @click="askDelete(m)">
               {{ deleting === m.id ? '⏳ Deleting…' : '🗑️ Delete match' }}

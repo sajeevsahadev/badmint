@@ -168,7 +168,7 @@ const needsClub = computed(() =>
             <span class="text-base shrink-0">🔄</span>
             <div class="min-w-0">
               <div class="text-xs font-semibold text-white leading-tight">New version available</div>
-              <div class="text-[10px] text-white/70 leading-tight">Tap to get the latest Badminton 360</div>
+              <div class="text-xs text-white/70 leading-tight">Tap to get the latest Badminton 360</div>
             </div>
           </div>
           <button @click="updateServiceWorker(true)"
@@ -209,7 +209,7 @@ const needsClub = computed(() =>
         <span class="text-2xl shrink-0">📲</span>
         <div class="flex-1 min-w-0">
           <div class="text-xs font-bold text-slate-800">Install Badminton 360 on Android</div>
-          <div class="text-[10px] text-slate-500">Works offline · No app store needed</div>
+          <div class="text-xs text-slate-500">Works offline · No app store needed</div>
         </div>
         <button class="btn-primary text-xs px-3 py-1.5 shrink-0" @click="promptInstall">Install</button>
       </div>
@@ -220,7 +220,7 @@ const needsClub = computed(() =>
           <span class="text-xl shrink-0">🍎</span>
           <div>
             <div class="text-xs font-bold text-slate-800 mb-1">Add to iPhone Home Screen</div>
-            <div class="text-[11px] text-slate-500 leading-relaxed">
+            <div class="text-xs text-slate-500 leading-relaxed">
               Tap the <strong class="text-slate-700">Share</strong> button (↑) in Safari,
               then choose <strong class="text-slate-700">"Add to Home Screen"</strong>.
             </div>
@@ -309,7 +309,7 @@ const needsClub = computed(() =>
         style="background:linear-gradient(90deg,transparent,rgba(0,168,204,.45) 35%,rgba(147,51,234,.40) 65%,transparent);" />
       <div class="mx-auto flex max-w-2xl">
         <RouterLink v-for="n in nav" :key="n.to" :to="n.to"
-          class="relative flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px]
+          class="relative flex flex-1 flex-col items-center gap-0.5 py-3 text-xs
                  text-slate-400 transition-all duration-200 font-medium"
           exact-active-class="!text-cyan-700">
           <span class="text-lg leading-none">{{ n.icon }}</span>
