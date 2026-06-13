@@ -164,6 +164,7 @@ badmint/
 18. `supabase/v17_schema.sql` — delete_tournament RPC
 19. `supabase/v18_schema.sql` — fix register_for_tournament: registered_by/notes swapped in VALUES
 20. `supabase/v19_schema.sql` — PaySplits opening balances (paysplit_opening_balances table + set/delete/get RPCs)
+21. `supabase/v20_schema.sql` — Open poll voting (any auth user, no club membership required) + public get_schedule_votes (grant to anon) + get_club_leaderboard security-definer RPC (bypasses v_leaderboard RLS for public club profiles)
 
 ---
 
@@ -397,6 +398,7 @@ elo_score, part_score, composite, club_rank
 | `get_top_scorers(p_limit?)` | Public | Global Elo leaderboard (security definer) |
 | `get_facilities(p_emirate?, p_search?)` | Public | All facilities with stats |
 | `get_facility_detail(p_facility_id)` | Public | Full facility JSON (schedule + bookings + clubs) |
+| `get_club_leaderboard(p_club_id)` | Public | Club leaderboard via SECURITY DEFINER — bypasses v_leaderboard RLS; used by ClubProfile.vue |
 | `set_opening_balance(p_club_id, p_player_id, p_amount, p_notes?)` | Manager | Upsert a player's PaySplits opening balance (±, one per player; |amount|<0.01 deletes) |
 | `delete_opening_balance(p_club_id, p_player_id)` | Manager | Remove a player's opening balance |
 | `get_opening_balances(p_club_id)` | Member | Opening balances with resolved names |

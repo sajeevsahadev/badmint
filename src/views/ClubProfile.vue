@@ -32,10 +32,7 @@ async function load() {
 
     supabase.rpc('get_club_players', { p_club_id: clubId }),
 
-    supabase.from('v_leaderboard')
-      .select('id, display_name, elo, composite, club_rank, win_pct, games, days_played, wins')
-      .eq('club_id', clubId)
-      .order('club_rank'),
+    supabase.rpc('get_club_leaderboard', { p_club_id: clubId }),
   ])
 
   club.value        = clubRes.data

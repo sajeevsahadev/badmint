@@ -90,10 +90,11 @@ const clubFacilities  = computed(() => filteredFacilities.value.filter(f => club
 const otherFacilities = computed(() => filteredFacilities.value.filter(f => !clubFacilityIds.value.has(f.id)))
 
 // ── Poll / votes ──
-const votes       = ref([])
-const votesFilter = ref('all')
+const votes        = ref([])
+const votesFilter  = ref('all')
 const showVotesModal = ref(false)
-const voting      = ref(null)
+const votesLoading = ref(false)
+const voting       = ref(null)
 
 const filteredVotes = computed(() => {
   if (votesFilter.value === 'all') return votes.value
@@ -153,8 +154,11 @@ async function openFacilityPicker() {
 }
 
 async function loadVotes(scheduleId) {
-  const { data } = await supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId })
+  votesLoading.value = true
+  const { data, error } = await supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId })
+  if (error) console.error('get_schedule_votes error:', error.message)
   votes.value = data ?? []
+  votesLoading.value = false
 }
 
 async function loadVotesAndAttendees(scheduleId) {
@@ -678,11 +682,13 @@ watch(currentClub, async () => {
           </div>
 
           <div class="px-4 pb-5 overflow-y-auto" style="max-height:320px">
-            <div v-if="filteredVotes.length === 0" class="text-sm text-slate-500 text-center py-6">
-              No votes yet.
-            </div>
-            <div v-for="v in filteredVotes" :key="v.user_id"
-              class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
+            <div v-if="votesLoading" class="text-center text-sm text-slate-500 animate-pulse py-6">Loading…</div>
+            <template v-else>
+              <div v-if="filteredVotes.length === 0" class="text-sm text-slate-500 text-center py-6">
+                No votes yet.
+              </div>
+              <div v-for="v in filteredVotes" :key="v.user_id"
+                class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
               <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-slate-950"
                 style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
                 {{ (v.display_name || '?')[0].toUpperCase() }}
@@ -695,6 +701,7 @@ watch(currentClub, async () => {
                 {{ v.vote === 'attending' ? '✅' : '❌' }}
               </span>
             </div>
+            </template>
           </div>
         </div>
       </div>
