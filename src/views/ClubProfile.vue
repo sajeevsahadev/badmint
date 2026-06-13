@@ -151,7 +151,7 @@ async function saveRename() {
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Score</div>
       </div>
       <div class="card p-3 text-center">
-        <div class="text-lg font-extrabold text-slate-200">{{ ranking.total_members }}</div>
+        <div class="text-lg font-extrabold text-slate-200">{{ ranking.member_count }}</div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Members</div>
       </div>
       <button class="card p-3 text-center cursor-pointer hover:border-violet-400/40 transition-all active:scale-95"

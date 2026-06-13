@@ -694,7 +694,7 @@ watch(currentClub, async () => {
                 {{ (v.display_name || '?')[0].toUpperCase() }}
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-slate-100 truncate">{{ v.display_name || 'Unknown' }}</div>
+                <div class="text-sm font-medium text-white truncate">{{ v.display_name || 'Unknown' }}</div>
                 <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>
               </div>
               <span class="text-lg shrink-0" :class="v.vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
