@@ -201,25 +201,27 @@ const fmtDate = d => d
       </div>
     </div>
 
-    <!-- ── 2. Announcements (open tournaments + facilities) ───────────── -->
-    <div v-if="openTournaments.length" class="space-y-2">
-      <p class="label">📣 Announcements</p>
-      <div v-for="t in openTournaments" :key="t.id"
-        class="card-violet p-4 cursor-pointer active:scale-[0.99] transition-transform"
-        @click="router.push('/tournament/' + t.id)">
-        <div class="flex items-start justify-between gap-2">
+    <!-- ── 2. Coming Soon ──────────────────────────────────────────────── -->
+    <div>
+      <p class="label mb-2">🚀 Coming Soon</p>
+      <div class="card overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
+          <span class="text-2xl shrink-0">🏆</span>
           <div class="flex-1 min-w-0">
-            <p class="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">
-              🏆 Tournament · Registration Open
-            </p>
-            <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
-            <p class="text-xs text-slate-500 mt-0.5">
-              {{ t.confirmed_teams }} / {{ t.max_teams }} teams
-              <span v-if="t.start_date"> · Starts {{ fmtDate(t.start_date) }}</span>
-              <span v-if="t.entry_fee"> · AED {{ t.entry_fee }}</span>
-            </p>
+            <p class="text-sm font-bold text-slate-800">Tournaments</p>
+            <p class="text-xs text-slate-400 mt-0.5">Club &amp; regional badminton events</p>
           </div>
-          <button class="shrink-0 btn-violet text-xs px-3 py-1.5">Register</button>
+          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
+            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
+        </div>
+        <div class="flex items-center gap-3 px-4 py-3.5">
+          <span class="text-2xl shrink-0">🏟️</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-slate-800">Court Booking</p>
+            <p class="text-xs text-slate-400 mt-0.5">Reserve your court in advance</p>
+          </div>
+          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
+            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
         </div>
       </div>
     </div>
@@ -236,28 +238,12 @@ const fmtDate = d => d
             <p class="text-xs text-slate-400">Log a doubles result</p>
           </div>
         </button>
-        <button class="card p-4 flex items-center gap-3 hover:border-violet-400/50 transition-all active:scale-[0.97]"
-          @click="router.push('/tournaments')">
-          <span class="text-2xl">🏆</span>
-          <div class="text-left min-w-0">
-            <p class="text-sm font-bold text-slate-800 truncate">Tournaments</p>
-            <p class="text-xs text-slate-400">Join or browse events</p>
-          </div>
-        </button>
         <button class="card p-4 flex items-center gap-3 hover:border-amber-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/schedule')">
           <span class="text-2xl">📅</span>
           <div class="text-left min-w-0">
-            <p class="text-sm font-bold text-slate-800 truncate">Schedule Court</p>
-            <p class="text-xs text-slate-400">Plan match days</p>
-          </div>
-        </button>
-        <button class="card p-4 flex items-center gap-3 hover:border-emerald-400/50 transition-all active:scale-[0.97]"
-          @click="router.push('/splits')">
-          <span class="text-2xl">💰</span>
-          <div class="text-left min-w-0">
-            <p class="text-sm font-bold text-slate-800 truncate">Pay Splits</p>
-            <p class="text-xs text-slate-400">Split court costs</p>
+            <p class="text-sm font-bold text-slate-800 truncate">Who's Playing?</p>
+            <p class="text-xs text-slate-400">Match day attendance poll</p>
           </div>
         </button>
       </div>
@@ -273,6 +259,7 @@ const fmtDate = d => d
         </button>
       </div>
 
+      <template v-if="!showFullBoard">
       <div v-if="!board.length" class="card p-6 text-center text-sm text-slate-400">
         No matches yet — record one to start the leaderboard.
       </div>
@@ -304,6 +291,7 @@ const fmtDate = d => d
           </RouterLink>
         </div>
       </div>
+      </template>
 
       <!-- Full leaderboard (expandable) -->
       <div v-if="showFullBoard && board.length" class="mt-3 space-y-3">
@@ -340,7 +328,6 @@ const fmtDate = d => d
               <tr class="border-b border-slate-100">
                 <th class="pl-4 pr-2 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">#</th>
                 <th class="pl-2 pr-3 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">Player</th>
-                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Pts</th>
                 <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Elo</th>
                 <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">W%</th>
                 <th class="pl-2 pr-4 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Days</th>
@@ -358,7 +345,6 @@ const fmtDate = d => d
                     <span v-if="isMe(p)" class="text-xs text-cyan-500 ml-1">you</span>
                   </RouterLink>
                 </td>
-                <td class="px-2 py-3 text-right font-extrabold text-neon text-xs">{{ p.composite }}</td>
                 <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
                 <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
                 <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
@@ -391,46 +377,6 @@ const fmtDate = d => d
           @click="router.push('/compare')">
           ⚔️ Head-to-Head Comparison
         </button>
-      </div>
-    </div>
-
-    <!-- ── 5a. My Club's Tournaments (all statuses) ────────────────── -->
-    <div v-if="myClubTournaments.length">
-      <div class="flex items-center justify-between mb-2">
-        <p class="label">🏆 My Club Tournaments</p>
-        <RouterLink to="/tournaments" class="text-xs text-neon hover:opacity-75 transition">
-          See All →
-        </RouterLink>
-      </div>
-      <div class="space-y-2">
-        <div v-for="t in myClubTournaments" :key="t.id"
-          class="card p-4 cursor-pointer hover:border-violet-400/40 transition-all active:scale-[0.99]"
-          @click="router.push('/tournament/' + t.id)">
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1 flex-wrap">
-                <span :class="{
-                  'badge-pending':  t.status === 'draft',
-                  'badge-approved': t.status === 'registration_open',
-                  'badge bg-rose-50 text-rose-600 border border-rose-200': t.status === 'live',
-                  'badge bg-slate-100 text-slate-500 border border-slate-200': t.status === 'completed',
-                }">
-                  {{ { draft:'Draft', registration_open:'Open', live:'🔴 Live', completed:'Done', cancelled:'Cancelled', registration_closed:'Closed' }[t.status] ?? t.status }}
-                </span>
-                <span class="text-xs text-slate-400">
-                  {{ t.format === 'single_elimination' ? 'Knock-out' : 'Round Robin' }}
-                </span>
-              </div>
-              <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
-              <p class="text-xs text-slate-500 mt-0.5">
-                {{ t.confirmed_teams }} confirmed
-                <span v-if="t.pending_teams"> · {{ t.pending_teams }} pending</span>
-                <span v-if="t.start_date"> · {{ fmtDate(t.start_date) }}</span>
-              </p>
-            </div>
-            <span class="text-slate-300 text-sm shrink-0">→</span>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -488,8 +434,8 @@ const fmtDate = d => d
     <div>
       <div class="flex items-center justify-between mb-2">
         <p class="label">👥 Your Clubs</p>
-        <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">
-          + Join or Create
+        <RouterLink to="/join" class="text-xs text-neon hover:opacity-75 transition">
+          + Join
         </RouterLink>
       </div>
 
@@ -504,7 +450,7 @@ const fmtDate = d => d
           :class="currentClub?.club_id === c.club_id
             ? 'border-cyan-400/50 bg-cyan-50/30'
             : 'hover:border-slate-300'"
-          @click="selectClub(c); router.push('/dashboard')">
+          @click="router.push('/club/' + c.club_id)">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
             :class="currentClub?.club_id === c.club_id ? 'bg-cyan-100' : 'bg-slate-100'">
             🏸

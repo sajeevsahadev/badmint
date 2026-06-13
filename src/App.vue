@@ -38,43 +38,41 @@ const menuSections = [
   {
     label: 'Match Day',
     items: [
-      { to: '/match',   icon: '➕', label: 'Add Match' },
-      { to: '/matches', icon: '📋', label: 'Matches' },
-      { to: '/compare', icon: '📊', label: 'Compare Players' },
-      { to: '/guide',   icon: '📖', label: 'Ranking Guide' },
+      { to: '/match',    icon: '➕', label: 'Add Match' },
+      { to: '/matches',  icon: '📋', label: 'Matches' },
+      { to: '/compare',  icon: '📊', label: 'Compare Players' },
+      { to: '/schedule', icon: '📅', label: "Who's Playing?" },
+      { to: '/guide',    icon: '📖', label: 'Ranking Guide' },
+    ]
+  },
+  {
+    label: 'PaySplits',
+    items: [
+      { to: '/splits?tab=activities', icon: '➕', label: 'Add Expenses' },
+      { to: '/splits?tab=balance',    icon: '⚖️', label: 'See Balance' },
+      { to: '/splits?tab=wallet',     icon: '💰', label: 'See Wallet' },
     ]
   },
   {
     label: 'Club Admin',
     items: [
+      { to: '/clubs',   icon: '🏸', label: 'Club Profile' },
       { to: '/manage',  icon: '⚙️', label: 'Manage Club' },
-      { to: '/explore', icon: '🌍', label: 'Explore Clubs' },
       { to: '/join',    icon: '🔗', label: 'Join a Club' },
-    ]
-  },
-  {
-    label: 'Competitions',
-    items: [
-      { to: '/tournaments', icon: '🏆', label: 'Tournaments' },
-    ]
-  },
-  {
-    label: 'Finances',
-    items: [
-      { to: '/splits',  icon: '💰', label: 'PaySplits' },
+      { to: '/explore', icon: '🌍', label: 'Explore Clubs & Facilities' },
     ]
   },
   {
     label: 'Account',
     items: [
-      { to: '/profile',  icon: '👤', label: 'My Profile' },
-      { to: '/schedule', icon: '📅', label: 'Schedule' },
+      { to: '/profile', icon: '👤', label: 'My Profile' },
     ]
   }
 ]
 
 const comingSoon = [
-  { icon: '📒', label: 'Ledger Book' },
+  { icon: '🏆', label: 'Tournaments' },
+  { icon: '🏟️', label: 'Court Booking' },
 ]
 
 function closeMenu() { showMenu.value = false }
@@ -347,16 +345,6 @@ const needsClub = computed(() =>
             <div class="flex-1 overflow-y-auto py-3">
 
               <!-- Home — always first -->
-              <RouterLink to="/" @click="closeMenu"
-                class="flex items-center gap-3 px-5 py-3 text-sm font-semibold text-slate-700
-                       hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
-                exact-active-class="!text-cyan-700 bg-cyan-50">
-                <span class="text-base w-6 text-center shrink-0">🏠</span>
-                Home
-              </RouterLink>
-
-              <div class="mx-5 my-1" style="border-top:1px solid rgba(0,0,0,.07)" />
-
               <div v-for="section in menuSections" :key="section.label" class="mb-1">
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2 font-semibold">
                   {{ section.label }}

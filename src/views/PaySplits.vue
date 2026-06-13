@@ -1,9 +1,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
+
+const route = useRoute()
 
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
@@ -106,8 +109,19 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  const tab = route.query.tab
+  if (tab && ['activities','balance','wallet','totals','notes'].includes(tab)) {
+    activeTab.value = tab
+  }
+})
 watch(currentClub, () => { expandedPlayer.value = null; load() })
+watch(() => route.query.tab, (tab) => {
+  if (tab && ['activities','balance','wallet','totals','notes'].includes(tab)) {
+    activeTab.value = tab
+  }
+})
 
 // ── Permission helper: creator or club manager/owner ───────────────────
 function canModify(item) {
