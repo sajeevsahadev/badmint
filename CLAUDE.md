@@ -165,6 +165,7 @@ badmint/
 19. `supabase/v18_schema.sql` — fix register_for_tournament: registered_by/notes swapped in VALUES
 20. `supabase/v19_schema.sql` — PaySplits opening balances (paysplit_opening_balances table + set/delete/get RPCs)
 21. `supabase/v20_schema.sql` — Open poll voting (any auth user, no club membership required) + public get_schedule_votes (grant to anon) + get_club_leaderboard security-definer RPC (bypasses v_leaderboard RLS for public club profiles)
+22. `supabase/v21_schema.sql` — get_schedule_votes: add auth.users join so Google display name shows for voters who haven't set up their profile
 
 ---
 
