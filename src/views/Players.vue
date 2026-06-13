@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
@@ -12,6 +12,8 @@ const newEmail = ref('')
 const busy     = ref(false)
 const msg      = ref(null)
 const invite   = ref(null)   // { link, email } after successful add-with-email
+let _msgTimer = null
+onUnmounted(() => { clearTimeout(_msgTimer) })
 
 async function load() {
   if (!currentClub.value) return
@@ -78,7 +80,8 @@ async function toggleActive(p) {
 function copyLink() {
   navigator.clipboard.writeText(invite.value.link)
   msg.value = '✅ Link copied!'
-  setTimeout(() => { msg.value = null }, 2500)
+  clearTimeout(_msgTimer)
+  _msgTimer = setTimeout(() => { msg.value = null }, 2500)
 }
 
 function whatsappLink() {

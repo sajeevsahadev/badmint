@@ -29,9 +29,15 @@ const greetText  = h < 12 ? 'Good morning'   : h < 17 ? 'Good afternoon' : 'Good
 const greetEmoji = h < 12 ? '☀️'             : h < 17 ? '⛅'             : '🌙'
 
 // ── Load ──────────────────────────────────────────────────────────────
+// Guard against stale loads when the user switches clubs quickly:
+// each load() call captures an ID; if a newer call has started by the time
+// async work completes, the older one discards its results.
+let _loadKey = 0
 async function load() {
+  const key = ++_loadKey
   loading.value = true
   await Promise.all([loadProfile(), loadClubData(), loadTournaments(), loadFacilities()])
+  if (key !== _loadKey) return
   loading.value = false
 }
 
@@ -61,16 +67,10 @@ async function loadClubData() {
   board.value     = lb ?? []
   bestPairs.value = bp ?? []
 
-  // Find own player row
-  const inBoard = board.value.find(p => p.user_id === user.value?.id)
-  if (inBoard) {
-    myPlayer.value = inBoard
-  } else if (user.value) {
-    const { data: me } = await supabase
-      .from('v_leaderboard')
-      .select('*').eq('club_id', cid).eq('user_id', user.value.id).maybeSingle()
-    myPlayer.value = me ?? null
-  }
+  // v_leaderboard already contains every active player for this club —
+  // no second query needed. Inactive players are excluded from the view, so
+  // the second query never produced a result they wouldn't have.
+  myPlayer.value = board.value.find(p => p.user_id === user.value?.id) ?? null
 
   // Weekly Elo delta (last 7 days)
   if (myPlayer.value) {

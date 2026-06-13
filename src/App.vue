@@ -99,10 +99,17 @@ async function refreshPending() {
 }
 
 onMounted(init)
-watch(user, init)
+// Only re-init when the signed-in user actually changes (login / logout).
+// Supabase fires onAuthStateChange after getSession resolves — without the ID
+// comparison this would cause loadClubs() to run 2-3× on every startup.
+watch(user, (newUser, oldUser) => {
+  if (newUser?.id !== oldUser?.id) init()
+})
 watch(() => route.path, (path) => {
-  refreshPending()
-  if (user.value) trackPage(path)
+  if (!user.value) return
+  trackPage(path)
+  // Only poll pending-requests count when the user actually manages a club.
+  if (clubs.value.some(c => ['owner', 'manager'].includes(c.role))) refreshPending()
 })
 
 async function logout() {

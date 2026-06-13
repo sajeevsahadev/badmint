@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
@@ -110,6 +110,8 @@ const attendeesDirty  = ref(false)
 // ── Invite ──
 const showInvitePanel = ref(false)
 const copied          = ref(false)
+let _copiedTimer = null
+onUnmounted(() => clearTimeout(_copiedTimer))
 const shareUrl = computed(() =>
   selectedSchedule.value ? `${window.location.origin}/poll/${selectedSchedule.value.id}` : ''
 )
@@ -282,7 +284,8 @@ async function saveAttendees() {
 async function copyLink() {
   await navigator.clipboard.writeText(shareUrl.value)
   copied.value = true
-  setTimeout(() => { copied.value = false }, 2500)
+  clearTimeout(_copiedTimer)
+  _copiedTimer = setTimeout(() => { copied.value = false }, 2500)
 }
 
 function shareWhatsApp() {

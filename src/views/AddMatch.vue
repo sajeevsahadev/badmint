@@ -76,11 +76,11 @@ async function loadNextMatchNum() {
   nextMatchNum.value = (data?.match_number ?? 0) + 1
 }
 
-onMounted(async () => {
-  await loadPlayers()
-  await loadNextMatchNum()
-  await checkScheduleAttendees(playedOn.value)
-})
+onMounted(() => Promise.all([
+  loadPlayers(),
+  loadNextMatchNum(),
+  checkScheduleAttendees(playedOn.value),
+]))
 watch(currentClub, () => { reset(); loadPlayers(); loadNextMatchNum() })
 watch(playedOn, (date) => checkScheduleAttendees(date))
 

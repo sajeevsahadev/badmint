@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
@@ -16,6 +16,8 @@ const showVotes    = ref(false)
 const votesLoading = ref(false)
 const copied   = ref(false)
 const error    = ref(null)
+let _copiedTimer = null
+onUnmounted(() => clearTimeout(_copiedTimer))
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -80,7 +82,8 @@ async function loadVotes() {
 async function copyLink() {
   await navigator.clipboard.writeText(window.location.href)
   copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+  clearTimeout(_copiedTimer)
+  _copiedTimer = setTimeout(() => { copied.value = false }, 2000)
 }
 
 function timeAgo(ts) {

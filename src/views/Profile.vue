@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
@@ -16,6 +16,8 @@ const error    = ref(null)
 
 // Edit form
 const form = ref({ nickname: '', phone: '', bio: '' })
+let _savedTimer = null
+onUnmounted(() => clearTimeout(_savedTimer))
 
 async function load() {
   if (!user.value) return
@@ -64,7 +66,8 @@ async function save() {
     saved.value = true
     if (!profile.value) profile.value = {}
     profile.value.nickname = form.value.nickname.trim()
-    setTimeout(() => { saved.value = false }, 3000)
+    clearTimeout(_savedTimer)
+    _savedTimer = setTimeout(() => { saved.value = false }, 3000)
   }
 }
 
