@@ -226,9 +226,25 @@ async function createSchedule(facilityId, facilityName) {
 
   if (error) { alert(error.message); return }
   showFacilityPicker.value = false
+  const isNew = !existing
   await loadMonthSchedules()
   await loadClubFacilityIds()
   if (schedId) await loadVotesAndAttendees(schedId)
+
+  // Notify subscribers only when a NEW schedule is created (not venue edits)
+  if (isNew && schedId) {
+    const facName = facilityId
+      ? (facilities.value.find(f => f.id === facilityId)?.name ?? 'TBD')
+      : (facilityName ?? 'TBD')
+    supabase.functions.invoke('send-push', {
+      body: {
+        schedule_id: schedId,
+        title: '🏸 Match Day Planned',
+        body: `${selectedDateLabel.value} at ${facName} — vote now!`,
+        url: `${window.location.origin}/poll/${schedId}`
+      }
+    }).catch(() => null)
+  }
 }
 
 async function pickFacility(fac) {
