@@ -55,6 +55,7 @@ GRANT EXECUTE ON FUNCTION invite_guest_player(uuid, uuid, text) TO authenticated
 -- 3. Replace accept_invite to handle guest_player_id:
 --    if set → link existing player row to the new account
 --    if null → normal path (create new player row)
+DROP FUNCTION IF EXISTS accept_invite(text);
 CREATE OR REPLACE FUNCTION accept_invite(p_token text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
