@@ -17,6 +17,8 @@ const inviteLink   = ref('')
 const note         = ref(null)
 const cfgNote      = ref(null)
 const inviteNote   = ref(null)
+const memberError  = ref(null)
+let   _memberErrTimer = null
 const facNote      = ref(null)
 const busy         = ref(false)
 
@@ -223,12 +225,20 @@ async function createAndLinkFacility() {
   busy.value = false
 }
 
-async function changeRole(userId, newRole) {
+function showMemberError(msg, selectEl = null) {
+  memberError.value = msg
+  if (selectEl) selectEl.value = members.value.find(m => m.user_id === selectEl.dataset.uid)?.role ?? selectEl.value
+  clearTimeout(_memberErrTimer)
+  _memberErrTimer = setTimeout(() => { memberError.value = null }, 5000)
+}
+
+async function changeRole(userId, newRole, selectEl = null) {
   const member = members.value.find(m => m.user_id === userId)
   if (member?.role === 'owner' && newRole !== 'owner') {
     const ownerCount = members.value.filter(m => m.role === 'owner').length
     if (ownerCount <= 1) {
-      note.value = { ok: false, t: 'Cannot change role — at least one owner must remain in the club.' }
+      if (selectEl) selectEl.value = 'owner'
+      showMemberError('At least one Owner must remain. Promote another member to Owner first.', null)
       return
     }
   }
@@ -238,8 +248,10 @@ async function changeRole(userId, newRole) {
     .eq('club_id', currentClub.value.club_id)
     .eq('user_id', userId)
   if (error) {
-    note.value = { ok: false, t: 'Role update failed: ' + error.message }
+    if (selectEl) selectEl.value = member?.role ?? newRole
+    showMemberError('Role update failed: ' + error.message, null)
   } else {
+    memberError.value = null
     members.value = members.value.map(m =>
       m.user_id === userId ? { ...m, role: newRole } : m
     )
@@ -449,6 +461,14 @@ async function leaveClub(clubId) {
   <!-- ── Members ── -->
   <div v-if="currentClub && members.length" class="card p-4 mb-4 fade-up">
     <div class="label">Members — {{ currentClub.clubs?.name }}</div>
+
+    <div v-if="memberError"
+      class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl text-xs font-medium text-rose-300"
+      style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
+      <span>⚠️</span>
+      <span>{{ memberError }}</span>
+    </div>
+
     <div v-for="m in members" :key="m.user_id"
       class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0 gap-2">
       <div class="flex-1 min-w-0">
@@ -459,7 +479,7 @@ async function leaveClub(clubId) {
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
         :value="m.role"
         class="text-xs rounded-lg border border-white/10 bg-white/[0.05] px-2 py-1 outline-none cursor-pointer"
-        @change="changeRole(m.user_id, $event.target.value)">
+        @change="changeRole(m.user_id, $event.target.value, $event.target)">
         <option value="player">🏸 Player</option>
         <option value="manager">🛠 Manager</option>
         <option v-if="currentClub.role === 'owner'" value="owner">👑 Owner</option>
