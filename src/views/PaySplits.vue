@@ -498,9 +498,14 @@ async function checkExpenseAttendees(date) {
   }
 }
 
+const titleAutoFilledFrom = ref(null)
+
 function selectCategory(cat) {
   form.value.category = cat.value
-  if (!form.value.title.trim()) form.value.title = cat.label
+  if (!form.value.title.trim() || form.value.title === titleAutoFilledFrom.value) {
+    form.value.title = cat.label
+    titleAutoFilledFrom.value = cat.label
+  }
 }
 
 const blankForm = () => ({
@@ -524,6 +529,7 @@ function openAddForm() {
   editingId.value = null
   form.value      = blankForm()
   formError.value = null
+  titleAutoFilledFrom.value = null
   expSchedAttendeeIds.value = new Set()
   showAllExpPlayers.value   = false
   showForm.value  = true
@@ -543,6 +549,7 @@ function openEditForm(exp) {
     participant_ids: (exp.participants ?? []).map(p => p.player_id)
   }
   formError.value = null
+  titleAutoFilledFrom.value = null
   showForm.value  = true
 }
 
@@ -1489,7 +1496,8 @@ const categoryBreakdown = computed(() => {
             <!-- Title -->
             <div>
               <label class="label">Expense Name</label>
-              <input v-model="form.title" class="input" placeholder="e.g. Tea break, Court rent, Cork pack" maxlength="60" />
+              <input v-model="form.title" class="input" placeholder="e.g. Tea break, Court rent, Cork pack" maxlength="60"
+                @input="titleAutoFilledFrom = null" />
             </div>
 
             <!-- Category chips -->
@@ -1588,10 +1596,11 @@ const categoryBreakdown = computed(() => {
                     @click="form.participant_ids = formDisplayPlayers.map(p => p.id)">All</button>
                   <button class="text-[10px] text-slate-400"
                     @click="form.participant_ids = []">None</button>
-                  <button v-if="expSchedAttendeeIds.size && !showAllExpPlayers"
-                    class="text-[10px] text-violet-400 font-semibold"
-                    @click="showAllExpPlayers = true; form.participant_ids = players.filter(p => p.is_active).map(p => p.id)">
-                    Show all
+                  <button v-if="expSchedAttendeeIds.size"
+                    class="text-[10px] font-semibold"
+                    :class="showAllExpPlayers ? 'text-slate-400' : 'text-violet-400'"
+                    @click="showAllExpPlayers = !showAllExpPlayers; form.participant_ids = showAllExpPlayers ? players.filter(p => p.is_active).map(p => p.id) : [...expSchedAttendeeIds].filter(id => players.find(p => p.id === id && p.is_active))">
+                    {{ showAllExpPlayers ? 'Attendees' : 'Show all' }}
                   </button>
                 </div>
               </div>
