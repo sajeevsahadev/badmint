@@ -1238,8 +1238,9 @@ const categoryBreakdown = computed(() => {
               </div>
             </div>
             <div class="text-right shrink-0">
-              <div class="font-bold text-slate-100">{{ aed(c.amount) }}</div>
-              <div class="text-[10px] text-emerald-400">{{ aed(c.remaining) }} left</div>
+              <div class="font-bold text-emerald-400 text-base">{{ aed(c.remaining) }}</div>
+              <div class="text-[10px] text-slate-500">of {{ aed(c.amount) }} received</div>
+              <div v-if="c.amount - c.remaining > 0.005" class="text-[10px] text-rose-400/70">−{{ aed(Math.round((c.amount - c.remaining) * 100) / 100) }} used</div>
             </div>
           </div>
           <!-- Partial consumption so far -->
