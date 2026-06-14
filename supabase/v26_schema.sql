@@ -1,6 +1,7 @@
 -- =====================================================================
 -- Badmint v26 — Guest player account linking via invite
 -- Run once in Supabase SQL Editor
+-- Safe to re-run: ALTER TABLE uses IF NOT EXISTS, functions use DROP IF EXISTS
 -- =====================================================================
 
 -- 1. Add guest_player_id to club_invites so we can link the invite to an existing guest player row
@@ -53,10 +54,13 @@ $$;
 GRANT EXECUTE ON FUNCTION invite_guest_player(uuid, uuid, text) TO authenticated;
 
 -- 3. Replace accept_invite to handle guest_player_id:
---    if set → link existing player row to the new account
+--    if set → link existing player row to the new account (preserves Elo + match history)
 --    if null → normal path (create new player row)
+--    DROP required because PostgreSQL won't allow changing a function with a different body
+--    that references a new column via %ROWTYPE without dropping first.
 DROP FUNCTION IF EXISTS accept_invite(text);
-CREATE OR REPLACE FUNCTION accept_invite(p_token text)
+
+CREATE FUNCTION accept_invite(p_token text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_invite club_invites%ROWTYPE;
