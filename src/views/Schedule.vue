@@ -16,7 +16,8 @@ const today    = new Date()
 const todayStr = fmtDate(today)
 const viewYear  = ref(today.getFullYear())
 const viewMonth = ref(today.getMonth() + 1)
-const selectedDate = ref(null)
+const selectedDate  = ref(null)
+const showDateModal = ref(false)
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -177,14 +178,20 @@ async function loadVotesAndAttendees(scheduleId) {
 
 // ── Calendar interaction ──
 async function selectDate(dateStr) {
-  if (selectedDate.value === dateStr) { selectedDate.value = null; return }
+  if (selectedDate.value === dateStr) { closeDateModal(); return }
   selectedDate.value = dateStr
+  showDateModal.value = true
   showInvitePanel.value = false
   votes.value = []
   attendeeIds.value = new Set()
   if (scheduleMap.value[dateStr]) {
     await loadVotesAndAttendees(scheduleMap.value[dateStr].id)
   }
+}
+
+function closeDateModal() {
+  showDateModal.value = false
+  selectedDate.value  = null
 }
 
 // ── Create / update schedule (direct table ops — no RPC) ──
@@ -449,133 +456,154 @@ watch(currentClub, async () => {
       <span class="flex items-center gap-1"><span class="w-4 h-4 rounded-full bg-cyan-400 inline-block"></span>Planned</span>
     </div>
 
-    <!-- Selected day panel -->
-    <div v-if="selectedDate">
+    <div class="text-center text-xs text-slate-600 py-2">Tap a date to plan or view a match day</div>
 
-      <!-- ── No schedule: plan prompt ── -->
-      <div v-if="!selectedSchedule" class="card p-5 fade-up text-center">
-        <div class="text-3xl mb-2">🏸</div>
-        <div class="font-semibold text-slate-200 mb-1">Plan a match on {{ selectedDateLabel }}</div>
-        <div class="text-xs text-slate-500 mb-4">Pick a venue to create this match day and open the poll.</div>
-        <button class="btn-primary w-full py-3" @click="openFacilityPicker">📍 Set Venue &amp; Schedule</button>
-      </div>
+    <!-- ── Date detail modal ── -->
+    <Teleport to="body">
+      <div v-if="showDateModal" class="fixed inset-0 z-50">
+        <div class="absolute inset-0 bg-black/70" @click="closeDateModal" />
+        <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
+          style="background:#0a1628; max-height:90vh; border-top:1px solid rgba(255,255,255,.1)">
 
-      <!-- ── Schedule exists ── -->
-      <div v-else class="space-y-4 fade-up">
-
-        <!-- Header -->
-        <div class="card-neon p-4">
-          <div class="font-display text-lg font-bold gradient-text leading-snug mb-1">{{ scheduleHeader }}</div>
-          <div v-if="selectedSchedule.status === 'cancelled'"
-            class="inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
-
-          <div class="flex gap-2 mt-3">
-            <button class="btn-primary flex-1 py-2 text-sm" @click="showInvitePanel = !showInvitePanel">
-              {{ showInvitePanel ? '✕ Close' : '📢 Invite' }}
-            </button>
-            <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
-          </div>
-
-          <!-- Invite / share panel -->
-          <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-slate-100 space-y-2">
-            <div class="text-xs text-slate-500">Share poll link with your group:</div>
-            <div class="flex gap-2">
-              <input :value="shareUrl" readonly
-                class="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-500 outline-none truncate" />
-              <button class="btn-ghost text-xs px-3 shrink-0" @click="copyLink">
-                {{ copied ? '✓ Copied' : 'Copy' }}
-              </button>
+          <!-- Sticky header -->
+          <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
+            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.07)">
+            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-slate-200">{{ selectedDateLabel }}</span>
+              <button @click="closeDateModal" class="text-slate-400 hover:text-slate-200 text-lg leading-none">✕</button>
             </div>
-            <button class="w-full rounded-xl py-2.5 text-sm font-medium transition"
-              style="background:rgba(37,211,102,.15); border:1px solid rgba(37,211,102,.3); color:#25d366"
-              @click="shareWhatsApp">
-              💬 Share via WhatsApp
-            </button>
-          </div>
-        </div>
-
-        <!-- Poll -->
-        <div class="card p-4">
-          <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Match Poll</div>
-          <div class="grid grid-cols-2 gap-2 mb-3">
-            <button
-              @click="castVote('attending')"
-              :disabled="voting !== null"
-              class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
-              :class="selectedSchedule.my_vote === 'attending'
-                ? 'bg-emerald-50 border-emerald-400'
-                : 'border-slate-200 hover:border-slate-300'">
-              <span class="text-2xl">✅</span>
-              <span class="text-xs font-semibold text-slate-700">Attending</span>
-              <span class="text-2xl font-bold text-emerald-400">{{ selectedSchedule.attending_count }}</span>
-            </button>
-            <button
-              @click="castVote('not_attending')"
-              :disabled="voting !== null"
-              class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
-              :class="selectedSchedule.my_vote === 'not_attending'
-                ? 'bg-rose-50 border-rose-400'
-                : 'border-slate-200 hover:border-slate-300'">
-              <span class="text-2xl">❌</span>
-              <span class="text-xs font-semibold text-slate-700">Not Attending</span>
-              <span class="text-2xl font-bold text-rose-400">{{ selectedSchedule.not_attending_count }}</span>
-            </button>
           </div>
 
-          <div class="flex items-center justify-between text-xs">
-            <span v-if="selectedSchedule.my_vote" :class="selectedSchedule.my_vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
-              Your vote: {{ selectedSchedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
-            </span>
-            <span v-else class="text-slate-600">Tap to cast your vote</span>
-            <button class="text-slate-500 underline" @click="openVotesModal">View Votes</button>
-          </div>
-        </div>
+          <!-- Scrollable content -->
+          <div class="overflow-y-auto px-4 pb-28" style="max-height: calc(90vh - 72px)">
 
-        <!-- Attendees -->
-        <div class="card p-4">
-          <div class="flex items-center justify-between mb-3">
-            <div>
-              <div class="text-[10px] uppercase tracking-widest text-slate-500">Actual Attendees</div>
-              <div class="text-[10px] text-slate-600 mt-0.5">Who actually showed up — used in Add Match player list</div>
+            <!-- No schedule: plan prompt -->
+            <div v-if="!selectedSchedule" class="pt-8 pb-4 text-center">
+              <div class="text-4xl mb-3">🏸</div>
+              <div class="font-semibold text-slate-200 text-lg mb-1">Plan a match on {{ selectedDateLabel }}</div>
+              <div class="text-xs text-slate-500 mb-6">Pick a venue to create this match day and open the poll.</div>
+              <button class="btn-primary w-full py-3" @click="openFacilityPicker">📍 Set Venue &amp; Schedule</button>
             </div>
-            <span class="text-[9px] px-2 py-0.5 rounded-full font-bold" style="background:rgba(0,153,184,.12);color:#0077a8">
-              {{ attendeeIds.size }}/{{ allPlayers.length }}
-            </span>
-          </div>
 
-          <div v-if="allPlayers.length === 0" class="text-xs text-slate-600 italic py-2">
-            No active players in roster yet.
-          </div>
+            <!-- Schedule exists -->
+            <div v-else class="space-y-4 pt-4">
 
-          <div class="space-y-1 mb-3">
-            <label v-for="p in allPlayers" :key="p.id"
-              class="flex items-center gap-3 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-slate-50 transition">
-              <div class="w-5 h-5 rounded border shrink-0 flex items-center justify-center transition"
-                :class="attendeeIds.has(p.id) ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'"
-                @click="toggleAttendee(p.id)">
-                <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-white font-bold">✓</span>
+              <!-- Header -->
+              <div class="card-neon p-4">
+                <div class="font-display text-lg font-bold gradient-text leading-snug mb-1">{{ scheduleHeader }}</div>
+                <div v-if="selectedSchedule.status === 'cancelled'"
+                  class="inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
+
+                <div class="flex gap-2 mt-3">
+                  <button class="btn-primary flex-1 py-2 text-sm" @click="showInvitePanel = !showInvitePanel">
+                    {{ showInvitePanel ? '✕ Close' : '📢 Invite' }}
+                  </button>
+                  <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
+                </div>
+
+                <!-- Invite / share panel -->
+                <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                  <div class="text-xs text-slate-500">Share poll link with your group:</div>
+                  <div class="flex gap-2">
+                    <input :value="shareUrl" readonly
+                      class="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-500 outline-none truncate" />
+                    <button class="btn-ghost text-xs px-3 shrink-0" @click="copyLink">
+                      {{ copied ? '✓ Copied' : 'Copy' }}
+                    </button>
+                  </div>
+                  <button class="w-full rounded-xl py-2.5 text-sm font-medium transition"
+                    style="background:rgba(37,211,102,.15); border:1px solid rgba(37,211,102,.3); color:#25d366"
+                    @click="shareWhatsApp">
+                    💬 Share via WhatsApp
+                  </button>
+                </div>
               </div>
-              <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'"
-                @click="toggleAttendee(p.id)">
-                {{ p.display_name }}
-              </span>
-              <span class="text-[10px] text-slate-400">{{ Math.round(p.elo) }}</span>
-            </label>
-          </div>
 
-          <button class="btn-success w-full py-2.5 text-sm"
-            :disabled="!attendeesDirty || savingAttendees"
-            @click="saveAttendees">
-            {{ savingAttendees ? 'Saving…' : `✓ Save Attendees (${attendeeIds.size})` }}
-          </button>
-          <div v-if="!attendeesDirty && attendeeIds.size > 0" class="text-[10px] text-slate-600 text-center mt-1.5">
-            Saved · Add Match will show only these {{ attendeeIds.size }} players
+              <!-- Poll -->
+              <div class="card p-4">
+                <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Match Poll</div>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    @click="castVote('attending')"
+                    :disabled="voting !== null"
+                    class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
+                    :class="selectedSchedule.my_vote === 'attending'
+                      ? 'bg-emerald-50 border-emerald-400'
+                      : 'border-slate-200 hover:border-slate-300'">
+                    <span class="text-2xl">✅</span>
+                    <span class="text-xs font-semibold text-slate-700">Attending</span>
+                    <span class="text-2xl font-bold text-emerald-400">{{ selectedSchedule.attending_count }}</span>
+                  </button>
+                  <button
+                    @click="castVote('not_attending')"
+                    :disabled="voting !== null"
+                    class="rounded-xl p-3 flex flex-col items-center gap-1 border transition"
+                    :class="selectedSchedule.my_vote === 'not_attending'
+                      ? 'bg-rose-50 border-rose-400'
+                      : 'border-slate-200 hover:border-slate-300'">
+                    <span class="text-2xl">❌</span>
+                    <span class="text-xs font-semibold text-slate-700">Not Attending</span>
+                    <span class="text-2xl font-bold text-rose-400">{{ selectedSchedule.not_attending_count }}</span>
+                  </button>
+                </div>
+
+                <div class="flex items-center justify-between text-xs">
+                  <span v-if="selectedSchedule.my_vote" :class="selectedSchedule.my_vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
+                    Your vote: {{ selectedSchedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
+                  </span>
+                  <span v-else class="text-slate-600">Tap to cast your vote</span>
+                  <button class="text-slate-500 underline" @click="openVotesModal">View Votes</button>
+                </div>
+              </div>
+
+              <!-- Attendees -->
+              <div class="card p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <div>
+                    <div class="text-[10px] uppercase tracking-widest text-slate-500">Actual Attendees</div>
+                    <div class="text-[10px] text-slate-600 mt-0.5">Who actually showed up — used in Add Match player list</div>
+                  </div>
+                  <span class="text-[9px] px-2 py-0.5 rounded-full font-bold" style="background:rgba(0,153,184,.12);color:#0077a8">
+                    {{ attendeeIds.size }}/{{ allPlayers.length }}
+                  </span>
+                </div>
+
+                <div v-if="allPlayers.length === 0" class="text-xs text-slate-600 italic py-2">
+                  No active players in roster yet.
+                </div>
+
+                <div class="space-y-1 mb-3">
+                  <label v-for="p in allPlayers" :key="p.id"
+                    class="flex items-center gap-3 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-slate-50 transition">
+                    <div class="w-5 h-5 rounded border shrink-0 flex items-center justify-center transition"
+                      :class="attendeeIds.has(p.id) ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'"
+                      @click="toggleAttendee(p.id)">
+                      <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-white font-bold">✓</span>
+                    </div>
+                    <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'"
+                      @click="toggleAttendee(p.id)">
+                      {{ p.display_name }}
+                    </span>
+                    <span class="text-[10px] text-slate-400">{{ Math.round(p.elo) }}</span>
+                  </label>
+                </div>
+
+                <button class="btn-success w-full py-2.5 text-sm"
+                  :disabled="!attendeesDirty || savingAttendees"
+                  @click="saveAttendees">
+                  {{ savingAttendees ? 'Saving…' : `✓ Save Attendees (${attendeeIds.size})` }}
+                </button>
+                <div v-if="!attendeesDirty && attendeeIds.size > 0" class="text-[10px] text-slate-600 text-center mt-1.5">
+                  Saved · Add Match will show only these {{ attendeeIds.size }} players
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
-
       </div>
-    </div>
-    <div v-else class="text-center text-xs text-slate-600 py-2">Tap a date to plan or view a match day</div>
+    </Teleport>
 
     <!-- ── Facility picker bottom sheet ── -->
     <Teleport to="body">
