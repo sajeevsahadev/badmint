@@ -102,8 +102,10 @@ async function load() {
     }
   }
 
-  // Tolerate the v19 migration not being applied yet
-  openingBalances.value = obRes.error ? [] : (obRes.data ?? [])
+  // Tolerate the v19 migration not being applied yet; show newest entry first
+  openingBalances.value = obRes.error ? [] : [...(obRes.data ?? [])].sort(
+    (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
+  )
   } finally {
     loading.value = false
   }
@@ -133,28 +135,38 @@ function canModify(item) {
 // no single counterparty (wallet consumption, opening balances).
 const POOL_ID = '__pool__'
 
-// Wallet net positions — using consumed fraction only so the sum = 0.
-// player_balances.balance = contributed − expense_share, but this does NOT
-// sum to zero when the wallet has unspent money (remaining > 0). That breaks
-// greedy settle-up. Fix: scale each player's credit by the consumed fraction
-// (totalWalletExpenses / totalContributed). Proof: sum(consumed_credit) =
-// ratio × totalContributed = totalWalletExpenses = sum(expense_share). ✓
+// Wallet net positions — derived from actual FIFO consumption, not a uniform ratio.
+// For each player: net = (amount FIFO consumed from their contributions) − (their wallet expense share)
+// sum(consumed) = totalWalletExpenses = sum(expense_shares), so nets always sum to zero. ✓
+// This correctly attributes wallet credits to whoever contributed first (per FIFO order),
+// rather than spreading credit proportionally across ALL contributors regardless of order.
 const walletNets = computed(() => {
-  const totalContributed = walletData.value.contributions
-    .reduce((s, c) => s + Number(c.amount), 0)
-  const totalWalletExp = walletData.value.wallet_expenses
-    .reduce((s, e) => s + Number(e.amount), 0)
-  const consumedRatio = totalContributed > 0
-    ? Math.min(1, totalWalletExp / totalContributed)
-    : 0
-  const nets = []
-  ;(walletData.value.player_balances ?? []).forEach(b => {
-    const consumedCredit = Math.round(Number(b.contributed) * consumedRatio * 100) / 100
-    const expenseShare   = Math.round(Number(b.expense_share) * 100) / 100
-    const net = Math.round((consumedCredit - expenseShare) * 100) / 100
-    if (Math.abs(net) >= 0.01) nets.push({ id: b.player_id, name: b.player_name, net })
+  const allContribs = [...fifoResult.value.active, ...fifoResult.value.consumed]
+
+  // How much FIFO actually consumed from each player's contributions
+  const consumedByPlayer = {}
+  allContribs.forEach(c => {
+    const consumed = c.consumedBy.reduce((s, cb) => s + cb.amount, 0)
+    if (!consumedByPlayer[c.player_id]) {
+      consumedByPlayer[c.player_id] = { name: c.player_name, consumed: 0 }
+    }
+    consumedByPlayer[c.player_id].consumed =
+      Math.round((consumedByPlayer[c.player_id].consumed + consumed) * 100) / 100
   })
-  return nets
+
+  const nets = {}
+  // Credit each contributor for how much FIFO drew from their wallet
+  Object.entries(consumedByPlayer).forEach(([pid, data]) => {
+    if (!nets[pid]) nets[pid] = { id: pid, name: data.name, net: 0 }
+    nets[pid].net = Math.round((nets[pid].net + data.consumed) * 100) / 100
+  })
+  // Debit each participant for their share of wallet expenses
+  ;(walletData.value.player_balances ?? []).forEach(b => {
+    if (!nets[b.player_id]) nets[b.player_id] = { id: b.player_id, name: b.player_name, net: 0 }
+    nets[b.player_id].net = Math.round((nets[b.player_id].net - Number(b.expense_share)) * 100) / 100
+  })
+
+  return Object.values(nets).filter(p => Math.abs(p.net) >= 0.01)
 })
 
 // Opening balances (v19): admin-entered starting position per player.
