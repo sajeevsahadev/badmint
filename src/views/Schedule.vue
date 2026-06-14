@@ -117,6 +117,9 @@ const shareUrl = computed(() =>
   selectedSchedule.value ? `${window.location.origin}/poll/${selectedSchedule.value.id}` : ''
 )
 
+// ── Errors ──
+const scheduleError = ref(null)
+
 // ── Push subscription ──
 const pushSubscribed   = ref(false)
 const pushPermission   = ref('default')
@@ -159,7 +162,7 @@ async function openFacilityPicker() {
 async function loadVotes(scheduleId) {
   votesLoading.value = true
   const { data, error } = await supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId })
-  if (error) console.error('get_schedule_votes error:', error.message)
+  if (error) { /* votes are non-critical; silently continue */ }
   votes.value = data ?? []
   votesLoading.value = false
 }
@@ -224,7 +227,8 @@ async function createSchedule(facilityId, facilityName) {
     schedId = res.data?.id
   }
 
-  if (error) { alert(error.message); return }
+  if (error) { scheduleError.value = error.message; return }
+  scheduleError.value = null
   showFacilityPicker.value = false
   const isNew = !existing
   await loadMonthSchedules()
@@ -257,7 +261,8 @@ async function useCustomVenue() {
 
   // Create in the facilities master table first so it appears in Explore → Facilities
   const { data: facId, error: facErr } = await supabase.rpc('create_facility', { p_name: name })
-  if (facErr) { alert(facErr.message); return }
+  if (facErr) { scheduleError.value = facErr.message; return }
+  scheduleError.value = null
 
   // Link the schedule to the new facility by ID (not free text)
   await createSchedule(facId, null)
@@ -408,6 +413,14 @@ watch(currentClub, async () => {
         </div>
       </template>
     </PageHeader>
+
+    <!-- Error banner -->
+    <div v-if="scheduleError"
+      class="mb-3 px-3 py-2 rounded-xl text-xs font-medium text-rose-300 flex items-center gap-2"
+      style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
+      <span>⚠️</span><span>{{ scheduleError }}</span>
+      <button class="ml-auto text-rose-400" @click="scheduleError = null">✕</button>
+    </div>
 
     <!-- Push notification subscribe banner -->
     <div v-if="pushSupported && !pushSubscribed && pushPermission !== 'denied'"
@@ -623,7 +636,7 @@ watch(currentClub, async () => {
 
     <!-- ── Facility picker bottom sheet ── -->
     <Teleport to="body">
-      <div v-if="showFacilityPicker" class="fixed inset-0 z-50">
+      <div v-if="showFacilityPicker" class="fixed inset-0 z-[60]">
         <div class="absolute inset-0 bg-black/70" @click="showFacilityPicker = false" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
           style="background:#0a1628; max-height:82vh; border-top:1px solid rgba(255,255,255,.1)">

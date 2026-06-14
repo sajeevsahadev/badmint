@@ -206,7 +206,7 @@ async function saveRename() {
               </td>
               <td class="pl-2 pr-2 py-3">
                 <RouterLink :to="'/player/' + p.id"
-                  class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate block max-w-[110px]">
+                  class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate block min-w-0">
                   {{ p.display_name }}
                 </RouterLink>
               </td>

@@ -49,7 +49,7 @@ async function load() {
     supabase.from('ranking_config').select('*').eq('club_id', cid).single(),
     supabase.from('club_members').select('user_id, role').eq('club_id', cid),
     isManager()
-      ? supabase.from('join_requests').select('*').eq('club_id', cid).order('created_at', { ascending: false })
+      ? supabase.from('join_requests').select('*').eq('club_id', cid).order('created_at', { ascending: false }).limit(200)
       : { data: [] },
     // player display_names for this club (linked accounts only)
     supabase.from('players').select('user_id, display_name').eq('club_id', cid).not('user_id', 'is', null),

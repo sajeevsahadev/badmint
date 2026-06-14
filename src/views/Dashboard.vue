@@ -298,6 +298,7 @@ const fmtDate = d => d
             <span class="text-xs font-bold text-slate-600 tracking-wide">Full Leaderboard</span>
             <InfoTip text="Sorted by composite rank points = Skill (70%) + Attendance (30%), both normalised 0–100 within club." />
           </div>
+          <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-100">
@@ -326,6 +327,7 @@ const fmtDate = d => d
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         <!-- Best pairs -->

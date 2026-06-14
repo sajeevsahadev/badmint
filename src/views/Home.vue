@@ -21,6 +21,7 @@ const searchQ     = ref('')
 const searchRes   = ref([])
 const searching   = ref(false)
 const loading     = ref(true)
+let   _searchTimer = null
 
 const myClubsWithScore = computed(() =>
   topClubs.value.filter(c => clubs.value.some(m => m.club_id === c.id))
@@ -85,24 +86,27 @@ async function load() {
   loading.value    = false
 }
 
-async function doSearch() {
-  if (!searchQ.value.trim()) { searchRes.value = []; return }
-  searching.value = true
+function doSearch() {
   const q = searchQ.value.trim()
-  const [clubsRes, facRes] = await Promise.all([
-    supabase.rpc('get_public_clubs'),
-    supabase.rpc('get_facilities', { p_search: q }),
-  ])
-  const clubs_ = (clubsRes.data ?? []).filter(c =>
-    c.name.toLowerCase().includes(q.toLowerCase()) ||
-    (c.facility_name || '').toLowerCase().includes(q.toLowerCase())
-  ).slice(0, 4)
-  const facs = (facRes.data ?? []).slice(0, 4)
-  searchRes.value = [
-    ...clubs_.map(c => ({ type: 'club', id: c.id, name: c.name, sub: c.emirates ?? '', to: '/club/' + c.id })),
-    ...facs.map(f => ({ type: 'facility', id: f.id, name: f.name, sub: f.emirate ?? '', to: '/facility/' + f.id })),
-  ]
-  searching.value = false
+  if (!q) { searchRes.value = []; return }
+  clearTimeout(_searchTimer)
+  _searchTimer = setTimeout(async () => {
+    searching.value = true
+    const ql = q.toLowerCase()
+    // Filter clubs from already-loaded topClubs (no extra RPC)
+    const clubs_ = topClubs.value.filter(c =>
+      c.name.toLowerCase().includes(ql) ||
+      (c.facility_name || '').toLowerCase().includes(ql)
+    ).slice(0, 4)
+    // Facilities still need an RPC (not pre-loaded)
+    const { data: facData } = await supabase.rpc('get_facilities', { p_search: q })
+    const facs = (facData ?? []).slice(0, 4)
+    searchRes.value = [
+      ...clubs_.map(c => ({ type: 'club',     id: c.id, name: c.name, sub: c.emirates ?? '',  to: '/club/'     + c.id })),
+      ...facs.map(f  => ({ type: 'facility',  id: f.id, name: f.name, sub: f.emirate  ?? '',  to: '/facility/' + f.id })),
+    ]
+    searching.value = false
+  }, 300)
 }
 
 function switchMyClub(clubId) {

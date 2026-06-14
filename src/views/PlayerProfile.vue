@@ -18,8 +18,10 @@ const matches     = ref([])
 const clubName    = ref('')
 const emirates    = ref('')
 const loading     = ref(true)
-const matchLimit  = ref(10)
-const loadingMore = ref(false)
+const matchLimit    = ref(10)
+const loadingMore   = ref(false)
+const hasMoreMatches = ref(false)
+const loadError     = ref(null)
 
 const isOwnProfile = computed(() =>
   user.value && player.value?.user_id === user.value.id
@@ -36,6 +38,8 @@ const initials = computed(() => {
 
 async function load() {
   loading.value = true
+  loadError.value = null
+  try {
 
   // 1. Player base row
   const { data: p } = await supabase
@@ -98,10 +102,14 @@ async function load() {
   const nameMap = await buildNameMap(allParticipantIds)
 
   // Filter matches that include this player
-  matches.value = (matchRes.data ?? [])
+  const rawMatches = (matchRes.data ?? [])
+  const filtered = rawMatches
     .filter(m => m.match_sides?.some(s =>
       s.match_participants?.some(mp => mp.players?.id === playerId)
     ))
+  // If we got back exactly the limit, there may be more pages
+  hasMoreMatches.value = rawMatches.length >= matchLimit.value
+  matches.value = filtered
     .map(m => {
       const sideA = m.match_sides?.find(s => s.side === 'A')
       const sideB = m.match_sides?.find(s => s.side === 'B')
@@ -125,6 +133,10 @@ async function load() {
     })
 
   loading.value = false
+  } catch (e) {
+    loadError.value = 'Failed to load profile. Please try again.'
+    loading.value = false
+  }
 }
 
 onMounted(load)
@@ -144,6 +156,12 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 <template>
   <div v-if="loading" class="space-y-3">
     <div v-for="i in 4" :key="i" class="h-20 shimmer rounded-2xl" />
+  </div>
+
+  <div v-else-if="loadError" class="card p-6 text-center">
+    <div class="text-2xl mb-2">⚠️</div>
+    <p class="text-sm text-rose-400">{{ loadError }}</p>
+    <button class="btn-ghost mt-3 text-sm" @click="load">Try Again</button>
   </div>
 
   <div v-else-if="!player" class="card p-8 text-center text-slate-400">
@@ -248,7 +266,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
         </div>
       </button>
       <!-- Load more -->
-      <div v-if="matches.length === matchLimit" class="px-4 py-3 border-t border-white/[0.05]">
+      <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-white/[0.05]">
         <button class="btn-ghost w-full text-sm" :disabled="loadingMore" @click="loadMore">
           {{ loadingMore ? 'Loading…' : 'Load More Matches' }}
         </button>

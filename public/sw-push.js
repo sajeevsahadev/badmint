@@ -4,15 +4,15 @@
 self.addEventListener('push', (event) => {
   if (!event.data) return
   let data = {}
-  try { data = event.data.json() } catch { data = { title: 'Badmint', body: event.data.text() } }
+  try { data = event.data.json() } catch { data = { title: 'Badminton 360', body: event.data.text() } }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Badmint', {
+    self.registration.showNotification(data.title || 'Badminton 360', {
       body:    data.body  || 'You have a new update.',
       icon:    '/icon-192.png',
       badge:   '/icon-192.png',
       data:    { url: data.url || '/' },
-      tag:     data.tag  || 'badmint',
+      tag:     data.tag  || 'b360',
       renotify: true
     })
   )
