@@ -120,6 +120,12 @@ async function rejectRequest(id) {
   requests.value = requests.value.map(r => r.id === id ? { ...r, status: 'rejected' } : r)
 }
 
+async function deleteRequest(id) {
+  const { error } = await supabase.rpc('delete_join_request', { p_request_id: id })
+  if (error) { note.value = { ok: false, t: error.message }; return }
+  requests.value = requests.value.filter(r => r.id !== id)
+}
+
 // ── Email invite ──
 async function generateInvite() {
   if (!inviteEmail.value.trim()) return
@@ -345,10 +351,15 @@ async function leaveClub(clubId) {
         </div>
         <!-- Status / actions -->
         <div class="shrink-0 flex items-center gap-1.5">
-          <span v-if="r.status !== 'pending'"
-            :class="r.status === 'approved' ? 'badge-approved' : 'badge-rejected'">
-            {{ r.status }}
-          </span>
+          <template v-if="r.status !== 'pending'">
+            <span :class="r.status === 'approved' ? 'badge-approved' : 'badge-rejected'">
+              {{ r.status }}
+            </span>
+            <button v-if="r.status === 'rejected'"
+              class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+              title="Delete request"
+              @click="deleteRequest(r.id)">🗑</button>
+          </template>
           <template v-else>
             <button class="btn-success text-xs px-2.5 py-1" @click="approveRequest(r.id)">Approve</button>
             <button class="btn-danger text-xs px-2.5 py-1" @click="rejectRequest(r.id)">Decline</button>
