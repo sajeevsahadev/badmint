@@ -1132,10 +1132,9 @@ const isMe = id => myPlayer.value?.id === id
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between rounded-lg px-3 py-2"
               style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06)">
-              <div>
-                <div class="text-xs text-slate-300 font-medium">{{ cb.title }}</div>
-                <div v-if="cb.expense_date" class="text-[10px] text-slate-500 mt-0.5">{{ fmtDate(cb.expense_date) }}</div>
-              </div>
+              <span class="text-xs text-slate-400">
+                {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-500"> · {{ fmtDate(cb.expense_date) }}</span>
+              </span>
               <span class="text-xs font-semibold text-slate-400 shrink-0 ml-3">{{ aed(cb.amount) }}</span>
             </div>
             <div v-if="canModify(c)" class="flex gap-3 pt-1">
