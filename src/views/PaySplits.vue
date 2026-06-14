@@ -330,7 +330,7 @@ const fifoResult = computed(() => {
       const take = Math.min(remaining[c.id], toConsume)
       remaining[c.id] = Math.round((remaining[c.id] - take) * 100) / 100
       toConsume       = Math.round((toConsume - take) * 100) / 100
-      consumedBy[c.id].push({ expenseId: exp.id, title: exp.title, amount: take })
+      consumedBy[c.id].push({ expenseId: exp.id, title: exp.title, amount: take, expense_date: exp.expense_date })
     }
   })
 
@@ -1082,8 +1082,8 @@ const isMe = id => myPlayer.value?.id === id
           <div v-if="c.consumedBy.length" class="mt-2 ml-9 space-y-1">
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between text-[10px] text-slate-500">
-              <span>→ {{ cb.title }}</span>
-              <span class="text-rose-400/70">−{{ aed(cb.amount) }}</span>
+              <span>→ {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-600"> · {{ fmtDate(cb.expense_date) }}</span></span>
+              <span class="text-rose-400/70 shrink-0 ml-2">−{{ aed(cb.amount) }}</span>
             </div>
           </div>
           <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9">
@@ -1132,8 +1132,11 @@ const isMe = id => myPlayer.value?.id === id
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between rounded-lg px-3 py-2"
               style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06)">
-              <span class="text-xs text-slate-400">{{ cb.title }}</span>
-              <span class="text-xs font-semibold text-slate-400">{{ aed(cb.amount) }}</span>
+              <div>
+                <div class="text-xs text-slate-300 font-medium">{{ cb.title }}</div>
+                <div v-if="cb.expense_date" class="text-[10px] text-slate-500 mt-0.5">{{ fmtDate(cb.expense_date) }}</div>
+              </div>
+              <span class="text-xs font-semibold text-slate-400 shrink-0 ml-3">{{ aed(cb.amount) }}</span>
             </div>
             <div v-if="canModify(c)" class="flex gap-3 pt-1">
               <button class="text-[10px] text-slate-600 hover:text-neon transition"
