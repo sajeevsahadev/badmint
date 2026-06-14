@@ -60,6 +60,9 @@ const expandedPlayer  = ref(null)
 const simplifyOn = ref(localStorage.getItem('b360_simplify_debts') !== '0')
 watch(simplifyOn, v => localStorage.setItem('b360_simplify_debts', v ? '1' : '0'))
 
+// "Plus N more balances" collapse in the top summary card
+const showAllMyBalance = ref(false)
+
 // ── Load all data ──────────────────────────────────────────────────────
 async function load() {
   if (!currentClub.value || !user.value) {
@@ -345,8 +348,10 @@ const fifoResult = computed(() => {
 
 const expandedConsumed = ref(null)
 
-// Auto-expand the current user's row when switching to the Balance tab
+// Auto-expand the current user's row when switching to the Balance tab;
+// also collapse the "Plus N more" summary each time.
 watch(activeTab, tab => {
+  showAllMyBalance.value = false
   if (tab === 'balance' && myPlayer.value?.id && !expandedPlayer.value) {
     expandedPlayer.value = myPlayer.value.id
   }
@@ -696,33 +701,43 @@ const isMe = id => myPlayer.value?.id === id
 
     <!-- ── Summary card ── -->
     <div class="card-neon p-4 mb-4 fade-up">
-      <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Your Balance</div>
-      <template v-if="myBalance">
-        <div class="flex items-baseline gap-2 mb-1">
-          <span class="text-2xl font-extrabold"
-            :class="myBalance.net > 0.01 ? 'text-emerald-400' : myBalance.net < -0.01 ? 'text-rose-400' : 'text-slate-400'">
-            {{ myBalance.net >= 0 ? '+' : '' }}{{ aed(myBalance.net) }}
-          </span>
+      <div v-if="myBalance">
+        <!-- Settled -->
+        <div v-if="Math.abs(myBalance.net) < 0.01" class="text-base font-bold text-slate-300">
+          All settled up! 🎉
         </div>
-        <div class="text-xs text-slate-500 mb-3">
-          {{ myBalance.net > 0.01 ? 'Net — you get back overall' : myBalance.net < -0.01 ? 'Net — you owe overall' : '🎉 All settled up!' }}
+        <!-- Owe overall -->
+        <div v-if="myBalance.net < -0.01">
+          <div class="text-xs text-slate-500 mb-0.5">You owe overall</div>
+          <div class="text-2xl font-extrabold text-rose-400 mb-3">{{ aed(Math.abs(myBalance.net)) }}</div>
         </div>
-        <div class="space-y-1.5">
-          <div v-for="g in myBalance.gets" :key="g.name" class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
-            style="background:rgba(52,211,153,.07); border:1px solid rgba(52,211,153,.15)">
-            <span class="text-slate-400">{{ g.name }} pays you</span>
-            <span class="font-semibold text-emerald-500">+{{ aed(g.amount) }}</span>
-          </div>
-          <div v-for="o in myBalance.owe" :key="o.name" class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
-            style="background:rgba(248,113,113,.07); border:1px solid rgba(248,113,113,.15)">
-            <span class="text-slate-400">You pay {{ o.name }}</span>
-            <span class="font-semibold text-rose-500">-{{ aed(o.amount) }}</span>
-          </div>
-          <div v-if="!myBalance.owe.length && !myBalance.gets.length"
-            class="text-xs text-slate-600">No outstanding balances</div>
+        <!-- Get back overall -->
+        <div v-if="myBalance.net > 0.01">
+          <div class="text-xs text-slate-500 mb-0.5">You get back overall</div>
+          <div class="text-2xl font-extrabold text-emerald-400 mb-3">+{{ aed(myBalance.net) }}</div>
         </div>
-      </template>
-      <div v-else class="text-sm text-slate-500">
+        <!-- Individual debts — Splitwise style list -->
+        <div v-if="myBalance.owe.length || myBalance.gets.length" class="space-y-2">
+          <template v-for="(o, i) in myBalance.owe" :key="'owe-' + o.name">
+            <div v-if="showAllMyBalance || i < 2" class="flex items-center justify-between">
+              <span class="text-sm text-slate-400">You owe <span class="text-slate-200 font-medium">{{ o.name }}</span></span>
+              <span class="text-sm font-bold text-rose-400">{{ aed(o.amount) }}</span>
+            </div>
+          </template>
+          <template v-for="(g, i) in myBalance.gets" :key="'get-' + g.name">
+            <div v-if="showAllMyBalance || (myBalance.owe.length + i) < 2" class="flex items-center justify-between">
+              <span class="text-sm text-slate-400"><span class="text-slate-200 font-medium">{{ g.name }}</span> pays you</span>
+              <span class="text-sm font-bold text-emerald-400">{{ aed(g.amount) }}</span>
+            </div>
+          </template>
+          <button v-if="!showAllMyBalance && (myBalance.owe.length + myBalance.gets.length) > 2"
+            @click="showAllMyBalance = true"
+            class="text-xs text-neon hover:opacity-75 transition pt-0.5">
+            Plus {{ myBalance.owe.length + myBalance.gets.length - 2 }} other {{ (myBalance.owe.length + myBalance.gets.length - 2) === 1 ? 'balance' : 'balances' }}
+          </button>
+        </div>
+      </div>
+      <div v-if="!myBalance" class="text-sm text-slate-500">
         No player record found for your account in this club yet.
       </div>
     </div>
@@ -885,24 +900,6 @@ const isMe = id => myPlayer.value?.id === id
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
     <div v-if="activeTab === 'balance'" class="fade-up">
 
-      <!-- Simplify debts toggle (Splitwise-style) -->
-      <div class="card px-4 py-3 mb-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-sm font-semibold text-slate-200">🔀 Simplify debts</div>
-          <div class="text-xs text-slate-500 leading-snug mt-0.5">
-            {{ simplifyOn
-              ? 'Debts restructured into the fewest payments — totals stay the same'
-              : 'Debts shown exactly as recorded (wallet & opening vs Club Pool)' }}
-          </div>
-        </div>
-        <button @click="simplifyOn = !simplifyOn"
-          class="shrink-0 px-4 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-200"
-          :class="simplifyOn ? 'text-slate-950 border-transparent' : 'text-slate-400 border-white/15 hover:border-white/30'"
-          :style="simplifyOn ? 'background:linear-gradient(135deg,#00e5ff,#0099cc); box-shadow:0 0 14px rgba(0,229,255,.25)' : ''">
-          {{ simplifyOn ? 'ON' : 'OFF' }}
-        </button>
-      </div>
-
       <!-- Opening balances don't net to zero — group can't fully settle -->
       <div v-if="Math.abs(openingSum) >= 0.01"
         class="mb-3 px-3.5 py-2.5 rounded-xl text-[11px] leading-relaxed"
@@ -917,75 +914,97 @@ const isMe = id => myPlayer.value?.id === id
         <p class="text-sm">No outstanding balances in this club.</p>
       </div>
 
+      <!-- Balance list — person rows -->
       <div class="space-y-2">
         <div v-for="p in playerBalanceList" :key="p.id"
           class="card overflow-hidden"
           :class="isMe(p.id) ? 'card-neon' : ''">
 
-          <!-- Row header -->
-          <button class="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          <!-- Row header — tap to expand -->
+          <button class="w-full flex items-center gap-3 px-4 py-4 text-left"
             @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
 
             <!-- Initials avatar -->
-            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+            <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
               :style="p.net > 0.01
-                ? 'background:rgba(52,211,153,.12); color:#34d399'
-                : 'background:rgba(248,113,113,.12); color:#f87171'">
-              {{ p.name.slice(0,2).toUpperCase() }}
+                ? 'background:rgba(52,211,153,.15); color:#34d399; border:1px solid rgba(52,211,153,.3)'
+                : 'background:rgba(248,113,113,.15); color:#f87171; border:1px solid rgba(248,113,113,.3)'">
+              {{ p.name.slice(0, 2).toUpperCase() }}
             </div>
 
-            <!-- Sentence: "Name owes/gets back AED X in total" -->
-            <div class="flex-1 min-w-0 text-sm leading-snug">
-              <span class="font-semibold" :class="isMe(p.id) ? 'text-neon' : 'text-slate-200'">
+            <!-- Name + amount summary -->
+            <div class="flex-1 min-w-0">
+              <div class="font-semibold text-sm" :class="isMe(p.id) ? 'text-neon' : 'text-slate-100'">
                 {{ isMe(p.id) ? 'You' : p.name }}
-              </span>
-              <span :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
-                {{ p.net > 0.01 ? ' get back ' : ' owe ' }}
-              </span>
-              <span class="font-bold" :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
-                {{ aed(Math.abs(p.net)) }}
-              </span>
-              <span class="text-slate-500 text-xs"> in total</span>
+              </div>
+              <div class="text-xs mt-0.5">
+                <span :class="p.net > 0.01 ? 'text-emerald-400' : 'text-rose-400'">
+                  {{ p.net > 0.01 ? 'get back ' : 'owe ' }}<span class="font-bold">{{ aed(Math.abs(p.net)) }}</span>
+                </span>
+                <span class="text-slate-500"> in total</span>
+              </div>
             </div>
 
-            <span class="text-slate-500 text-xs shrink-0 transition-transform duration-200"
-              :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''">▾</span>
+            <!-- Chevron -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="shrink-0 text-slate-500 transition-transform duration-200"
+              :style="expandedPlayer === p.id ? 'transform:rotate(180deg)' : ''"
+              width="16" height="16" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </button>
 
-          <!-- Expanded: simplified settlement instructions -->
-          <div v-if="expandedPlayer === p.id"
-            class="border-t border-white/[0.06] px-4 py-3 space-y-2">
-
+          <!-- Expanded: individual debt rows (Splitwise style) -->
+          <div v-if="expandedPlayer === p.id" class="border-t border-white/[0.06]">
+            <!-- Debts this person owes -->
             <div v-for="o in p.owes" :key="o.toId + (o.kind ?? '')"
-              class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
-              style="background:rgba(248,113,113,.06); border:1px solid rgba(248,113,113,.12)">
-              <span>
-                <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'You' : p.name }}</span>
-                <span class="text-slate-500"> → pay → </span>
-                <span class="font-medium text-slate-200">{{ o.to }}</span>
-                <span v-if="o.kind === 'wallet'" class="text-[9px] text-violet ml-1">💰 wallet</span>
-                <span v-else-if="o.kind === 'opening'" class="text-[9px] text-amber-400 ml-1">⚖️ opening</span>
-              </span>
-              <span class="text-rose-400 font-bold shrink-0 ml-3">{{ aed(o.amount) }}</span>
+              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[.04] last:border-0">
+              <div class="min-w-0">
+                <div class="text-sm text-slate-300">
+                  <span class="font-semibold">{{ isMe(p.id) ? 'You' : p.name }}</span>
+                  <span class="text-slate-500"> owe{{ isMe(p.id) ? '' : 's' }} </span>
+                  <span class="font-semibold">{{ o.to }}</span>
+                </div>
+                <div v-if="o.kind === 'wallet'" class="text-[10px] text-slate-500 mt-0.5">💰 wallet payment</div>
+                <div v-if="o.kind === 'opening'" class="text-[10px] text-slate-500 mt-0.5">⚖️ opening balance</div>
+              </div>
+              <span class="text-rose-400 font-bold text-sm shrink-0">{{ aed(o.amount) }}</span>
             </div>
-
+            <!-- Payments this person receives -->
             <div v-for="g in p.gets" :key="g.fromId + (g.kind ?? '')"
-              class="flex items-center justify-between text-xs rounded-lg px-3 py-2"
-              style="background:rgba(52,211,153,.06); border:1px solid rgba(52,211,153,.12)">
-              <span>
-                <span class="font-medium text-slate-200">{{ g.from }}</span>
-                <span class="text-slate-500"> → pays → </span>
-                <span class="font-medium text-slate-200">{{ isMe(p.id) ? 'you' : p.name }}</span>
-                <span v-if="g.kind === 'wallet'" class="text-[9px] text-violet ml-1">💰 wallet</span>
-                <span v-else-if="g.kind === 'opening'" class="text-[9px] text-amber-400 ml-1">⚖️ opening</span>
-              </span>
-              <span class="text-emerald-400 font-bold shrink-0 ml-3">{{ aed(g.amount) }}</span>
+              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[.04] last:border-0">
+              <div class="min-w-0">
+                <div class="text-sm text-slate-300">
+                  <span class="font-semibold">{{ g.from }}</span>
+                  <span class="text-slate-500"> pays </span>
+                  <span class="font-semibold">{{ isMe(p.id) ? 'you' : p.name }}</span>
+                </div>
+                <div v-if="g.kind === 'wallet'" class="text-[10px] text-slate-500 mt-0.5">💰 wallet payment</div>
+                <div v-if="g.kind === 'opening'" class="text-[10px] text-slate-500 mt-0.5">⚖️ opening balance</div>
+              </div>
+              <span class="text-emerald-400 font-bold text-sm shrink-0">{{ aed(g.amount) }}</span>
             </div>
-
             <div v-if="!p.owes.length && !p.gets.length"
-              class="text-xs text-slate-500 text-center py-1">Settled up ✓</div>
+              class="px-5 py-4 text-sm text-slate-500 text-center">Settled up ✓</div>
           </div>
         </div>
+      </div>
+
+      <!-- Simplify debts toggle — bottom banner (Splitwise style) -->
+      <div class="mt-4 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl"
+        style="background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.1)">
+        <p class="text-xs text-slate-400 leading-snug">
+          <span class="font-semibold text-neon">Simplify debts</span> is {{ simplifyOn ? 'on' : 'off' }}
+          <span class="text-slate-500">{{ simplifyOn
+            ? ' — restructured into the fewest payments'
+            : ' — showing debts exactly as recorded' }}</span>
+        </p>
+        <button @click="simplifyOn = !simplifyOn"
+          class="shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-200"
+          :class="simplifyOn ? 'text-slate-950 border-transparent' : 'text-slate-400 border-white/15 hover:border-white/30'"
+          :style="simplifyOn ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
+          {{ simplifyOn ? 'ON' : 'OFF' }}
+        </button>
       </div>
 
     </div>
