@@ -33,6 +33,16 @@ const CAT_COLORS = {
   tax:       '#94a3b8',
   other:     '#6b7280',
 }
+const CAT_BG = {
+  facility:  'rgba(0,229,255,.13)',
+  food:      'rgba(251,191,36,.13)',
+  drinks:    'rgba(168,85,247,.13)',
+  equipment: 'rgba(52,211,153,.13)',
+  transport: 'rgba(248,113,113,.13)',
+  tax:       'rgba(148,163,184,.13)',
+  other:     'rgba(107,114,128,.13)',
+}
+const catColorBg = v => CAT_BG[v] ?? 'rgba(129,140,248,.13)'
 
 // custom categories — stored in localStorage per club
 const customCategories = ref([])
@@ -42,7 +52,9 @@ const catIcon  = v => allCategories.value.find(c => c.value === v)?.icon  ?? '�
 const catLabel = v => allCategories.value.find(c => c.value === v)?.label ?? v
 const catColor = v => CAT_COLORS[v] ?? '#818cf8'
 const aed      = n => `${CURRENCY} ${Number(n).toFixed(2)}`
-const fmtDate  = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
+const fmtDate     = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
+const fmtExpMonth = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en', { month: 'short' }) : '—'
+const fmtExpDay   = d => d ? String(new Date(d + 'T00:00:00').getDate()).padStart(2, '0') : '—'
 const fmtDatetime = ts => new Date(ts).toLocaleString('en-AE', {
   day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
 })
@@ -363,6 +375,7 @@ const fifoResult = computed(() => {
 })
 
 const expandedConsumed = ref(null)
+const expandedExp      = ref(null)
 
 // Auto-expand the current user's row when switching to the Balance tab;
 // also collapse the "Plus N more" summary each time.
@@ -416,6 +429,23 @@ const monthlyTrend = computed(() => {
     .map(([key, total]) => {
       const [y, m] = key.split('-').map(Number)
       return { key, label: `${MONTHS[m-1]} ${y}`, total }
+    })
+})
+
+// Group expenses by month for the Splitwise-style list (newest month first)
+const expensesByMonth = computed(() => {
+  const groups = {}
+  expenses.value.forEach(e => {
+    const key = e.expense_date?.slice(0, 7) ?? 'unknown'
+    if (!groups[key]) groups[key] = { monthKey: key, expenses: [], total: 0 }
+    groups[key].expenses.push(e)
+    groups[key].total = Math.round((groups[key].total + Number(e.amount)) * 100) / 100
+  })
+  return Object.entries(groups)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, g]) => {
+      const [y, m] = key.split('-').map(Number)
+      return { ...g, label: isNaN(m) ? key : `${MONTHS[m - 1]} ${y}` }
     })
 })
 
@@ -832,84 +862,91 @@ const categoryBreakdown = computed(() => {
         <p class="text-sm">Record the first shared cost for this club.</p>
       </div>
 
-      <div class="space-y-3">
-        <div v-for="exp in expenses" :key="exp.id" class="card p-4">
-          <!-- Header row -->
-          <div class="flex items-start justify-between gap-3 mb-3">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                style="background:rgba(255,255,255,.06)">
-                {{ catIcon(exp.category) }}
+      <!-- Expenses grouped by month — Splitwise style -->
+      <template v-for="group in expensesByMonth" :key="group.monthKey">
+        <!-- Month header -->
+        <div class="flex items-center gap-2 mt-5 mb-2 first:mt-0">
+          <span class="text-xs font-semibold text-slate-400">{{ group.label }}</span>
+          <div class="flex-1 h-px" style="background:rgba(255,255,255,.07)"/>
+          <span class="text-[10px] text-slate-600">{{ aed(group.total) }}</span>
+        </div>
+
+        <div v-for="exp in group.expenses" :key="exp.id" class="card mb-2 overflow-hidden">
+          <!-- Collapsed row — tap to expand -->
+          <button class="w-full flex items-center gap-3 px-4 py-3 text-left"
+            @click="expandedExp = expandedExp === exp.id ? null : exp.id">
+            <!-- Date column -->
+            <div class="flex flex-col items-center w-7 shrink-0 select-none">
+              <span class="text-[10px] text-slate-500 uppercase leading-none">{{ fmtExpMonth(exp.expense_date) }}</span>
+              <span class="text-lg font-bold text-slate-200 leading-snug">{{ fmtExpDay(exp.expense_date) }}</span>
+            </div>
+            <!-- Category icon with tinted bg -->
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+              :style="{ background: catColorBg(exp.category) }">
+              {{ catIcon(exp.category) }}
+            </div>
+            <!-- Title + payer -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <span class="font-semibold text-sm text-slate-100 truncate">{{ exp.title }}</span>
+                <span v-if="exp.paid_from_wallet"
+                  class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md"
+                  style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.3)">
+                  💰 WALLET
+                </span>
               </div>
-              <div class="min-w-0">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-semibold text-sm text-slate-100 truncate">{{ exp.title }}</span>
-                  <span v-if="exp.paid_from_wallet"
-                    class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md"
-                    style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.3)">
-                    💰 WALLET
-                  </span>
-                </div>
-                <div class="text-[10px] text-slate-500 mt-0.5">
-                  {{ catLabel(exp.category) }} · {{ fmtDate(exp.expense_date) }}
-                </div>
+              <div class="text-[11px] text-slate-500">
+                {{ exp.paid_from_wallet
+                  ? 'From common wallet · ' + aed(exp.amount)
+                  : exp.paid_name + ' paid ' + aed(exp.amount) }}
               </div>
             </div>
-            <div class="text-right shrink-0">
-              <div class="font-bold text-slate-100">{{ aed(exp.amount) }}</div>
-              <div class="text-[10px] text-slate-500">
-                {{ exp.paid_from_wallet ? 'From wallet' : exp.paid_name + ' paid' }}
+            <!-- Your share -->
+            <div v-if="myContrib(exp)" class="text-right shrink-0">
+              <div class="text-[10px] leading-none mb-0.5"
+                :class="myContrib(exp).net >= 0 ? 'text-emerald-500' : 'text-rose-500'">
+                {{ myContrib(exp).net >= 0 ? 'you lent' : 'you borrowed' }}
+              </div>
+              <div class="font-bold text-sm"
+                :class="myContrib(exp).net >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+                {{ aed(Math.abs(myContrib(exp).net)) }}
               </div>
             </div>
-          </div>
+            <div v-else class="text-right shrink-0">
+              <div class="text-[10px] text-slate-600 mb-0.5">total</div>
+              <div class="font-bold text-sm text-slate-400">{{ aed(exp.amount) }}</div>
+            </div>
+          </button>
 
-          <!-- My contribution pill -->
-          <div v-if="myContrib(exp)"
-            class="flex items-center justify-between rounded-lg px-3 py-2 mb-2 text-xs"
-            style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06)">
-            <span class="text-slate-400">
-              {{ myContrib(exp).type === 'paid' ? 'You paid · gets back'
-               : myContrib(exp).type === 'wallet' ? 'Your share (wallet-paid)'
-               : 'Your share' }}
-            </span>
-            <span class="font-bold"
-              :class="myContrib(exp).net >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ myContrib(exp).net >= 0 ? '+' : '' }}{{ aed(myContrib(exp).net) }}
-            </span>
-          </div>
-
-          <!-- Split summary + participant names -->
-          <div class="mb-3">
-            <div class="text-[10px] text-slate-600 mb-1.5">
+          <!-- Expanded details -->
+          <div v-if="expandedExp === exp.id"
+            class="px-4 pb-4 pt-3 border-t border-white/[.05]">
+            <div class="text-[11px] text-slate-500 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
               <span v-if="exp.participants?.length">
                 · {{ aed(Number(exp.amount) / exp.participants.length) }} each
               </span>
             </div>
-            <div v-if="exp.participants?.length" class="flex flex-wrap gap-1">
+            <div v-if="exp.participants?.length" class="flex flex-wrap gap-1 mb-3">
               <span v-for="pt in exp.participants" :key="pt.player_id"
-                class="text-[9px] px-1.5 py-0.5 rounded-md"
-                :class="pt.player_id === myPlayer?.id
-                  ? 'text-neon font-semibold'
-                  : 'text-slate-400'"
+                class="text-[9px] px-2 py-0.5 rounded-md"
+                :class="pt.player_id === myPlayer?.id ? 'text-neon font-semibold' : 'text-slate-400'"
                 style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09)">
                 {{ pt.player_id === myPlayer?.id ? 'You' : pt.name }}
               </span>
             </div>
-          </div>
-
-          <!-- Actions: only for creator or manager -->
-          <div v-if="canModify(exp)" class="flex items-center gap-2 pt-2 border-t border-white/[0.05]">
-            <button class="text-[11px] text-slate-500 hover:text-neon transition"
-              @click="openEditForm(exp)">✏️ Edit</button>
-            <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition ml-auto"
-              :disabled="deletingId === exp.id"
-              @click="confirmDelId = exp.id">
-              {{ deletingId === exp.id ? '⏳ Deleting…' : '🗑️ Delete' }}
-            </button>
+            <div v-if="canModify(exp)" class="flex items-center gap-3">
+              <button class="text-[11px] text-slate-500 hover:text-neon transition"
+                @click.stop="openEditForm(exp)">✏️ Edit</button>
+              <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition ml-auto"
+                :disabled="deletingId === exp.id"
+                @click.stop="confirmDelId = exp.id">
+                {{ deletingId === exp.id ? '⏳ Deleting…' : '🗑️ Delete' }}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
 
       <!-- ── Opening Balances (migration from another app) — shown at bottom ── -->
       <div class="card overflow-hidden mt-4">
