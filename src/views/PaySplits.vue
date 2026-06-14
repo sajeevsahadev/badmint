@@ -765,7 +765,12 @@ async function addNote() {
   await load()
 }
 
-async function deleteNote(id) {
+const confirmDelNoteId = ref(null)
+
+async function deleteNote() {
+  const id = confirmDelNoteId.value
+  confirmDelNoteId.value = null
+  if (!id) return
   await supabase.from('paysplit_notes').delete().eq('id', id)
   notes.value = notes.value.filter(n => n.id !== id)
 }
@@ -1467,7 +1472,7 @@ const categoryBreakdown = computed(() => {
               · {{ timeAgo(n.created_at) }}
             </div>
             <button v-if="canModify(n)" class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
-              @click="deleteNote(n.id)">Delete</button>
+              @click="confirmDelNoteId = n.id">Delete</button>
           </div>
         </div>
       </div>
@@ -1864,6 +1869,30 @@ const categoryBreakdown = computed(() => {
             <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
               style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
               @click="doDeleteContrib">Yes, Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ══════════════════════════ DELETE NOTE CONFIRM ════════════════════ -->
+    <Teleport to="body">
+      <div v-if="confirmDelNoteId"
+        class="fixed inset-0 z-50 flex items-center justify-center px-5"
+        style="background:rgba(0,0,0,.75); backdrop-filter:blur(6px)"
+        @click.self="confirmDelNoteId = null">
+        <div class="w-full max-w-sm rounded-2xl p-6"
+          style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
+          <div class="text-center mb-4">
+            <div class="text-3xl mb-2">🗑️</div>
+            <p class="font-semibold text-slate-100 mb-1">Delete this note?</p>
+            <p class="text-xs text-slate-400">This will permanently remove the note.</p>
+          </div>
+          <div class="flex gap-3">
+            <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
+              @click="confirmDelNoteId = null">Cancel</button>
+            <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
+              style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
+              @click="deleteNote">Yes, Delete</button>
           </div>
         </div>
       </div>
