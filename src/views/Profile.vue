@@ -156,8 +156,8 @@ async function leaveClub(clubId) {
       <div v-for="s in myStats" :key="s.id"
         class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0 gap-2">
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold text-slate-100">{{ s.display_name }}</div>
-          <div class="text-[11px] text-slate-500">{{ clubName(s.club_id) }}</div>
+          <div class="text-sm font-semibold text-slate-100">{{ clubName(s.club_id) }}</div>
+          <div class="text-[11px] text-slate-500">{{ s.display_name }}</div>
         </div>
         <div class="text-right shrink-0">
           <div class="text-sm font-extrabold text-neon">Rank #{{ s.club_rank }}</div>
