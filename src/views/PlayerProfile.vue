@@ -193,7 +193,9 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
     <!-- Stats row -->
     <div v-if="stats" class="grid grid-cols-4 gap-2 mb-4 fade-up">
       <div class="card p-3 text-center">
-        <div class="text-lg font-extrabold text-gold">#{{ stats.club_rank }}</div>
+        <div class="text-lg font-extrabold" :class="stats.games > 0 ? 'text-gold' : 'text-slate-600'">
+          {{ stats.games > 0 ? '#' + stats.club_rank : '—' }}
+        </div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Rank</div>
       </div>
       <div class="card p-3 text-center">
