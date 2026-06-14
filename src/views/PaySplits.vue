@@ -1015,21 +1015,11 @@ const isMe = id => myPlayer.value?.id === id
       <!-- Wallet balance summary -->
       <div class="card p-4">
         <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Common Wallet</div>
-        <div class="grid grid-cols-3 gap-3 text-center mb-3">
-          <div>
-            <div class="text-[10px] text-slate-500 mb-1">Contributed</div>
-            <div class="text-base font-extrabold text-emerald-400">{{ aed(walletTotalContributed) }}</div>
-          </div>
-          <div>
-            <div class="text-[10px] text-slate-500 mb-1">Spent</div>
-            <div class="text-base font-extrabold text-rose-400">{{ aed(walletTotalExpenses) }}</div>
-          </div>
-          <div>
-            <div class="text-[10px] text-slate-500 mb-1">Balance</div>
-            <div class="text-base font-extrabold"
-              :class="walletBalance >= 0 ? 'text-neon' : 'text-rose-400'">
-              {{ aed(walletBalance) }}
-            </div>
+        <div class="text-center mb-3">
+          <div class="text-[10px] text-slate-500 mb-1">Wallet Balance</div>
+          <div class="text-2xl font-extrabold"
+            :class="walletBalance >= 0 ? 'text-neon' : 'text-rose-400'">
+            {{ aed(walletBalance) }}
           </div>
         </div>
         <div class="text-[10px] text-slate-600 text-center">
