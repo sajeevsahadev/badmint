@@ -37,7 +37,7 @@ async function load() {
 
   club.value        = clubRes.data
   members.value     = memberRes.data ?? []
-  leaderboard.value = lbRes.data ?? []
+  leaderboard.value = (lbRes.data ?? []).filter(p => p.games > 0)
 
   // Find this club's ranking from the public list
   ranking.value = (rankRes.data ?? []).find(c => c.id === clubId) ?? null
