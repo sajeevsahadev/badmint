@@ -24,8 +24,23 @@ const CATEGORIES = [
 ]
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-const catIcon  = v => CATEGORIES.find(c => c.value === v)?.icon  ?? '💡'
-const catLabel = v => CATEGORIES.find(c => c.value === v)?.label ?? v
+const CAT_COLORS = {
+  facility:  '#00e5ff',
+  food:      '#fbbf24',
+  drinks:    '#a855f7',
+  equipment: '#34d399',
+  transport: '#f87171',
+  tax:       '#94a3b8',
+  other:     '#6b7280',
+}
+
+// custom categories — stored in localStorage per club
+const customCategories = ref([])
+const allCategories    = computed(() => [...CATEGORIES, ...customCategories.value])
+
+const catIcon  = v => allCategories.value.find(c => c.value === v)?.icon  ?? '🏷️'
+const catLabel = v => allCategories.value.find(c => c.value === v)?.label ?? v
+const catColor = v => CAT_COLORS[v] ?? '#818cf8'
 const aed      = n => `${CURRENCY} ${Number(n).toFixed(2)}`
 const fmtDate  = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
 const fmtDatetime = ts => new Date(ts).toLocaleString('en-AE', {
@@ -109,6 +124,7 @@ async function load() {
   openingBalances.value = obRes.error ? [] : [...(obRes.data ?? [])].sort(
     (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
   )
+  loadCats()
   } finally {
     loading.value = false
   }
@@ -670,6 +686,51 @@ const perShare = computed(() => {
 })
 
 const isMe = id => myPlayer.value?.id === id
+
+// ── Custom categories (per-club, localStorage) ─────────────────────────
+const showAddCat = ref(false)
+const newCatName = ref('')
+
+function loadCats() {
+  const cid = currentClub.value?.club_id
+  if (!cid) { customCategories.value = []; return }
+  try {
+    const stored = localStorage.getItem(`b360_cats_${cid}`)
+    customCategories.value = stored ? JSON.parse(stored) : []
+  } catch { customCategories.value = [] }
+}
+
+function saveCats() {
+  const cid = currentClub.value?.club_id
+  if (!cid) return
+  localStorage.setItem(`b360_cats_${cid}`, JSON.stringify(customCategories.value))
+}
+
+function confirmAddCategory() {
+  const name = newCatName.value.trim()
+  if (!name) return
+  const value = 'custom_' + Date.now()
+  customCategories.value = [...customCategories.value, { value, label: name, icon: '🏷️' }]
+  form.value.category = value
+  saveCats()
+  showAddCat.value = false
+  newCatName.value = ''
+}
+
+// ── Category breakdown for Insights tab ───────────────────────────────
+const categoryBreakdown = computed(() => {
+  const map = {}
+  expenses.value.forEach(e => {
+    const cat = e.category ?? 'other'
+    if (!map[cat]) map[cat] = { label: catLabel(cat), icon: catIcon(cat), color: catColor(cat), total: 0, count: 0 }
+    map[cat].total  = Math.round((map[cat].total + Number(e.amount)) * 100) / 100
+    map[cat].count++
+  })
+  const grandTotal = Object.values(map).reduce((s, v) => s + v.total, 0)
+  return Object.entries(map)
+    .map(([key, v]) => ({ key, ...v, pct: grandTotal > 0 ? Math.round(v.total / grandTotal * 100) : 0 }))
+    .sort((a, b) => b.total - a.total)
+})
 </script>
 
 <template>
@@ -693,7 +754,7 @@ const isMe = id => myPlayer.value?.id === id
           <p><strong class="text-slate-800">Balance</strong> — Who owes whom. With <strong>Simplify debts ON</strong>, the app restructures debts into the fewest possible payments (totals never change). OFF shows debts exactly as recorded. Tap a name to expand.</p>
           <p><strong class="text-slate-800">Opening Balances</strong> — Migrating from another app? A club admin can record each player's starting balance once (positive = gets back, negative = owes).</p>
           <p><strong class="text-slate-800">Wallet</strong> — Shared cash pool. Contributions are consumed oldest-first (FIFO) when a wallet expense is recorded.</p>
-          <p><strong class="text-slate-800">Totals</strong> — Monthly spending charts and all-time summary.</p>
+          <p><strong class="text-slate-800">Insights</strong> — Category breakdown chart, monthly spending, and all-time summary.</p>
           <p><strong class="text-slate-800">Notes</strong> — Shared notepad for payment reminders.</p>
         </div>
       </template>
@@ -748,7 +809,7 @@ const isMe = id => myPlayer.value?.id === id
           { key: 'activities', label: 'Expenses' },
           { key: 'balance',    label: 'Balance' },
           { key: 'wallet',     label: 'Wallet' },
-          { key: 'totals',     label: 'Totals' },
+          { key: 'totals',     label: 'Insights' },
           { key: 'notes',      label: 'Notes' }
         ]" :key="t.key"
         @click="activeTab = t.key"
@@ -1174,6 +1235,33 @@ const isMe = id => myPlayer.value?.id === id
         </div>
       </div>
 
+      <!-- Category Breakdown -->
+      <div class="card p-4 mb-5">
+        <div class="text-xs font-semibold text-slate-300 mb-4">By Category</div>
+        <div v-if="!categoryBreakdown.length" class="text-sm text-slate-500 text-center py-4">
+          No expenses yet
+        </div>
+        <div v-else class="space-y-4">
+          <div v-for="c in categoryBreakdown" :key="c.key">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs text-slate-300 flex items-center gap-1.5">
+                <span>{{ c.icon }}</span>
+                <span>{{ c.label }}</span>
+                <span class="text-[10px] text-slate-600">({{ c.count }})</span>
+              </span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-500">{{ c.pct }}%</span>
+                <span class="text-xs font-bold text-slate-200">{{ aed(c.total) }}</span>
+              </div>
+            </div>
+            <div class="h-2 rounded-full" style="background:rgba(255,255,255,.06)">
+              <div class="h-2 rounded-full transition-all duration-700"
+                :style="{ width: c.pct + '%', background: c.color }" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="card overflow-hidden">
         <div class="px-4 py-3 border-b border-white/[0.06]">
           <div class="text-xs font-semibold text-slate-300">Monthly Breakdown</div>
@@ -1253,12 +1341,31 @@ const isMe = id => myPlayer.value?.id === id
             <div>
               <label class="label">Category</label>
               <div class="flex flex-wrap gap-2">
-                <button v-for="c in CATEGORIES" :key="c.value"
+                <button v-for="c in allCategories" :key="c.value"
                   @click="form.category = c.value"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
                   :class="form.category === c.value ? 'text-white font-bold' : 'text-slate-500 border border-slate-200 hover:border-slate-400'"
                   :style="form.category === c.value ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
                   {{ c.icon }} {{ c.label }}
+                </button>
+                <!-- Add new category -->
+                <div v-if="showAddCat" class="flex items-center gap-1.5 w-full mt-1">
+                  <input v-model="newCatName" type="text" placeholder="Category name…"
+                    class="input text-xs h-8 flex-1 px-2 py-1"
+                    maxlength="30"
+                    @keyup.enter="confirmAddCategory"
+                    @keyup.escape="showAddCat = false; newCatName = ''" />
+                  <button @click="confirmAddCategory"
+                    class="px-3 h-8 rounded-xl text-xs font-semibold text-white shrink-0"
+                    style="background:linear-gradient(135deg,#00b4cc,#0077a0)">Add</button>
+                  <button @click="showAddCat = false; newCatName = ''"
+                    class="text-slate-400 hover:text-slate-600 text-sm shrink-0">✕</button>
+                </div>
+                <button v-else
+                  @click="showAddCat = true"
+                  class="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 transition-all hover:border-slate-400"
+                  style="border:1px dashed rgba(100,116,139,.5)">
+                  + Add new
                 </button>
               </div>
             </div>
