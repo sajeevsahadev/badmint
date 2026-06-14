@@ -60,7 +60,7 @@ async function loadClubData() {
   const cid = currentClub.value.club_id
 
   const [{ data: lb }, { data: bp }] = await Promise.all([
-    supabase.from('v_leaderboard').select('*').eq('club_id', cid).order('club_rank'),
+    supabase.from('v_leaderboard').select('*').eq('club_id', cid).gt('games', 0).order('club_rank'),
     supabase.from('v_best_pairs').select('*').eq('club_id', cid)
       .order('win_pct', { ascending: false }).order('games', { ascending: false }).limit(3),
   ])
@@ -198,31 +198,6 @@ const fmtDate = d => d
           class="shrink-0 text-xs text-neon hover:opacity-75 transition mt-1">
           Club Profile →
         </RouterLink>
-      </div>
-    </div>
-
-    <!-- ── 2. Coming Soon ──────────────────────────────────────────────── -->
-    <div>
-      <p class="label mb-2">🚀 Coming Soon</p>
-      <div class="card overflow-hidden">
-        <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
-          <span class="text-2xl shrink-0">🏆</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-slate-800">Tournaments</p>
-            <p class="text-xs text-slate-400 mt-0.5">Club &amp; regional badminton events</p>
-          </div>
-          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
-            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
-        </div>
-        <div class="flex items-center gap-3 px-4 py-3.5">
-          <span class="text-2xl shrink-0">🏟️</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-slate-800">Court Booking</p>
-            <p class="text-xs text-slate-400 mt-0.5">Reserve your court in advance</p>
-          </div>
-          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
-            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
-        </div>
       </div>
     </div>
 
@@ -462,6 +437,31 @@ const fmtDate = d => d
           <span v-if="currentClub?.club_id === c.club_id"
             class="shrink-0 text-xs font-bold text-cyan-600">Active</span>
           <span v-else class="shrink-0 text-slate-300 text-sm">→</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Coming Soon ───────────────────────────────────────────────── -->
+    <div>
+      <p class="label mb-2">🚀 Coming Soon</p>
+      <div class="card overflow-hidden">
+        <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
+          <span class="text-2xl shrink-0">🏆</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-slate-800">Tournaments</p>
+            <p class="text-xs text-slate-400 mt-0.5">Club &amp; regional badminton events</p>
+          </div>
+          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
+            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
+        </div>
+        <div class="flex items-center gap-3 px-4 py-3.5">
+          <span class="text-2xl shrink-0">🏟️</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-slate-800">Court Booking</p>
+            <p class="text-xs text-slate-400 mt-0.5">Reserve your court in advance</p>
+          </div>
+          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
+            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
         </div>
       </div>
     </div>
