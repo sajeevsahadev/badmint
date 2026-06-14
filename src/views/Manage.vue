@@ -218,6 +218,14 @@ async function createAndLinkFacility() {
 }
 
 async function changeRole(userId, newRole) {
+  const member = members.value.find(m => m.user_id === userId)
+  if (member?.role === 'owner' && newRole !== 'owner') {
+    const ownerCount = members.value.filter(m => m.role === 'owner').length
+    if (ownerCount <= 1) {
+      note.value = { ok: false, t: 'Cannot change role — at least one owner must remain in the club.' }
+      return
+    }
+  }
   const { error } = await supabase
     .from('club_members')
     .update({ role: newRole })
