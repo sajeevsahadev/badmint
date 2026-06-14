@@ -919,16 +919,14 @@ const categoryBreakdown = computed(() => {
                   <template v-if="walletExpenseContributors[exp.id]?.length">
                     <template v-for="(wc, i) in walletExpenseContributors[exp.id]" :key="wc.player_id">
                       <span v-if="i > 0">, </span>
-                      <span class="text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors"
-                        @click.stop="router.push('/player/' + wc.player_id)">{{ wc.name }}</span>
+                      <span class="text-slate-400">{{ wc.name }}</span>
                     </template>
                   </template>
                   <span v-else class="text-slate-500">common pool</span>
                   <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
                 </template>
                 <template v-else>
-                  <span class="text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors"
-                    @click.stop="router.push('/player/' + exp.paid_player_id)">{{ exp.paid_name }}</span>
+                  <span class="text-slate-400">{{ exp.paid_name }}</span>
                   <span> paid {{ aed(exp.amount) }}</span>
                 </template>
               </div>
