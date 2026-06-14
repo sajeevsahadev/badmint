@@ -9,6 +9,7 @@ const { user } = useAuth()
 
 // ── Tab state ──
 const tab = ref('stats')
+function switchTab(t) { tab.value = t; err.value = '' }
 
 const TABS = [
   { v: 'stats',       l: '📊 Stats' },
@@ -55,6 +56,10 @@ const renaming    = ref(false)
 const editFacModal = ref(null)  // { id, name, address, emirate, courts_count }
 const saving       = ref(false)
 
+// ── Add facility modal ──
+const addFacModal = ref(null)
+const addingFac   = ref(false)
+
 // ── Boot ──
 async function checkAdmin() {
   const { data } = await supabase.rpc('get_my_roles')
@@ -90,7 +95,8 @@ async function loadClubs() {
 
 async function loadFacilities() {
   const { data, error } = await supabase.rpc('admin_get_facilities')
-  if (!error) facilities.value = data ?? []
+  if (error) { err.value = error.message; return }
+  facilities.value = data ?? []
 }
 
 async function loadTournaments() {
@@ -185,6 +191,27 @@ async function saveEditFacility() {
   await loadFacilities()
 }
 
+function openAddFacility() {
+  addFacModal.value = { name: '', address: '', emirate: '', courts_count: '', image_url: '' }
+}
+
+async function saveAddFacility() {
+  if (!addFacModal.value.name.trim()) return
+  addingFac.value = true
+  const { error } = await supabase.rpc('admin_create_facility', {
+    p_name:         addFacModal.value.name.trim(),
+    p_address:      addFacModal.value.address     || null,
+    p_emirate:      addFacModal.value.emirate     || null,
+    p_courts_count: addFacModal.value.courts_count ? Number(addFacModal.value.courts_count) : null,
+    p_image_url:    addFacModal.value.image_url   || null,
+  })
+  addingFac.value = false
+  if (error) { err.value = error.message; return }
+  flash('Facility created')
+  addFacModal.value = null
+  await Promise.all([loadFacilities(), loadStats()])
+}
+
 // ── Shared delete (clubs / facilities / tournaments) ──
 function openDelete(type, id, name, warning) {
   deleteModal.value = { type, id, name, warning }
@@ -208,6 +235,15 @@ async function confirmDelete() {
 }
 
 // ── Helpers ──
+function deviceIcon(ua) {
+  if (!ua) return ''
+  if (/iPhone|iPad/i.test(ua)) return '🍎'
+  if (/Android/i.test(ua))     return '🤖'
+  if (/Windows/i.test(ua))     return '🖥'
+  if (/Mac/i.test(ua))         return '💻'
+  return '🌐'
+}
+
 const roleChip = r => ({
   app_admin:           'bg-rose-50 text-rose-700 border-rose-200',
   tournament_director: 'bg-violet-50 text-violet-700 border-violet-200',
@@ -230,16 +266,16 @@ const fmtDate  = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeri
 const fmtShort = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' }) : '—'
 
 const statItems = computed(() => !stats.value ? [] : [
-  { l: 'Total Users',      v: stats.value.total_users,       icon: '👥' },
-  { l: 'Clubs',            v: stats.value.total_clubs,        icon: '🏸' },
-  { l: 'Members',          v: stats.value.total_members,      icon: '📋' },
-  { l: 'Matches Recorded', v: stats.value.total_matches,      icon: '🎯' },
-  { l: 'Tournaments',      v: stats.value.total_tournaments,  icon: '🏆' },
-  { l: 'Live Now',         v: stats.value.live_tournaments,   icon: '🔴' },
-  { l: 'Facilities',       v: stats.value.total_facilities,   icon: '🏢' },
-  { l: 'Directors',        v: stats.value.directors,          icon: '🎖️' },
-  { l: 'Matches (30d)',    v: stats.value.matches_last_30d,   icon: '📈' },
-  { l: 'New Users (7d)',   v: stats.value.new_users_last_7d,  icon: '✨' },
+  { l: 'Total Users',      v: stats.value.total_users,       icon: '👥', tab: 'users' },
+  { l: 'Clubs',            v: stats.value.total_clubs,        icon: '🏸', tab: 'clubs' },
+  { l: 'Members',          v: stats.value.total_members,      icon: '📋', tab: 'clubs' },
+  { l: 'Matches Recorded', v: stats.value.total_matches,      icon: '🎯', tab: null },
+  { l: 'Tournaments',      v: stats.value.total_tournaments,  icon: '🏆', tab: 'tournaments' },
+  { l: 'Live Now',         v: stats.value.live_tournaments,   icon: '🔴', tab: 'tournaments' },
+  { l: 'Facilities',       v: stats.value.total_facilities,   icon: '🏢', tab: 'facilities' },
+  { l: 'Directors',        v: stats.value.directors,          icon: '🎖️', tab: 'roles' },
+  { l: 'Matches (30d)',    v: stats.value.matches_last_30d,   icon: '📈', tab: null },
+  { l: 'New Users (7d)',   v: stats.value.new_users_last_7d,  icon: '✨', tab: 'users' },
 ])
 </script>
 
@@ -266,7 +302,7 @@ const statItems = computed(() => !stats.value ? [] : [
           :class="tab === t.v
             ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
             : 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300'"
-          @click="tab = t.v">
+          @click="switchTab(t.v)">
           {{ t.l }}
         </button>
       </div>
@@ -284,11 +320,16 @@ const statItems = computed(() => !stats.value ? [] : [
         <div v-if="!stats" class="card p-8 text-center text-slate-400">Loading stats…</div>
         <template v-else>
           <div class="grid grid-cols-2 gap-3">
-            <div v-for="s in statItems" :key="s.l" class="card p-4">
+            <div v-for="s in statItems" :key="s.l" class="card p-4 transition-all"
+              :class="s.tab ? 'cursor-pointer hover:ring-1 hover:ring-cyan-400/40 active:scale-[0.98]' : ''"
+              @click="s.tab && switchTab(s.tab)">
               <p class="text-[10px] text-slate-400 uppercase tracking-widest mb-1">{{ s.l }}</p>
-              <div class="flex items-center gap-2">
-                <span class="text-xl">{{ s.icon }}</span>
-                <span class="text-2xl font-extrabold text-neon">{{ s.v ?? 0 }}</span>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xl">{{ s.icon }}</span>
+                  <span class="text-2xl font-extrabold text-neon">{{ s.v ?? 0 }}</span>
+                </div>
+                <span v-if="s.tab" class="text-[10px] text-slate-500">›</span>
               </div>
             </div>
           </div>
@@ -326,6 +367,10 @@ const statItems = computed(() => !stats.value ? [] : [
                   Joined {{ fmtDate(u.created_at) }}
                   <span v-if="u.last_sign_in"> · Last {{ fmtDate(u.last_sign_in) }}</span>
                   <span v-if="u.tournaments_created > 0"> · {{ u.tournaments_created }} tournament(s)</span>
+                </p>
+                <p v-if="u.login_count > 0 || u.last_ip" class="text-[10px] text-slate-400 mt-0.5">
+                  <span v-if="u.login_count">{{ u.login_count }} session(s)</span>
+                  <span v-if="u.last_ip" class="font-mono"> · {{ deviceIcon(u.last_user_agent) }} {{ u.last_ip }}</span>
                 </p>
               </div>
               <button class="shrink-0 btn-ghost text-xs px-3 py-1.5" @click="openGrant(u)">+ Role</button>
@@ -369,9 +414,9 @@ const statItems = computed(() => !stats.value ? [] : [
                 </div>
               </div>
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                <button class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-2.5 py-1.5"
+                <button class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Rename" @click="openRename(c)">✏️</button>
-                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-2.5 py-1.5"
+                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Delete"
                   @click="openDelete('club', c.club_id, c.name, 'Permanently deletes ALL matches, Elo history, and player data for this club. Cannot be undone.')">
                   🗑
@@ -385,7 +430,10 @@ const statItems = computed(() => !stats.value ? [] : [
 
       <!-- ── FACILITIES ─────────────────────────────────────────────────── -->
       <div v-if="tab === 'facilities'" class="space-y-3 fade-up">
-        <p class="text-xs text-slate-400">{{ facilities.length }} facilities on platform</p>
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-slate-400">{{ facilities.length }} facilities on platform</p>
+          <button class="btn-primary text-xs px-3 py-1.5 min-h-[36px]" @click="openAddFacility">+ Add Facility</button>
+        </div>
         <div class="space-y-2">
           <div v-for="f in facilities" :key="f.id" class="card p-4">
             <div class="flex items-start gap-2">
@@ -403,9 +451,9 @@ const statItems = computed(() => !stats.value ? [] : [
                 <p v-if="f.creator_email" class="text-[10px] text-slate-300 mt-0.5">by {{ f.creator_email }}</p>
               </div>
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                <button class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-2.5 py-1.5"
+                <button class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Edit" @click="openEditFacility(f)">✏️</button>
-                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-2.5 py-1.5"
+                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Delete"
                   @click="openDelete('facility', f.id, f.name, 'Unlinks all clubs, removes all schedule slots and booking history. Cannot be undone.')">
                   🗑
@@ -442,9 +490,9 @@ const statItems = computed(() => !stats.value ? [] : [
               </div>
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
                 <RouterLink :to="'/tournament/' + t.id"
-                  class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-2.5 py-1.5"
+                  class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="View">👁</RouterLink>
-                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-2.5 py-1.5"
+                <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Delete"
                   @click="openDelete('tournament', t.id, t.name, 'Deletes all registrations, bracket matches, and results. Cannot be undone.')">
                   🗑
@@ -612,6 +660,49 @@ const statItems = computed(() => !stats.value ? [] : [
           <button class="btn-ghost flex-1" @click="renameModal = null">Cancel</button>
           <button class="btn-primary flex-1" :disabled="renaming || !renameModal.name.trim()" @click="saveRename">
             {{ renaming ? 'Saving…' : 'Rename' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Facility Modal -->
+    <div v-if="addFacModal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.5);backdrop-filter:blur(4px)"
+      @click.self="addFacModal = null">
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
+        style="background:#f8fafc;border:1px solid rgba(0,229,255,.2)">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-display font-bold text-slate-800">Add Facility</h3>
+          <button class="text-slate-400 hover:text-slate-700 text-xl min-w-[44px] min-h-[44px] flex items-center justify-center" @click="addFacModal = null">✕</button>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="label">Name <span class="text-rose-400">*</span></label>
+            <input v-model="addFacModal.name" class="input" maxlength="100" placeholder="Facility name" />
+          </div>
+          <div>
+            <label class="label">Address</label>
+            <input v-model="addFacModal.address" class="input" maxlength="200" placeholder="Street address" />
+          </div>
+          <div>
+            <label class="label">City / Region</label>
+            <input v-model="addFacModal.emirate" class="input" maxlength="100" placeholder="e.g. Dubai, Mumbai, Riyadh" />
+          </div>
+          <div>
+            <label class="label">Courts</label>
+            <input v-model="addFacModal.courts_count" type="number" min="1" max="50" class="input"
+              placeholder="Number of courts" />
+          </div>
+          <div>
+            <label class="label">Image URL <span class="text-slate-400">(optional)</span></label>
+            <input v-model="addFacModal.image_url" class="input" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="flex gap-3 mt-5">
+          <button class="btn-ghost flex-1" @click="addFacModal = null">Cancel</button>
+          <button class="btn-primary flex-1" :disabled="addingFac || !addFacModal.name.trim()" @click="saveAddFacility">
+            {{ addingFac ? 'Creating…' : 'Create Facility' }}
           </button>
         </div>
       </div>
