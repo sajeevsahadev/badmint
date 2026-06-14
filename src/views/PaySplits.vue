@@ -1,12 +1,13 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
 
-const route = useRoute()
+const route  = useRoute()
+const router = useRouter()
 
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
@@ -376,6 +377,20 @@ const fifoResult = computed(() => {
 
 const expandedConsumed = ref(null)
 const expandedExp      = ref(null)
+
+// For wallet-paid expenses: map expenseId → [{ name, player_id, amount }]
+// Inverts fifoResult.consumedBy so the collapsed card can show who funded it.
+const walletExpenseContributors = computed(() => {
+  const map = {}
+  const allContribs = [...fifoResult.value.active, ...fifoResult.value.consumed]
+  allContribs.forEach(c => {
+    c.consumedBy.forEach(cb => {
+      if (!map[cb.expenseId]) map[cb.expenseId] = []
+      map[cb.expenseId].push({ name: c.player_name, player_id: c.player_id, amount: cb.amount })
+    })
+  })
+  return map
+})
 
 // Auto-expand the current user's row when switching to the Balance tab;
 // also collapse the "Plus N more" summary each time.
@@ -896,9 +911,23 @@ const categoryBreakdown = computed(() => {
                 </span>
               </div>
               <div class="text-[11px] text-slate-500">
-                {{ exp.paid_from_wallet
-                  ? 'From common wallet · ' + aed(exp.amount)
-                  : exp.paid_name + ' paid ' + aed(exp.amount) }}
+                <template v-if="exp.paid_from_wallet">
+                  <span>Wallet · </span>
+                  <template v-if="walletExpenseContributors[exp.id]?.length">
+                    <template v-for="(wc, i) in walletExpenseContributors[exp.id]" :key="wc.player_id">
+                      <span v-if="i > 0">, </span>
+                      <span class="text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors"
+                        @click.stop="router.push('/player/' + wc.player_id)">{{ wc.name }}</span>
+                    </template>
+                  </template>
+                  <span v-else class="text-slate-500">common pool</span>
+                  <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
+                </template>
+                <template v-else>
+                  <span class="text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors"
+                    @click.stop="router.push('/player/' + exp.paid_player_id)">{{ exp.paid_name }}</span>
+                  <span> paid {{ aed(exp.amount) }}</span>
+                </template>
               </div>
             </div>
             <!-- Your share -->
