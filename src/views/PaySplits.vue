@@ -732,6 +732,9 @@ const perShare = computed(() => {
 
 const isMe = id => myPlayer.value?.id === id
 
+// Resolve which player record created an expense (for the expanded card "Added by" line)
+const expCreatorPlayer = exp => players.value.find(p => p.user_id === exp.created_by) ?? null
+
 // ── Custom categories (per-club, localStorage) ─────────────────────────
 const showAddCat = ref(false)
 const newCatName = ref('')
@@ -950,6 +953,39 @@ const categoryBreakdown = computed(() => {
           <!-- Expanded details -->
           <div v-if="expandedExp === exp.id"
             class="px-4 pb-4 pt-3 border-t border-white/[.05]">
+
+            <!-- Added by + timestamp -->
+            <div class="flex items-center gap-1.5 mb-3">
+              <span class="text-[10px] text-slate-600">Added by</span>
+              <span class="text-[10px] font-medium"
+                :class="expCreatorPlayer(exp) ? 'text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors' : 'text-slate-400'"
+                @click.stop="expCreatorPlayer(exp) && router.push('/player/' + expCreatorPlayer(exp).id)">
+                {{ expCreatorPlayer(exp)?.display_name ?? (exp.created_by === user?.id ? 'You' : 'Member') }}
+              </span>
+              <span class="text-[10px] text-slate-600">·</span>
+              <span class="text-[10px] text-slate-600">{{ fmtDatetime(exp.created_at) }}</span>
+            </div>
+
+            <!-- Wallet funding breakdown — shows exactly who funded how much via FIFO -->
+            <div v-if="exp.paid_from_wallet && walletExpenseContributors[exp.id]?.length"
+              class="rounded-xl overflow-hidden mb-3"
+              style="background:rgba(168,85,247,.07); border:1px solid rgba(168,85,247,.18)">
+              <div class="px-3 py-2 flex items-center gap-1.5">
+                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#c084fc">💰 Wallet funded by</span>
+              </div>
+              <div v-for="wc in walletExpenseContributors[exp.id]" :key="wc.player_id"
+                class="flex items-center justify-between px-3 py-2 border-t"
+                style="border-color:rgba(168,85,247,.12)">
+                <span class="text-xs underline underline-offset-2 cursor-pointer hover:text-neon transition-colors"
+                  :class="wc.player_id === myPlayer?.id ? 'text-neon font-semibold' : 'text-slate-300'"
+                  @click.stop="router.push('/player/' + wc.player_id)">
+                  {{ wc.player_id === myPlayer?.id ? 'You' : wc.name }}
+                </span>
+                <span class="text-xs font-semibold" style="color:#c084fc">{{ aed(wc.amount) }}</span>
+              </div>
+            </div>
+
+            <!-- Split summary -->
             <div class="text-[11px] text-slate-500 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
               <span v-if="exp.participants?.length">
