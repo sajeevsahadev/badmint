@@ -36,6 +36,12 @@ watch(needRefresh, (yes) => {
 // ── Hamburger menu sections ──────────────────────────────────────────────────
 const menuSections = [
   {
+    label: 'Account',
+    items: [
+      { to: '/profile', icon: '👤', label: 'My Profile' },
+    ]
+  },
+  {
     label: 'Match Day',
     items: [
       { to: '/match',    icon: '➕', label: 'Add Match' },
@@ -62,12 +68,6 @@ const menuSections = [
       { to: '/explore', icon: '🌍', label: 'Explore Clubs & Facilities' },
     ]
   },
-  {
-    label: 'Account',
-    items: [
-      { to: '/profile', icon: '👤', label: 'My Profile' },
-    ]
-  }
 ]
 
 function closeMenu() { showMenu.value = false }
