@@ -221,7 +221,7 @@ async function confirmDelete() {
   deleting.value = true; err.value = ''
   const { type, id } = deleteModal.value
   let error
-  if (type === 'club')       ({ error } = await supabase.rpc('delete_club',             { p_club_id:       id }))
+  if (type === 'club')       ({ error } = await supabase.rpc('admin_delete_club',       { p_club_id:       id }))
   if (type === 'facility')   ({ error } = await supabase.rpc('admin_delete_facility',   { p_id:            id }))
   if (type === 'tournament') ({ error } = await supabase.rpc('delete_tournament',       { p_tournament_id: id }))
   deleting.value = false
