@@ -732,6 +732,13 @@ const perShare = computed(() => {
 
 const isMe = id => myPlayer.value?.id === id
 
+// Resolve display name of any auth-user UUID from the club's player list
+const resolveUserName = uid => {
+  if (!uid) return 'Member'
+  if (uid === user.value?.id) return 'You'
+  return players.value.find(p => p.user_id === uid)?.display_name ?? 'Manager'
+}
+
 // Resolve which player record created an expense (for the expanded card "Added by" line)
 const expCreatorPlayer = exp => players.value.find(p => p.user_id === exp.created_by) ?? null
 
@@ -1188,10 +1195,13 @@ const categoryBreakdown = computed(() => {
         </div>
       </div>
 
-      <!-- Add Contribution button -->
-      <button class="btn-primary w-full py-3 text-sm" @click="openWalletAddForm">
+      <!-- Add Contribution — managers/owners only; players can still add wallet-paid expenses -->
+      <button v-if="isManager()" class="btn-primary w-full py-3 text-sm" @click="openWalletAddForm">
         ➕ Add Contribution
       </button>
+      <div v-else class="text-center text-xs text-slate-500 py-2">
+        Contributions are managed by club managers · you can still pay expenses from the wallet
+      </div>
 
       <!-- ── Active FIFO Queue ── -->
       <div class="card overflow-hidden">
@@ -1221,6 +1231,9 @@ const categoryBreakdown = computed(() => {
                 </div>
                 <div class="text-[10px] text-slate-500">
                   {{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span>
+                </div>
+                <div class="text-[10px] text-slate-600">
+                  Added by {{ resolveUserName(c.created_by) }}
                 </div>
               </div>
             </div>
@@ -1267,6 +1280,7 @@ const categoryBreakdown = computed(() => {
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
                 </div>
                 <div class="text-[10px] text-slate-600">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
+                <div class="text-[10px] text-slate-700">Added by {{ resolveUserName(c.created_by) }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
