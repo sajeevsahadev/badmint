@@ -22,6 +22,14 @@ let   _memberErrTimer = null
 const facNote      = ref(null)
 const busy         = ref(false)
 
+// Guest players (no account linked)
+const guestPlayers     = ref([])
+const guestInviteId    = ref(null)
+const guestInviteEmail = ref('')
+const guestInviteLink  = ref('')
+const guestInviteNote  = ref(null)
+const guestInviteBusy  = ref(false)
+
 // Existing facility info (club's own fields)
 const facility = ref({ emirates: '', facility_name: '', facility_address: '', maps_url: '', description: '' })
 
@@ -37,7 +45,7 @@ const pendingRequests = computed(() => requests.value.filter(r => r.status === '
 async function load() {
   if (!currentClub.value) return
   const cid = currentClub.value.club_id
-  const [{ data: c }, { data: m }, { data: r }, { data: playerNames }] = await Promise.all([
+  const [{ data: c }, { data: m }, { data: r }, { data: playerNames }, { data: guests }] = await Promise.all([
     supabase.from('ranking_config').select('*').eq('club_id', cid).single(),
     supabase.from('club_members').select('user_id, role').eq('club_id', cid),
     isManager()
@@ -45,6 +53,7 @@ async function load() {
       : { data: [] },
     // player display_names for this club (linked accounts only)
     supabase.from('players').select('user_id, display_name').eq('club_id', cid).not('user_id', 'is', null),
+    supabase.from('players').select('id, display_name').eq('club_id', cid).is('user_id', null).eq('is_active', true),
   ])
   cfg.value      = c
   requests.value = r ?? []
@@ -66,6 +75,7 @@ async function load() {
       playerMap[member.user_id]?.display_name ||
       '—',
   }))
+  guestPlayers.value = guests ?? []
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
@@ -122,7 +132,12 @@ async function rejectRequest(id) {
   requests.value = requests.value.map(r => r.id === id ? { ...r, status: 'rejected' } : r)
 }
 
-async function deleteRequest(id) {
+const confirmDelReqId = ref(null)
+
+async function deleteRequest() {
+  const id = confirmDelReqId.value
+  confirmDelReqId.value = null
+  if (!id) return
   const { error } = await supabase.rpc('delete_join_request', { p_request_id: id })
   if (error) { note.value = { ok: false, t: error.message }; return }
   requests.value = requests.value.filter(r => r.id !== id)
@@ -157,6 +172,38 @@ function mailtoLink() {
     `Hi!\n\nYou've been invited to join "${club}" on Badminton 360 — the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! 🏸`
   )
   return `mailto:${inviteEmail.value}?subject=${subj}&body=${body}`
+}
+
+// ── Guest player invite (link existing roster entry to a Gmail account) ──
+async function sendGuestInvite() {
+  if (!guestInviteEmail.value.trim() || !guestInviteId.value) return
+  guestInviteBusy.value = true; guestInviteNote.value = null; guestInviteLink.value = ''
+  const { data, error } = await supabase.rpc('invite_guest_player', {
+    p_club_id:   currentClub.value.club_id,
+    p_player_id: guestInviteId.value,
+    p_email:     guestInviteEmail.value.trim(),
+  })
+  guestInviteBusy.value = false
+  if (error) {
+    guestInviteNote.value = { ok: false, t: error.message }
+  } else {
+    guestInviteLink.value = `${window.location.origin}/join?token=${data}`
+    guestInviteNote.value = { ok: true, t: 'Link generated! Share it so they can claim their Elo history.' }
+  }
+}
+
+function copyGuestLink() {
+  navigator.clipboard.writeText(guestInviteLink.value)
+  guestInviteNote.value = { ok: true, t: '✅ Link copied to clipboard!' }
+}
+
+function guestWhatsApp() {
+  const player = guestPlayers.value.find(p => p.id === guestInviteId.value)
+  const club   = currentClub.value?.clubs?.name ?? 'our club'
+  const msg    = encodeURIComponent(
+    `Hi ${player?.display_name ?? 'there'}!\n\nYou've been added to "${club}" on Badminton 360. Click the link below to sign in with Google and claim your account — your Elo ranking and match history will be waiting for you:\n${guestInviteLink.value}\n\nThe link expires in 7 days. See you on the court! 🏸`
+  )
+  window.open(`https://wa.me/?text=${msg}`, '_blank')
 }
 
 // ── Save facility info ──
@@ -370,7 +417,7 @@ async function leaveClub(clubId) {
             <button v-if="r.status === 'rejected'"
               class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
               title="Delete request"
-              @click="deleteRequest(r.id)">🗑</button>
+              @click="confirmDelReqId = r.id">🗑</button>
           </template>
           <template v-else>
             <button class="btn-success text-xs px-2.5 py-1" @click="approveRequest(r.id)">Approve</button>
@@ -459,7 +506,7 @@ async function leaveClub(clubId) {
   </div>
 
   <!-- ── Members ── -->
-  <div v-if="currentClub && members.length" class="card p-4 mb-4 fade-up">
+  <div v-if="currentClub && (members.length || guestPlayers.length)" class="card p-4 mb-4 fade-up">
     <div class="label">Members — {{ currentClub.clubs?.name }}</div>
 
     <div v-if="memberError"
@@ -473,7 +520,6 @@ async function leaveClub(clubId) {
       class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0 gap-2">
       <div class="flex-1 min-w-0">
         <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
-        <div class="text-[10px] text-slate-600 font-mono">{{ m.user_id.slice(0, 8) }}…</div>
       </div>
       <select
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
@@ -485,6 +531,59 @@ async function leaveClub(clubId) {
         <option v-if="currentClub.role === 'owner'" value="owner">👑 Owner</option>
       </select>
       <span v-else class="text-xs shrink-0">{{ roleLabel(m.role) }}</span>
+    </div>
+
+    <!-- Guest players (added manually, no Google account linked yet) -->
+    <div v-if="guestPlayers.length" class="mt-1 pt-3 border-t border-white/[0.06]">
+      <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Guest players — no account linked</div>
+
+      <div v-for="gp in guestPlayers" :key="gp.id" class="mb-1">
+        <div class="flex items-center justify-between py-2 gap-2">
+          <div class="text-sm text-slate-300 flex-1 truncate">{{ gp.display_name }}</div>
+          <button
+            class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+            style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"
+            @click="guestInviteId = gp.id; guestInviteEmail = ''; guestInviteLink = ''; guestInviteNote = null">
+            Link Account
+          </button>
+        </div>
+
+        <!-- Inline invite form for this player -->
+        <div v-if="guestInviteId === gp.id"
+          class="mb-3 p-3 rounded-xl fade-up"
+          style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12)">
+          <p class="text-[11px] text-slate-400 mb-2">
+            Enter their Gmail — they'll get a link to sign in and claim their Elo history.
+          </p>
+          <div class="flex gap-2 mb-2">
+            <input v-model="guestInviteEmail" type="email" placeholder="their@gmail.com"
+              class="input flex-1 text-sm"
+              @keyup.enter="sendGuestInvite" />
+            <button class="btn-primary px-3 text-sm shrink-0"
+              :disabled="guestInviteBusy || !guestInviteEmail.trim()"
+              @click="sendGuestInvite">
+              {{ guestInviteBusy ? '…' : 'Generate' }}
+            </button>
+          </div>
+          <div v-if="guestInviteNote" class="text-xs mb-2 px-2 py-1 rounded-lg"
+            :class="guestInviteNote.ok ? 'text-emerald-400' : 'text-rose-400'">
+            {{ guestInviteNote.t }}
+          </div>
+          <div v-if="guestInviteLink" class="fade-up">
+            <div class="text-xs text-slate-400 break-all font-mono mb-2 bg-white/[0.04] rounded-lg p-2 select-all">
+              {{ guestInviteLink }}
+            </div>
+            <div class="flex gap-2">
+              <button class="flex-1 btn-ghost text-xs py-2" @click="copyGuestLink">📋 Copy</button>
+              <button class="flex-1 text-xs py-2 rounded-xl font-semibold transition"
+                style="background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.3); color:#25d366"
+                @click="guestWhatsApp">WhatsApp</button>
+              <button class="text-slate-500 hover:text-slate-300 text-xs px-2 transition"
+                @click="guestInviteId = null">✕</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -748,6 +847,29 @@ async function leaveClub(clubId) {
           </div>
         </div>
 
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── Delete join request confirm ── -->
+  <Teleport to="body">
+    <div v-if="confirmDelReqId" class="fixed inset-0 z-50 flex items-center justify-center px-5"
+      style="background:rgba(0,0,0,.75);backdrop-filter:blur(6px)"
+      @click.self="confirmDelReqId = null">
+      <div class="w-full max-w-sm rounded-2xl p-6"
+        style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
+        <div class="text-center mb-4">
+          <div class="text-3xl mb-2">🗑️</div>
+          <p class="font-semibold text-slate-100 mb-1">Delete this request?</p>
+          <p class="text-xs text-slate-400">This will permanently remove the rejected join request.</p>
+        </div>
+        <div class="flex gap-3">
+          <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
+            @click="confirmDelReqId = null">Cancel</button>
+          <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
+            style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
+            @click="deleteRequest">Yes, Delete</button>
+        </div>
       </div>
     </div>
   </Teleport>
