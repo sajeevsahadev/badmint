@@ -470,6 +470,39 @@ const editingId  = ref(null)
 const formError  = ref(null)
 const formSaving = ref(false)
 
+const expSchedAttendeeIds = ref(new Set())
+const showAllExpPlayers   = ref(false)
+
+const formDisplayPlayers = computed(() => {
+  const active = players.value.filter(p => p.is_active)
+  if (!expSchedAttendeeIds.value.size || showAllExpPlayers.value) return active
+  return active.filter(p => expSchedAttendeeIds.value.has(p.id))
+})
+
+async function checkExpenseAttendees(date) {
+  expSchedAttendeeIds.value = new Set()
+  showAllExpPlayers.value   = false
+  if (!currentClub.value || !date) return
+  const { data: sched } = await supabase
+    .from('club_schedule').select('id')
+    .eq('club_id', currentClub.value.club_id)
+    .eq('scheduled_date', date)
+    .maybeSingle()
+  if (!sched) return
+  const { data: atts } = await supabase.rpc('get_schedule_attendees', { p_schedule_id: sched.id })
+  if (atts?.length) {
+    expSchedAttendeeIds.value = new Set(atts.map(a => a.player_id))
+    form.value.participant_ids = atts
+      .map(a => a.player_id)
+      .filter(id => players.value.find(p => p.id === id && p.is_active))
+  }
+}
+
+function selectCategory(cat) {
+  form.value.category = cat.value
+  if (!form.value.title.trim()) form.value.title = cat.label
+}
+
 const blankForm = () => ({
   title:           '',
   category:        'other',
@@ -483,11 +516,18 @@ const blankForm = () => ({
 
 const form = ref(blankForm())
 
+watch(() => form.value.expense_date, date => {
+  if (showForm.value && !editingId.value) checkExpenseAttendees(date)
+})
+
 function openAddForm() {
   editingId.value = null
   form.value      = blankForm()
   formError.value = null
+  expSchedAttendeeIds.value = new Set()
+  showAllExpPlayers.value   = false
   showForm.value  = true
+  checkExpenseAttendees(form.value.expense_date)
 }
 
 function openEditForm(exp) {
@@ -1457,7 +1497,7 @@ const categoryBreakdown = computed(() => {
               <label class="label">Category</label>
               <div class="flex flex-wrap gap-2">
                 <button v-for="c in allCategories" :key="c.value"
-                  @click="form.category = c.value"
+                  @click="selectCategory(c)"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
                   :class="form.category === c.value ? 'text-white font-bold' : 'text-slate-500 border border-slate-200 hover:border-slate-400'"
                   :style="form.category === c.value ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
@@ -1544,13 +1584,23 @@ const categoryBreakdown = computed(() => {
               <div class="flex items-center justify-between mb-2">
                 <label class="label mb-0">Split Among</label>
                 <div class="flex gap-3">
-                  <button class="text-[10px] text-cyan-600 font-semibold" @click="form.participant_ids = players.map(p => p.id)">All</button>
-                  <button class="text-[10px] text-slate-400" @click="form.participant_ids = []">None</button>
+                  <button class="text-[10px] text-cyan-600 font-semibold"
+                    @click="form.participant_ids = formDisplayPlayers.map(p => p.id)">All</button>
                   <button class="text-[10px] text-slate-400"
-                    @click="form.participant_ids = players.filter(p => p.is_active).map(p => p.id)">
-                    Active only
+                    @click="form.participant_ids = []">None</button>
+                  <button v-if="expSchedAttendeeIds.size && !showAllExpPlayers"
+                    class="text-[10px] text-violet-400 font-semibold"
+                    @click="showAllExpPlayers = true; form.participant_ids = players.filter(p => p.is_active).map(p => p.id)">
+                    Show all
                   </button>
                 </div>
+              </div>
+
+              <div v-if="expSchedAttendeeIds.size && !showAllExpPlayers"
+                class="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg text-[10px] text-violet-300"
+                style="background:rgba(168,85,247,.1); border:1px solid rgba(168,85,247,.2)">
+                <span>📋</span>
+                <span>Showing players who attended on this date</span>
               </div>
 
               <div v-if="perShare && form.participant_ids.length"
@@ -1559,7 +1609,7 @@ const categoryBreakdown = computed(() => {
               </div>
 
               <div class="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
-                <label v-for="p in players" :key="p.id"
+                <label v-for="p in formDisplayPlayers" :key="p.id"
                   class="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer transition-all text-sm select-none"
                   :class="form.participant_ids.includes(p.id)
                     ? 'font-medium text-slate-800'
