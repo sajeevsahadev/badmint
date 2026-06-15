@@ -44,11 +44,12 @@ const menuSections = [
   {
     label: 'Match Day',
     items: [
-      { to: '/match',    icon: '➕', label: 'Add Match' },
-      { to: '/matches',  icon: '📋', label: 'Matches' },
-      { to: '/compare',  icon: '📊', label: 'Compare Players' },
-      { to: '/schedule', icon: '📅', label: "Who's Playing?" },
-      { to: '/guide',    icon: '📖', label: 'Ranking Guide' },
+      { to: '/schedule',   icon: '📅', label: "Who's Playing?" },
+      { to: '/dashboard',  icon: '🏆', label: 'Leaderboard' },
+      { to: '/match',      icon: '➕', label: 'Add Match' },
+      { to: '/matches',    icon: '📋', label: 'Matches' },
+      { to: '/compare',    icon: '📊', label: 'Compare Players' },
+      { to: '/guide',      icon: '📖', label: 'Ranking Guide' },
     ]
   },
   {
