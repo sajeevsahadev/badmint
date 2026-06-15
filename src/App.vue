@@ -7,7 +7,8 @@ import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
 import { useInstall } from './composables/useInstall'
 import { useSession } from './composables/useSession'
-import OnboardingGuide from './components/OnboardingGuide.vue'
+import OnboardingGuide  from './components/OnboardingGuide.vue'
+import OnboardingWizard from './components/OnboardingWizard.vue'
 
 const { user, ready, signOut } = useAuth()
 const { clubs, currentClub, loadClubs, selectClub } = useClub()
@@ -22,10 +23,18 @@ const showMenu       = ref(false)
 const updating       = ref(false)
 const isAdmin        = ref(false)
 const showOnboarding = ref(false)
+const showWizard     = ref(false)
 
 const ONBOARDING_KEY = 'b360_onboarding_v1'
-function openGuide()  { showOnboarding.value = true; showMenu.value = false }
-function closeGuide() { showOnboarding.value = false; localStorage.setItem(ONBOARDING_KEY, '1') }
+const WIZARD_KEY     = 'b360_wizard_v1'
+
+function openGuide()   { showOnboarding.value = true;  showMenu.value = false }
+function closeGuide()  { showOnboarding.value = false; localStorage.setItem(ONBOARDING_KEY, '1') }
+function closeWizard() {
+  showWizard.value = false
+  localStorage.setItem(WIZARD_KEY, '1')
+  localStorage.setItem(ONBOARDING_KEY, '1')
+}
 
 // ── PWA update detection ──────────────────────────────────────────────────────
 // If a new SW is already waiting when the app opens (during loading screen),
@@ -86,8 +95,10 @@ async function init() {
     await loadClubs()
     await refreshPending()
   } catch {}
-  // Show onboarding guide on first ever login
-  if (!localStorage.getItem(ONBOARDING_KEY)) showOnboarding.value = true
+  // First-time users with no clubs get the setup wizard; returning users skip it
+  if (!localStorage.getItem(WIZARD_KEY) && clubs.value.length === 0) {
+    showWizard.value = true
+  }
   // Non-blocking: session + admin check don't need to hold up club/page loading
   startSession().catch(() => {})
   supabase.rpc('get_my_roles').then(({ data }) => {
@@ -419,7 +430,10 @@ const needsClub = computed(() =>
       </Transition>
     </Teleport>
 
-    <!-- Onboarding guide (first-time + burger menu replay) -->
+    <!-- New-user setup wizard (first login, no clubs) -->
+    <OnboardingWizard v-if="user && showWizard" @done="closeWizard" />
+
+    <!-- Story guide (accessible any time from hamburger → App Guide) -->
     <OnboardingGuide v-if="user && showOnboarding" @done="closeGuide" />
 
   </template>
