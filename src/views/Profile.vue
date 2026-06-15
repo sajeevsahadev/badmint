@@ -96,6 +96,54 @@ async function leaveClub(clubId) {
     leaveNote.value = 'You have left the club.'
   }
 }
+
+// ── Delete Account (GDPR) ────────────────────────────────────────────────────
+const showDeleteModal  = ref(false)
+const deleteConfirmText = ref('')
+const deleteChecked    = ref(false)
+const deleting         = ref(false)
+const deleteError      = ref(null)
+const deleteCheckResult = ref(null)  // { can_delete, reason, details }
+
+async function openDeleteModal() {
+  deleteConfirmText.value = ''
+  deleteChecked.value = false
+  deleteError.value = null
+  deleteCheckResult.value = null
+  deleting.value = false
+  showDeleteModal.value = true
+  // Run pre-check so user sees their block reason immediately
+  const { data } = await supabase.rpc('check_can_delete_account')
+  deleteCheckResult.value = data
+}
+
+async function confirmDelete() {
+  if (deleteConfirmText.value !== 'DELETE') { deleteError.value = 'Type DELETE to confirm'; return }
+  if (!deleteChecked.value) { deleteError.value = 'Please tick the confirmation box'; return }
+  deleteError.value = null
+  deleting.value = true
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const resp = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    )
+    const body = await resp.json()
+    if (!resp.ok) throw new Error(body.error || 'Deletion failed')
+    // Account deleted — sign out and redirect
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  } catch (e) {
+    deleteError.value = e.message
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -181,5 +229,138 @@ async function leaveClub(clubId) {
       <div class="text-2xl mb-2">🎯</div>
       <p>No match stats yet. Ask your manager to link your account to a player.</p>
     </div>
+
+    <!-- ── Danger Zone ──────────────────────────────────────────────────── -->
+    <div class="mt-6 mb-2 fade-up">
+      <div class="rounded-2xl border border-rose-200/60 overflow-hidden" style="background:#fff9f9;">
+        <div class="px-4 py-3 border-b border-rose-100 flex items-center gap-2">
+          <span class="text-base">⚠️</span>
+          <span class="text-xs font-bold text-rose-600 uppercase tracking-widest">Danger Zone</span>
+        </div>
+        <div class="px-4 py-4">
+          <div class="text-sm font-semibold text-slate-800 mb-1">Delete My Account</div>
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">
+            Permanently remove your account and all personal data from Badminton 360.
+            Club match history is preserved (anonymised) so Elo rankings stay accurate.
+          </p>
+          <button
+            @click="openDeleteModal"
+            class="text-xs font-bold text-rose-600 border border-rose-300 rounded-xl px-4 py-2 hover:bg-rose-50 transition"
+          >
+            Delete My Account…
+          </button>
+        </div>
+      </div>
+    </div>
+
   </template>
+
+  <!-- ── Delete Account Modal ─────────────────────────────────────────────── -->
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div v-if="showDeleteModal"
+        class="fixed inset-0 z-[300] flex items-end sm:items-center justify-center"
+        style="background:rgba(5,13,26,.82); backdrop-filter:blur(6px);">
+        <div
+          class="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden"
+          style="max-height:90dvh; box-shadow:0 24px 64px rgba(0,0,0,.4);">
+
+          <!-- Header stripe -->
+          <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#ef4444,#b91c1c)" />
+
+          <div class="overflow-y-auto flex-1">
+            <div class="px-6 pt-6 pb-2">
+              <div class="text-3xl mb-3">🗑️</div>
+              <h2 class="text-xl font-extrabold text-slate-800 mb-1">Delete Your Account</h2>
+              <p class="text-sm text-slate-500 leading-relaxed">
+                This is permanent and cannot be undone.
+              </p>
+            </div>
+
+            <!-- Pre-check result: blocked -->
+            <div v-if="deleteCheckResult && !deleteCheckResult.can_delete"
+              class="mx-6 mt-4 p-4 rounded-2xl border text-sm leading-relaxed"
+              style="background:#fff7f7; border-color:#fecaca; color:#991b1b;">
+              <div class="font-bold mb-1">❌ Can't delete right now</div>
+              <p>{{ deleteCheckResult.details }}</p>
+            </div>
+
+            <!-- Pre-check: clear to delete -->
+            <div v-else class="px-6 mt-4 space-y-4">
+
+              <!-- What gets deleted -->
+              <div class="text-xs text-slate-600 space-y-2 bg-slate-50 rounded-xl p-4">
+                <div class="font-bold text-slate-700 mb-2">What gets permanently deleted:</div>
+                <div>🗑️ Your profile (name, phone, bio)</div>
+                <div>🗑️ All club memberships &amp; join requests</div>
+                <div>🗑️ Your PaySplit expenses &amp; notes</div>
+                <div>🗑️ Session &amp; activity history</div>
+                <div class="border-t border-slate-200 pt-2 mt-1 text-slate-500">
+                  <div>✅ Match results stay (anonymised) so club rankings remain accurate</div>
+                  <div>✅ Other players' expenses are unaffected</div>
+                </div>
+              </div>
+
+              <!-- Confirmation checkbox -->
+              <label class="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  v-model="deleteChecked"
+                  type="checkbox"
+                  class="mt-0.5 w-4 h-4 rounded accent-rose-500 shrink-0"
+                />
+                <span class="text-xs text-slate-600 leading-relaxed">
+                  I understand this is <strong>permanent</strong>. I have settled all PaySplit
+                  balances and no longer need this account.
+                </span>
+              </label>
+
+              <!-- Type DELETE -->
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">
+                  Type DELETE to confirm
+                </label>
+                <input
+                  v-model="deleteConfirmText"
+                  type="text"
+                  placeholder="DELETE"
+                  class="w-full px-4 py-3 rounded-xl text-sm border font-mono text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-300"
+                  style="border-color:rgba(239,68,68,.3);"
+                />
+              </div>
+
+              <p v-if="deleteError" class="text-xs text-rose-600">⚠ {{ deleteError }}</p>
+
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="px-6 pb-6 pt-4 border-t flex flex-col gap-2 shrink-0" style="border-color:rgba(0,0,0,.07);">
+            <button
+              v-if="deleteCheckResult?.can_delete"
+              @click="confirmDelete"
+              :disabled="deleting || deleteConfirmText !== 'DELETE' || !deleteChecked"
+              class="w-full py-3 rounded-2xl text-sm font-bold text-white transition disabled:opacity-40"
+              style="background:linear-gradient(135deg,#ef4444,#b91c1c);"
+            >
+              {{ deleting ? 'Deleting…' : '🗑️ Permanently Delete My Account' }}
+            </button>
+            <button
+              @click="showDeleteModal = false"
+              class="w-full py-3 rounded-2xl text-sm font-semibold border transition hover:bg-slate-50"
+              style="border-color:rgba(0,0,0,.12); color:#475569;"
+            >
+              Cancel
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.modal-fade-enter-active { transition: opacity .2s ease; }
+.modal-fade-leave-active { transition: opacity .15s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+</style>

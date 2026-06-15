@@ -30,6 +30,7 @@ const WIZARD_KEY     = 'b360_wizard_v1'
 
 function openGuide()   { showOnboarding.value = true;  showMenu.value = false }
 function closeGuide()  { showOnboarding.value = false; localStorage.setItem(ONBOARDING_KEY, '1') }
+function openWizard()  { showWizard.value = true; showMenu.value = false }
 function closeWizard() {
   showWizard.value = false
   localStorage.setItem(WIZARD_KEY, '1')
@@ -53,8 +54,9 @@ const menuSections = [
   {
     label: 'Account',
     items: [
-      { to: '/profile', icon: '👤', label: 'My Profile' },
-      { action: 'guide', icon: '🗺️', label: 'App Guide' },
+      { to: '/profile',  icon: '👤', label: 'My Profile' },
+      { action: 'wizard', icon: '🚀', label: 'Club Setup Wizard' },
+      { action: 'guide',  icon: '🗺️', label: 'App Guide' },
     ]
   },
   {
@@ -375,7 +377,7 @@ const needsClub = computed(() =>
                 <template v-for="item in section.items" :key="item.to ?? item.action">
                   <!-- Action items (no route) -->
                   <button v-if="item.action"
-                    @click="item.action === 'guide' && openGuide()"
+                    @click="item.action === 'guide' ? openGuide() : item.action === 'wizard' ? openWizard() : null"
                     class="w-full flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
                            hover:bg-black/[0.04] hover:text-slate-900 transition-colors text-left">
                     <span class="text-base w-6 text-center shrink-0">{{ item.icon }}</span>
