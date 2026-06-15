@@ -7,6 +7,7 @@ import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
 import { useInstall } from './composables/useInstall'
 import { useSession } from './composables/useSession'
+import OnboardingGuide from './components/OnboardingGuide.vue'
 
 const { user, ready, signOut } = useAuth()
 const { clubs, currentClub, loadClubs, selectClub } = useClub()
@@ -15,11 +16,16 @@ const { startSession, trackPage, endSession } = useSession()
 const route  = useRoute()
 const router = useRouter()
 
-const pendingCount = ref(0)
-const showIOSHint  = ref(false)
-const showMenu     = ref(false)
-const updating     = ref(false)
-const isAdmin      = ref(false)
+const pendingCount   = ref(0)
+const showIOSHint    = ref(false)
+const showMenu       = ref(false)
+const updating       = ref(false)
+const isAdmin        = ref(false)
+const showOnboarding = ref(false)
+
+const ONBOARDING_KEY = 'b360_onboarding_v1'
+function openGuide()  { showOnboarding.value = true; showMenu.value = false }
+function closeGuide() { showOnboarding.value = false; localStorage.setItem(ONBOARDING_KEY, '1') }
 
 // ── PWA update detection ──────────────────────────────────────────────────────
 // If a new SW is already waiting when the app opens (during loading screen),
@@ -39,6 +45,7 @@ const menuSections = [
     label: 'Account',
     items: [
       { to: '/profile', icon: '👤', label: 'My Profile' },
+      { action: 'guide', icon: '🗺️', label: 'App Guide' },
     ]
   },
   {
@@ -79,6 +86,8 @@ async function init() {
     await loadClubs()
     await refreshPending()
   } catch {}
+  // Show onboarding guide on first ever login
+  if (!localStorage.getItem(ONBOARDING_KEY)) showOnboarding.value = true
   // Non-blocking: session + admin check don't need to hold up club/page loading
   startSession().catch(() => {})
   supabase.rpc('get_my_roles').then(({ data }) => {
@@ -352,19 +361,30 @@ const needsClub = computed(() =>
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2 font-semibold">
                   {{ section.label }}
                 </div>
-                <RouterLink v-for="item in section.items" :key="item.to" :to="item.to"
-                  @click="closeMenu"
-                  class="flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
-                         hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
-                  active-class="!text-cyan-700 bg-cyan-50">
-                  <span class="text-base w-6 text-center shrink-0">{{ item.icon }}</span>
-                  {{ item.label }}
-                  <span v-if="item.to === '/manage' && pendingCount > 0"
-                    class="ml-auto text-[10px] bg-rose-500 text-white rounded-full
-                           px-1.5 py-0.5 font-bold leading-none">
-                    {{ pendingCount > 9 ? '9+' : pendingCount }}
-                  </span>
-                </RouterLink>
+                <template v-for="item in section.items" :key="item.to ?? item.action">
+                  <!-- Action items (no route) -->
+                  <button v-if="item.action"
+                    @click="item.action === 'guide' && openGuide()"
+                    class="w-full flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
+                           hover:bg-black/[0.04] hover:text-slate-900 transition-colors text-left">
+                    <span class="text-base w-6 text-center shrink-0">{{ item.icon }}</span>
+                    {{ item.label }}
+                  </button>
+                  <!-- Route links -->
+                  <RouterLink v-else :to="item.to"
+                    @click="closeMenu"
+                    class="flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
+                           hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
+                    active-class="!text-cyan-700 bg-cyan-50">
+                    <span class="text-base w-6 text-center shrink-0">{{ item.icon }}</span>
+                    {{ item.label }}
+                    <span v-if="item.to === '/manage' && pendingCount > 0"
+                      class="ml-auto text-[10px] bg-rose-500 text-white rounded-full
+                             px-1.5 py-0.5 font-bold leading-none">
+                      {{ pendingCount > 9 ? '9+' : pendingCount }}
+                    </span>
+                  </RouterLink>
+                </template>
               </div>
 
               <!-- Admin Panel (app_admin only) -->
@@ -398,6 +418,9 @@ const needsClub = computed(() =>
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Onboarding guide (first-time + burger menu replay) -->
+    <OnboardingGuide v-if="user && showOnboarding" @done="closeGuide" />
 
   </template>
 </template>
