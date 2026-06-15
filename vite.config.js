@@ -22,7 +22,7 @@ export default defineConfig({
         importScripts: ['sw-push.js']
       },
       manifest: {
-        name: 'Badminton 360 – Club Manager & Rankings',
+        name: 'Badminton 360 – Rankings & Payment Splits',
         short_name: 'B360',
         description: 'Free app for badminton clubs worldwide. Elo rankings, match tracking, expense splitting and tournaments.',
         theme_color: '#00e5ff',
