@@ -272,14 +272,12 @@ async function useCustomVenue() {
 
 // ── Voting ──
 async function castVote(option) {
-  if (!selectedSchedule.value) return
+  const schedId = selectedSchedule.value?.id
+  if (!schedId) return
   voting.value = option
-  await supabase.rpc('vote_schedule', {
-    p_schedule_id: selectedSchedule.value.id,
-    p_vote:        option
-  })
+  await supabase.rpc('vote_schedule', { p_schedule_id: schedId, p_vote: option })
   voting.value = null
-  await Promise.all([loadMonthSchedules(), loadVotes(selectedSchedule.value.id)])
+  await Promise.all([loadMonthSchedules(), loadVotes(schedId)])
 }
 
 // ── View votes modal ──
@@ -387,9 +385,10 @@ onMounted(async () => {
 })
 
 watch(currentClub, async () => {
-  selectedDate.value = null
-  votes.value = []
-  attendeeIds.value = new Set()
+  selectedDate.value  = null
+  showDateModal.value = false
+  votes.value         = []
+  attendeeIds.value   = new Set()
   await loadMonthSchedules()
   await loadClubFacilityIds()
 })

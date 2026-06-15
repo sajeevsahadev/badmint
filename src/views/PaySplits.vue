@@ -613,8 +613,9 @@ async function doDelete() {
   if (!id) return
   confirmDelId.value = null
   deletingId.value   = id
-  await supabase.rpc('delete_expense', { p_expense_id: id })
+  const { error } = await supabase.rpc('delete_expense', { p_expense_id: id })
   deletingId.value = null
+  if (error) { formError.value = error.message; await load(); return }
   await load()
 }
 
@@ -689,7 +690,8 @@ async function doDeleteContrib() {
   const id = confirmDelWallet.value
   if (!id) return
   confirmDelWallet.value = null
-  await supabase.rpc('delete_wallet_contribution', { p_id: id })
+  const { error } = await supabase.rpc('delete_wallet_contribution', { p_id: id })
+  if (error) { formError.value = error.message; await load(); return }
   await load()
 }
 
@@ -742,9 +744,10 @@ async function doDeleteOb() {
   const pid = confirmDelOb.value
   if (!pid) return
   confirmDelOb.value = null
-  await supabase.rpc('delete_opening_balance', {
+  const { error } = await supabase.rpc('delete_opening_balance', {
     p_club_id: currentClub.value.club_id, p_player_id: pid
   })
+  if (error) { formError.value = error.message; await load(); return }
   await load()
 }
 
@@ -755,13 +758,14 @@ const noteSaving = ref(false)
 async function addNote() {
   if (!noteText.value.trim()) return
   noteSaving.value = true
-  await supabase.from('paysplit_notes').insert({
+  const { error } = await supabase.from('paysplit_notes').insert({
     club_id:    currentClub.value.club_id,
     content:    noteText.value.trim(),
     created_by: user.value.id
   })
-  noteText.value   = ''
   noteSaving.value = false
+  if (error) { formError.value = error.message; return }
+  noteText.value = ''
   await load()
 }
 
@@ -771,7 +775,8 @@ async function deleteNote() {
   const id = confirmDelNoteId.value
   confirmDelNoteId.value = null
   if (!id) return
-  await supabase.from('paysplit_notes').delete().eq('id', id)
+  const { error } = await supabase.from('paysplit_notes').delete().eq('id', id)
+  if (error) { formError.value = error.message; await load(); return }
   notes.value = notes.value.filter(n => n.id !== id)
 }
 

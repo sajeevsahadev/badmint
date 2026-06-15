@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
+const RESEND_API_KEY      = Deno.env.get("RESEND_API_KEY")
+const SERVICE_ROLE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -197,6 +198,15 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders })
   }
 
+  // Only accept calls from Supabase internal webhooks (service role key as Bearer)
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")
+  if (!SERVICE_ROLE_KEY || token !== SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
+
   try {
     const body = await req.json()
 
@@ -251,7 +261,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = err instanceof Error ? err.message : String(err)
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })

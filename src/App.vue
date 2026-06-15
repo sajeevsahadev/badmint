@@ -114,6 +114,7 @@ watch(() => route.path, (path) => {
 })
 
 async function logout() {
+  isAdmin.value = false
   await endSession()
   await signOut()
   router.push('/login')
@@ -132,7 +133,7 @@ const nav = computed(() => [
   { to: '/manage',    label: 'Manage',    icon: '⚙️' },
 ])
 
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits']
+const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin']
 const needsClub = computed(() =>
   !currentClub.value &&
   !clubFreeRoutes.includes(route.path)

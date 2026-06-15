@@ -171,6 +171,7 @@ function openEditFacility(f) {
     address:      f.address ?? '',
     emirate:      f.emirate ?? '',
     courts_count: f.courts_count ?? '',
+    image_url:    f.image_url ?? '',
   }
 }
 
@@ -183,6 +184,7 @@ async function saveEditFacility() {
     p_address:      editFacModal.value.address  || null,
     p_emirate:      editFacModal.value.emirate  || null,
     p_courts_count: editFacModal.value.courts_count ? Number(editFacModal.value.courts_count) : null,
+    p_image_url:    editFacModal.value.image_url || null,
   })
   saving.value = false
   if (error) { err.value = error.message; return }
@@ -736,6 +738,10 @@ const statItems = computed(() => !stats.value ? [] : [
             <label class="label">Courts</label>
             <input v-model="editFacModal.courts_count" type="number" min="1" max="50" class="input"
               placeholder="Number of courts" />
+          </div>
+          <div>
+            <label class="label">Image URL</label>
+            <input v-model="editFacModal.image_url" class="input" maxlength="500" placeholder="https://…" />
           </div>
         </div>
         <div class="flex gap-3 mt-5">
