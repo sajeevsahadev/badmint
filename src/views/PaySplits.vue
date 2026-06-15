@@ -1314,9 +1314,9 @@ const categoryBreakdown = computed(() => {
 
       <!-- ── Consumed contributions ── -->
       <div v-if="fifoResult.consumed.length" class="card overflow-hidden">
-        <div class="px-4 py-2.5 border-b border-white/[.06]">
-          <div class="text-xs font-semibold text-slate-400">✓ Wallet Consumed</div>
-          <div class="text-xs text-slate-500">Fully used — tap to see which expenses</div>
+        <div class="px-4 py-3 border-b border-white/[.06]">
+          <div class="text-sm font-semibold text-slate-300">✓ Wallet Consumed</div>
+          <div class="text-xs text-slate-400 mt-0.5">Fully used — tap to see which expenses</div>
         </div>
 
         <div v-for="c in fifoResult.consumed" :key="c.id"
@@ -1326,10 +1326,10 @@ const categoryBreakdown = computed(() => {
           <button class="w-full px-4 py-3 flex items-center justify-between text-left"
             @click="expandedConsumed = expandedConsumed === c.id ? null : c.id">
             <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-7 h-7 rounded-xl flex items-center justify-center text-xs shrink-0"
-                style="background:rgba(100,116,139,.12); color:#475569">✓</div>
+              <div class="w-7 h-7 rounded-xl flex items-center justify-center text-sm shrink-0"
+                style="background:rgba(100,116,139,.18); color:#94a3b8">✓</div>
               <div class="min-w-0">
-                <div class="text-sm text-slate-500">
+                <div class="text-sm font-semibold text-slate-300">
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
                 </div>
                 <div class="text-xs text-slate-400">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
@@ -1337,23 +1337,23 @@ const categoryBreakdown = computed(() => {
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <div class="font-bold text-slate-600 line-through text-sm">{{ aed(c.amount) }}</div>
-              <span class="text-slate-600 text-xs transition-transform duration-200"
+              <div class="font-bold text-slate-400 line-through text-sm">{{ aed(c.amount) }}</div>
+              <span class="text-slate-400 text-xs transition-transform duration-200"
                 :style="expandedConsumed === c.id ? 'transform:rotate(180deg)' : ''">▾</span>
             </div>
           </button>
 
           <!-- Expanded: expense breakdown -->
           <div v-if="expandedConsumed === c.id"
-            class="px-4 pb-3 ml-9 space-y-2 border-t border-white/[.04]">
-            <div class="pt-2 text-xs text-slate-400 mb-1">Used for:</div>
+            class="px-4 pb-4 ml-9 space-y-2 border-t border-white/[.06]">
+            <div class="pt-3 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Used for:</div>
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
-              class="flex items-center justify-between rounded-lg px-3 py-2"
-              style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06)">
-              <span class="text-xs text-slate-400">
-                {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-500"> · {{ fmtDate(cb.expense_date) }}</span>
+              class="flex items-center justify-between rounded-xl px-3 py-2.5"
+              style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09)">
+              <span class="text-sm font-medium text-slate-200 min-w-0 truncate">
+                {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal text-xs"> · {{ fmtDate(cb.expense_date) }}</span>
               </span>
-              <span class="text-xs font-semibold text-slate-400 shrink-0 ml-3">{{ aed(cb.amount) }}</span>
+              <span class="text-sm font-bold text-rose-400 shrink-0 ml-3">−{{ aed(cb.amount) }}</span>
             </div>
             <div v-if="canModify(c)" class="flex gap-3 pt-1">
               <button class="text-xs text-slate-400 hover:text-neon transition"
