@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
+import { computeSettledEdges } from '../utils/settle-up'
+import { aed, fmtExpMonth, fmtExpDay, timeAgo } from '../utils/formatters'
 import PageHeader from '../components/PageHeader.vue'
 
 const route  = useRoute()
@@ -52,24 +54,11 @@ const allCategories    = computed(() => [...CATEGORIES, ...customCategories.valu
 const catIcon  = v => allCategories.value.find(c => c.value === v)?.icon  ?? '🏷️'
 const catLabel = v => allCategories.value.find(c => c.value === v)?.label ?? v
 const catColor = v => CAT_COLORS[v] ?? '#818cf8'
-const aed      = n => `${CURRENCY} ${Number(n).toFixed(2)}`
-const fmtDate     = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
-const fmtExpMonth = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en', { month: 'short' }) : '—'
-const fmtExpDay   = d => d ? String(new Date(d + 'T00:00:00').getDate()).padStart(2, '0') : '—'
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
 const fmtDatetime = ts => new Date(ts).toLocaleString('en-AE', {
   day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
 })
 const toDatetimeLocal = d => new Date(d).toISOString().slice(0, 16)
-const timeAgo = ts => {
-  const mins = Math.floor((Date.now() - new Date(ts)) / 60000)
-  if (mins < 1)  return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24)  return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7)  return `${days}d ago`
-  return new Date(ts).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
-}
 
 // ── State ──────────────────────────────────────────────────────────────
 const expenses        = ref([])
@@ -225,30 +214,13 @@ const settledEdges = computed(() => {
     if (!netMap[id]) netMap[id] = { id, name, net: 0 }
     netMap[id].net = Math.round((netMap[id].net + delta) * 100) / 100
   }
-
   balances.value.forEach(b => {
     addNet(b.from_player_id, b.from_name, -Number(b.net_amount))
     addNet(b.to_player_id,   b.to_name,   +Number(b.net_amount))
   })
   walletNets.value.forEach(w => addNet(w.id, w.name, w.net))
   openingNets.value.forEach(o => addNet(o.id, o.name, o.net))
-
-  const positions = Object.values(netMap).filter(p => Math.abs(p.net) >= 0.01)
-  const getters   = positions.filter(p => p.net > 0).map(p => ({ ...p })).sort((a, b) => b.net - a.net)
-  const owers     = positions.filter(p => p.net < 0).map(p => ({ ...p, net: Math.abs(p.net) })).sort((a, b) => b.net - a.net)
-
-  const edges = []
-  let gi = 0, oi = 0
-  while (gi < getters.length && oi < owers.length) {
-    const g = getters[gi], o = owers[oi]
-    const amount = Math.round(Math.min(g.net, o.net) * 100) / 100
-    if (amount >= 0.01) edges.push({ fromId: o.id, fromName: o.name, toId: g.id, toName: g.name, amount, kind: 'settle' })
-    g.net = Math.round((g.net - amount) * 100) / 100
-    o.net = Math.round((o.net - amount) * 100) / 100
-    if (g.net < 0.01) gi++
-    if (o.net < 0.01) oi++
-  }
-  return edges
+  return computeSettledEdges(netMap).map(e => ({ ...e, kind: 'settle' }))
 })
 
 // ── Unsimplified: debts exactly as recorded ────────────────────────────

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import { deviceIcon } from '../utils/formatters'
 
 const router = useRouter()
 const { user } = useAuth()
@@ -236,15 +237,6 @@ async function confirmDelete() {
   if (type === 'tournament') await Promise.all([loadTournaments(), loadStats()])
 }
 
-// ── Helpers ──
-function deviceIcon(ua) {
-  if (!ua) return ''
-  if (/iPhone|iPad/i.test(ua)) return '🍎'
-  if (/Android/i.test(ua))     return '🤖'
-  if (/Windows/i.test(ua))     return '🖥'
-  if (/Mac/i.test(ua))         return '💻'
-  return '🌐'
-}
 
 const roleChip = r => ({
   app_admin:           'bg-rose-50 text-rose-700 border-rose-200',
