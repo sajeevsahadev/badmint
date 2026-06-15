@@ -967,12 +967,12 @@ const categoryBreakdown = computed(() => {
               <div class="flex items-center gap-1.5 mb-0.5">
                 <span class="font-semibold text-sm text-slate-100 truncate">{{ exp.title }}</span>
                 <span v-if="exp.paid_from_wallet"
-                  class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md"
+                  class="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md"
                   style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.3)">
                   💰 WALLET
                 </span>
               </div>
-              <div class="text-[11px] text-slate-500">
+              <div class="text-xs text-slate-400">
                 <template v-if="exp.paid_from_wallet">
                   <span>Wallet · </span>
                   <template v-if="walletExpenseContributors[exp.id]?.length">
@@ -992,7 +992,7 @@ const categoryBreakdown = computed(() => {
             </div>
             <!-- Your share -->
             <div v-if="myContrib(exp)" class="text-right shrink-0">
-              <div class="text-[10px] leading-none mb-0.5"
+              <div class="text-xs leading-none mb-0.5"
                 :class="myContrib(exp).net >= 0 ? 'text-emerald-500' : 'text-rose-500'">
                 {{ myContrib(exp).net >= 0 ? 'you lent' : 'you borrowed' }}
               </div>
@@ -1002,7 +1002,7 @@ const categoryBreakdown = computed(() => {
               </div>
             </div>
             <div v-else class="text-right shrink-0">
-              <div class="text-[10px] text-slate-600 mb-0.5">total</div>
+              <div class="text-xs text-slate-500 mb-0.5">total</div>
               <div class="font-bold text-sm text-slate-400">{{ aed(exp.amount) }}</div>
             </div>
           </button>
@@ -1013,14 +1013,14 @@ const categoryBreakdown = computed(() => {
 
             <!-- Added by + timestamp -->
             <div class="flex items-center gap-1.5 mb-3">
-              <span class="text-[10px] text-slate-600">Added by</span>
-              <span class="text-[10px] font-medium"
+              <span class="text-xs text-slate-500">Added by</span>
+              <span class="text-xs font-medium"
                 :class="expCreatorPlayer(exp) ? 'text-slate-300 underline underline-offset-2 cursor-pointer hover:text-neon transition-colors' : 'text-slate-400'"
                 @click.stop="expCreatorPlayer(exp) && router.push('/player/' + expCreatorPlayer(exp).id)">
                 {{ expCreatorPlayer(exp)?.display_name ?? (exp.created_by === user?.id ? 'You' : 'Member') }}
               </span>
-              <span class="text-[10px] text-slate-600">·</span>
-              <span class="text-[10px] text-slate-600">{{ fmtDatetime(exp.created_at) }}</span>
+              <span class="text-xs text-slate-500">·</span>
+              <span class="text-xs text-slate-500">{{ fmtDatetime(exp.created_at) }}</span>
             </div>
 
             <!-- Wallet funding breakdown — shows exactly who funded how much via FIFO -->
@@ -1043,24 +1043,24 @@ const categoryBreakdown = computed(() => {
             </div>
 
             <!-- Split summary -->
-            <div class="text-[11px] text-slate-500 mb-2">
+            <div class="text-xs text-slate-400 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
               <span v-if="exp.participants?.length">
                 · {{ aed(Number(exp.amount) / exp.participants.length) }} each
               </span>
             </div>
-            <div v-if="exp.participants?.length" class="flex flex-wrap gap-1 mb-3">
+            <div v-if="exp.participants?.length" class="flex flex-wrap gap-1.5 mb-3">
               <span v-for="pt in exp.participants" :key="pt.player_id"
-                class="text-[9px] px-2 py-0.5 rounded-md"
-                :class="pt.player_id === myPlayer?.id ? 'text-neon font-semibold' : 'text-slate-400'"
+                class="text-xs px-2.5 py-1 rounded-md"
+                :class="pt.player_id === myPlayer?.id ? 'text-neon font-semibold' : 'text-slate-300'"
                 style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09)">
                 {{ pt.player_id === myPlayer?.id ? 'You' : pt.name }}
               </span>
             </div>
             <div v-if="canModify(exp)" class="flex items-center gap-3">
-              <button class="text-[11px] text-slate-500 hover:text-neon transition"
+              <button class="text-xs text-slate-400 hover:text-neon transition"
                 @click.stop="openEditForm(exp)">✏️ Edit</button>
-              <button class="text-[11px] text-rose-500/60 hover:text-rose-400 transition ml-auto"
+              <button class="text-xs text-rose-400/70 hover:text-rose-400 transition ml-auto"
                 :disabled="deletingId === exp.id"
                 @click.stop="confirmDelId = exp.id">
                 {{ deletingId === exp.id ? '⏳ Deleting…' : '🗑️ Delete' }}
@@ -1185,8 +1185,8 @@ const categoryBreakdown = computed(() => {
                   <span class="text-slate-500"> owe{{ isMe(p.id) ? '' : 's' }} </span>
                   <span class="font-semibold">{{ o.to }}</span>
                 </div>
-                <div v-if="o.kind === 'wallet'" class="text-[10px] text-slate-500 mt-0.5">💰 wallet payment</div>
-                <div v-if="o.kind === 'opening'" class="text-[10px] text-slate-500 mt-0.5">⚖️ opening balance</div>
+                <div v-if="o.kind === 'wallet'" class="text-xs text-slate-400 mt-0.5">💰 wallet payment</div>
+                <div v-if="o.kind === 'opening'" class="text-xs text-slate-400 mt-0.5">⚖️ opening balance</div>
               </div>
               <span class="text-rose-400 font-bold text-sm shrink-0">{{ aed(o.amount) }}</span>
             </div>
@@ -1234,9 +1234,9 @@ const categoryBreakdown = computed(() => {
 
       <!-- Wallet balance summary -->
       <div class="card p-4">
-        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Common Wallet</div>
+        <div class="text-xs uppercase tracking-widest text-slate-400 mb-3">Common Wallet</div>
         <div class="text-center mb-3">
-          <div class="text-[10px] text-slate-500 mb-1">Wallet Balance</div>
+          <div class="text-xs text-slate-400 mb-1">Wallet Balance</div>
           <div class="text-2xl font-extrabold"
             :class="walletBalance >= 0 ? 'text-neon' : 'text-rose-400'">
             {{ aed(walletBalance) }}
@@ -1259,7 +1259,7 @@ const categoryBreakdown = computed(() => {
       <div class="card overflow-hidden">
         <div class="px-4 py-2.5 border-b border-white/[.06]">
           <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
-          <div class="text-[10px] text-slate-500">#1 is consumed first when wallet pays an expense</div>
+          <div class="text-xs text-slate-400">#1 is consumed first when wallet pays an expense</div>
         </div>
 
         <div v-if="!fifoResult.active.length" class="px-4 py-8 text-center text-sm text-slate-500">
@@ -1281,32 +1281,32 @@ const categoryBreakdown = computed(() => {
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
                   <span v-if="isMe(c.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ c.player_name }}</span>
                 </div>
-                <div class="text-[10px] text-slate-500">
+                <div class="text-xs text-slate-400">
                   {{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span>
                 </div>
-                <div class="text-[10px] text-slate-600">
+                <div class="text-xs text-slate-500">
                   Added by {{ resolveUserName(c.created_by) }}
                 </div>
               </div>
             </div>
             <div class="text-right shrink-0">
               <div class="font-bold text-emerald-400 text-base">{{ aed(c.remaining) }}</div>
-              <div class="text-[10px] text-slate-500">of {{ aed(c.amount) }} received</div>
-              <div v-if="c.amount - c.remaining > 0.005" class="text-[10px] text-rose-400/70">−{{ aed(Math.round((c.amount - c.remaining) * 100) / 100) }} used</div>
+              <div class="text-xs text-slate-400">of {{ aed(c.amount) }} received</div>
+              <div v-if="c.amount - c.remaining > 0.005" class="text-xs text-rose-400 font-medium">−{{ aed(Math.round((c.amount - c.remaining) * 100) / 100) }} used</div>
             </div>
           </div>
           <!-- Partial consumption so far -->
-          <div v-if="c.consumedBy.length" class="mt-2 ml-9 space-y-1">
+          <div v-if="c.consumedBy.length" class="mt-2 ml-9 space-y-1.5">
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
-              class="flex items-center justify-between text-[10px] text-slate-500">
-              <span>→ {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-600"> · {{ fmtDate(cb.expense_date) }}</span></span>
-              <span class="text-rose-400/70 shrink-0 ml-2">−{{ aed(cb.amount) }}</span>
+              class="flex items-center justify-between text-xs">
+              <span class="text-slate-300 font-medium">→ {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal"> · {{ fmtDate(cb.expense_date) }}</span></span>
+              <span class="text-rose-400 font-semibold shrink-0 ml-2">−{{ aed(cb.amount) }}</span>
             </div>
           </div>
           <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9">
-            <button class="text-[10px] text-slate-500 hover:text-neon transition"
+            <button class="text-xs text-slate-400 hover:text-neon transition"
               @click="openWalletEditForm(c)">✏️ Edit</button>
-            <button class="text-[10px] text-rose-500/60 hover:text-rose-400 transition"
+            <button class="text-xs text-rose-400/70 hover:text-rose-400 transition"
               @click="confirmDelWallet = c.id">🗑️ Delete</button>
           </div>
         </div>
@@ -1316,7 +1316,7 @@ const categoryBreakdown = computed(() => {
       <div v-if="fifoResult.consumed.length" class="card overflow-hidden">
         <div class="px-4 py-2.5 border-b border-white/[.06]">
           <div class="text-xs font-semibold text-slate-400">✓ Wallet Consumed</div>
-          <div class="text-[10px] text-slate-600">Fully used — tap to see which expenses</div>
+          <div class="text-xs text-slate-500">Fully used — tap to see which expenses</div>
         </div>
 
         <div v-for="c in fifoResult.consumed" :key="c.id"
@@ -1332,8 +1332,8 @@ const categoryBreakdown = computed(() => {
                 <div class="text-sm text-slate-500">
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
                 </div>
-                <div class="text-[10px] text-slate-600">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
-                <div class="text-[10px] text-slate-700">Added by {{ resolveUserName(c.created_by) }}</div>
+                <div class="text-xs text-slate-400">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
+                <div class="text-xs text-slate-500">Added by {{ resolveUserName(c.created_by) }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -1346,7 +1346,7 @@ const categoryBreakdown = computed(() => {
           <!-- Expanded: expense breakdown -->
           <div v-if="expandedConsumed === c.id"
             class="px-4 pb-3 ml-9 space-y-2 border-t border-white/[.04]">
-            <div class="pt-2 text-[10px] text-slate-600 mb-1">Used for:</div>
+            <div class="pt-2 text-xs text-slate-400 mb-1">Used for:</div>
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between rounded-lg px-3 py-2"
               style="background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06)">
@@ -1356,9 +1356,9 @@ const categoryBreakdown = computed(() => {
               <span class="text-xs font-semibold text-slate-400 shrink-0 ml-3">{{ aed(cb.amount) }}</span>
             </div>
             <div v-if="canModify(c)" class="flex gap-3 pt-1">
-              <button class="text-[10px] text-slate-600 hover:text-neon transition"
+              <button class="text-xs text-slate-400 hover:text-neon transition"
                 @click="openWalletEditForm(c)">✏️ Edit</button>
-              <button class="text-[10px] text-rose-600/50 hover:text-rose-400 transition"
+              <button class="text-xs text-rose-400/70 hover:text-rose-400 transition"
                 @click="confirmDelWallet = c.id">🗑️ Delete</button>
             </div>
           </div>
@@ -1371,14 +1371,14 @@ const categoryBreakdown = computed(() => {
     <div v-if="activeTab === 'totals'" class="fade-up">
       <div class="grid grid-cols-2 gap-3 mb-5">
         <div class="card p-4 text-center">
-          <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1.5">All-time spent</div>
+          <div class="text-xs uppercase tracking-widest text-slate-400 mb-1.5">All-time spent</div>
           <div class="text-xl font-extrabold text-gold">{{ aed(allTimeTotal) }}</div>
-          <div class="text-[10px] text-slate-600 mt-1">{{ expenses.length }} expenses</div>
+          <div class="text-xs text-slate-500 mt-1">{{ expenses.length }} expenses</div>
         </div>
         <div class="card p-4 text-center">
-          <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1.5">{{ currentYear }} total</div>
+          <div class="text-xs uppercase tracking-widest text-slate-400 mb-1.5">{{ currentYear }} total</div>
           <div class="text-xl font-extrabold text-neon">{{ aed(yearTotal) }}</div>
-          <div class="text-[10px] text-slate-600 mt-1">this year</div>
+          <div class="text-xs text-slate-500 mt-1">this year</div>
         </div>
       </div>
 
@@ -1414,10 +1414,10 @@ const categoryBreakdown = computed(() => {
               <span class="text-xs text-slate-300 flex items-center gap-1.5">
                 <span>{{ c.icon }}</span>
                 <span>{{ c.label }}</span>
-                <span class="text-[10px] text-slate-600">({{ c.count }})</span>
+                <span class="text-xs text-slate-500">({{ c.count }})</span>
               </span>
               <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-500">{{ c.pct }}%</span>
+                <span class="text-xs text-slate-400">{{ c.pct }}%</span>
                 <span class="text-xs font-bold text-slate-200">{{ aed(c.total) }}</span>
               </div>
             </div>
@@ -1447,7 +1447,7 @@ const categoryBreakdown = computed(() => {
     <!-- ══════════════════════════════ NOTES ═══════════════════════════════ -->
     <div v-if="activeTab === 'notes'" class="fade-up">
       <div class="card p-4 mb-4">
-        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Add a Note</div>
+        <div class="text-xs uppercase tracking-widest text-slate-400 mb-2">Add a Note</div>
         <textarea v-model="noteText" rows="3" class="input resize-none w-full mb-3"
           placeholder="Payment reminders, group agreements, reimbursements to track…" />
         <button class="btn-primary w-full py-2.5 text-sm"
@@ -1467,11 +1467,11 @@ const categoryBreakdown = computed(() => {
         <div v-for="n in notes" :key="n.id" class="card p-4">
           <p class="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap mb-3">{{ n.content }}</p>
           <div class="flex items-center justify-between">
-            <div class="text-[10px] text-slate-500">
-              <span class="font-medium text-slate-400">{{ n.author }}</span>
+            <div class="text-xs text-slate-400">
+              <span class="font-medium text-slate-300">{{ n.author }}</span>
               · {{ timeAgo(n.created_at) }}
             </div>
-            <button v-if="canModify(n)" class="text-[11px] text-rose-500/60 hover:text-rose-400 transition"
+            <button v-if="canModify(n)" class="text-xs text-rose-400/70 hover:text-rose-400 transition"
               @click="confirmDelNoteId = n.id">Delete</button>
           </div>
         </div>
@@ -1567,12 +1567,12 @@ const categoryBreakdown = computed(() => {
                   :class="form.paymentSource === 'wallet' ? 'text-white' : walletBalance <= 0 ? 'text-slate-300 border border-slate-100' : 'text-slate-500 border border-slate-200'"
                   :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed)' : ''">
                   <span>💰 Common Wallet</span>
-                  <span class="text-[9px] font-normal opacity-80">{{ aed(walletBalance) }} available</span>
+                  <span class="text-[11px] font-normal opacity-80">{{ aed(walletBalance) }} available</span>
                 </button>
               </div>
               <!-- Wallet balance hint -->
               <div v-if="form.paymentSource === 'wallet'"
-                class="mt-2 text-[10px] px-3 py-2 rounded-lg"
+                class="mt-2 text-xs px-3 py-2 rounded-lg"
                 :style="walletBalance > 0
                   ? 'background:rgba(0,153,184,.08); color:#0077a0; border:1px solid rgba(0,153,184,.2)'
                   : 'background:rgba(220,38,38,.06); color:#dc2626; border:1px solid rgba(220,38,38,.2)'">
