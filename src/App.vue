@@ -52,7 +52,7 @@ const menuSections = [
     label: 'Match Day',
     items: [
       { to: '/schedule',   icon: '📅', label: "Who's Playing?" },
-      { to: '/dashboard',  icon: '🏆', label: 'Leaderboard' },
+      { to: '/scoreboard', icon: '🏆', label: 'Leaderboard' },
       { to: '/match',      icon: '➕', label: 'Add Match' },
       { to: '/matches',    icon: '📋', label: 'Matches' },
       { to: '/compare',    icon: '📊', label: 'Compare Players' },

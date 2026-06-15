@@ -21,7 +21,6 @@ const openTournaments = ref([])
 const liveTournaments = ref([])
 const facilities      = ref([])
 const loading         = ref(true)
-const showFullBoard   = ref(false)
 
 // ── Time-of-day greeting ──────────────────────────────────────────────
 const h = new Date().getHours()
@@ -228,13 +227,11 @@ const fmtDate = d => d
     <div v-if="currentClub">
       <div class="flex items-center justify-between mb-2">
         <p class="label">🏸 {{ clubName }}</p>
-        <button class="text-xs text-neon hover:opacity-75 transition"
-          @click="showFullBoard = !showFullBoard">
-          {{ showFullBoard ? 'Show less ↑' : 'See Full Rankings →' }}
-        </button>
+        <RouterLink to="/scoreboard" class="text-xs text-neon hover:opacity-75 transition">
+          See Full Rankings →
+        </RouterLink>
       </div>
 
-      <template v-if="!showFullBoard">
       <div v-if="!board.length" class="card p-6 text-center text-sm text-slate-400">
         No matches yet — record one to start the leaderboard.
       </div>
@@ -265,95 +262,6 @@ const fmtDate = d => d
             </div>
           </RouterLink>
         </div>
-      </div>
-      </template>
-
-      <!-- Full leaderboard (expandable) -->
-      <div v-if="showFullBoard && board.length" class="mt-3 space-y-3">
-
-        <!-- Podium top 3 -->
-        <div class="grid grid-cols-3 gap-2">
-          <div v-for="(p, i) in board.slice(0, 3)" :key="p.id"
-            :class="i === 0 ? 'card-amber' : 'card'"
-            class="flex flex-col items-center p-3 text-center">
-            <div class="text-2xl mb-1"
-              :style="i === 0 ? 'filter:drop-shadow(0 0 10px rgba(217,119,6,.5))' : ''">
-              {{ medals[i] }}
-            </div>
-            <RouterLink :to="'/player/' + p.id"
-              class="text-xs font-bold truncate w-full text-center text-slate-700 hover:text-neon transition-colors">
-              {{ p.display_name }}
-            </RouterLink>
-            <div class="text-xs font-extrabold mt-0.5"
-              :class="i === 0 ? 'text-gold' : 'text-neon'">
-              {{ p.composite }} pts
-            </div>
-            <div class="text-xs text-slate-400">Elo {{ p.elo }}</div>
-          </div>
-        </div>
-
-        <!-- Full table -->
-        <div class="card overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-600 tracking-wide">Full Leaderboard</span>
-            <InfoTip text="Sorted by composite rank points = Skill (70%) + Attendance (30%), both normalised 0–100 within club." />
-          </div>
-          <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-slate-100">
-                <th class="pl-4 pr-2 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">#</th>
-                <th class="pl-2 pr-3 py-2.5 text-left text-xs uppercase tracking-wider text-slate-400">Player</th>
-                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Elo</th>
-                <th class="px-2 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">W%</th>
-                <th class="pl-2 pr-4 py-2.5 text-right text-xs uppercase tracking-wider text-slate-400">Days</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(p, i) in board" :key="p.id"
-                class="border-b border-slate-50 last:border-0 transition-colors"
-                :class="isMe(p) ? 'bg-cyan-50/70' : (i === 0 ? 'bg-amber-50/50' : 'hover:bg-slate-50')">
-                <td class="pl-4 pr-2 py-3 font-bold text-slate-500">{{ medals[i] ?? (i + 1) }}</td>
-                <td class="pl-2 pr-3 py-3">
-                  <RouterLink :to="'/player/' + p.id"
-                    class="font-semibold text-slate-800 hover:text-neon transition-colors">
-                    {{ p.display_name }}
-                    <span v-if="isMe(p)" class="text-xs text-cyan-500 ml-1">you</span>
-                  </RouterLink>
-                </td>
-                <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
-                <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
-                <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
-              </tr>
-            </tbody>
-          </table>
-          </div>
-        </div>
-
-        <!-- Best pairs -->
-        <div v-if="bestPairs.length" class="card overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-            <span class="text-xs font-bold text-slate-600">🏅 Best Pairs</span>
-            <InfoTip text="Ranked by win % across all doubles matches played together (min 1 game)." />
-          </div>
-          <div v-for="(pair, i) in bestPairs" :key="pair.p1 + pair.p2"
-            class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0">
-            <span class="text-lg shrink-0 w-6 text-center">{{ ['🥇','🥈','🥉'][i] }}</span>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold text-slate-700 truncate">{{ pair.p1_name }} + {{ pair.p2_name }}</p>
-              <p class="text-xs text-slate-400 mt-0.5">
-                {{ pair.games }} games · {{ pair.wins }}W / {{ pair.games - pair.wins }}L
-              </p>
-            </div>
-            <div class="text-lg font-extrabold text-neon shrink-0">{{ pair.win_pct }}%</div>
-          </div>
-        </div>
-
-        <!-- Quick compare link -->
-        <button class="card w-full py-3 text-sm text-slate-400 hover:text-neon transition-all flex items-center justify-center gap-2"
-          @click="router.push('/compare')">
-          ⚔️ Head-to-Head Comparison
-        </button>
       </div>
     </div>
 
