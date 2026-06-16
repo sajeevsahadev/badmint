@@ -26,6 +26,7 @@ const searchQ       = ref('')
 const searchResults = ref([])
 const searching     = ref(false)
 const requested     = ref(new Set())
+const searchErr     = ref('')
 
 // ── Player invite ────────────────────────────────────────────────────────────
 // playerList items: { name, email, via: 'email'|'whatsapp'|null }
@@ -74,7 +75,8 @@ async function onSearch() {
 }
 
 async function requestJoin(clubId) {
-  await supabase.rpc('request_join', { p_club_id: clubId })
+  const { error } = await supabase.rpc('request_join', { p_club_id: clubId })
+  if (error) { searchErr.value = error.message; return }
   requested.value = new Set([...requested.value, clubId])
 }
 
@@ -140,9 +142,10 @@ async function doSendEmail() {
 
 // ── WhatsApp share → adds to list → clears form ──────────────────────────────
 async function doWhatsApp() {
-  const email = pEmail.value.trim()
-  const name  = pName.value.trim() || (email ? email.split('@')[0] : `Player ${playerList.value.length + 1}`)
-  let token   = null
+  const email       = pEmail.value.trim()
+  const phoneDigits = pPhone.value.replace(/\D/g, '')
+  const name        = pName.value.trim() || (email ? email.split('@')[0] : `Player ${playerList.value.length + 1}`)
+  let token         = null
 
   // If email provided, generate an invite token for a personalised link
   if (email) {
@@ -161,7 +164,11 @@ async function doWhatsApp() {
   } else {
     msg = `Hey${name ? ' ' + name : ''}! 🏸 We're on Badminton 360 for ${club}.\nSign in at https://badminton360.app and search for "${club}" to join!`
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+  // Deep-link straight to the contact's chat when a phone number was given
+  const waUrl = phoneDigits
+    ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`
+    : `https://wa.me/?text=${encodeURIComponent(msg)}`
+  window.open(waUrl, '_blank')
 
   addToList(name, email, 'whatsapp')
   clearPlayerForm()
@@ -282,25 +289,26 @@ function finish() {
             <div v-if="!searching" class="flex flex-col gap-2">
               <div
                 v-for="club in searchResults"
-                :key="club.club_id"
+                :key="club.id"
                 class="flex items-center justify-between gap-3 p-4 rounded-xl border"
                 style="border-color:rgba(0,0,0,.08); background:#fafafa;"
               >
                 <div class="min-w-0">
                   <div class="font-semibold text-slate-800 text-sm truncate">{{ club.name }}</div>
-                  <div class="text-xs text-slate-400 mt-0.5">{{ club.total_members ?? '—' }} members</div>
+                  <div class="text-xs text-slate-400 mt-0.5">{{ club.member_count }} member{{ club.member_count !== 1 ? 's' : '' }}</div>
                 </div>
                 <button
-                  @click="requestJoin(club.club_id)"
-                  :disabled="requested.has(club.club_id)"
+                  @click="requestJoin(club.id)"
+                  :disabled="requested.has(club.id)"
                   class="shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-                  :style="requested.has(club.club_id)
+                  :style="requested.has(club.id)
                     ? 'background:#dcfce7;color:#166534;'
                     : 'background:linear-gradient(135deg,#00b4d8,#0077a8);color:#fff;'"
                 >
-                  {{ requested.has(club.club_id) ? '✓ Requested' : 'Request to Join' }}
+                  {{ requested.has(club.id) ? '✓ Requested' : 'Request to Join' }}
                 </button>
               </div>
+              <p v-if="searchErr" class="text-center py-2 text-xs text-rose-500">⚠ {{ searchErr }}</p>
               <p v-if="searchQ.trim() && !searchResults.length" class="text-center py-6 text-sm text-slate-400">
                 No clubs found for "{{ searchQ }}"
               </p>
@@ -308,7 +316,7 @@ function finish() {
           </div>
           <div class="px-6 pb-6 shrink-0 border-t pt-4" style="border-color:rgba(0,0,0,.07);">
             <button
-              @click="finish('/explore')"
+              @click="destPath = '/explore'; finish()"
               class="w-full py-3 rounded-xl text-sm font-semibold border transition hover:bg-slate-50"
               style="border-color:rgba(0,0,0,.12); color:#475569;"
             >
