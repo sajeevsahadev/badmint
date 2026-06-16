@@ -777,7 +777,7 @@ async function leaveClub(clubId) {
         style="background:#0d1829; border:1px solid rgba(239,68,68,.25)">
 
         <!-- Header -->
-        <div class="px-5 pt-5 pb-4 border-b border-[rgba(15,23,42,0.06)]">
+        <div class="px-5 pt-5 pb-4 border-b border-white/[0.06]">
           <div class="flex items-center gap-3 mb-1">
             <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shrink-0"
               style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
