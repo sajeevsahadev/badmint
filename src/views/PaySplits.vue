@@ -986,7 +986,7 @@ const categoryBreakdown = computed(() => {
 
           <!-- Expanded details -->
           <div v-if="expandedExp === exp.id"
-            class="px-4 pb-4 pt-3 border-t border-white/[.05]">
+            class="px-4 pb-4 pt-3 border-t border-[rgba(15,23,42,0.05)]">
 
             <!-- Added by + timestamp -->
             <div class="flex items-center gap-1.5 mb-3">
@@ -1049,7 +1049,7 @@ const categoryBreakdown = computed(() => {
 
       <!-- ── Opening Balances (migration from another app) — shown at bottom ── -->
       <div class="card overflow-hidden mt-4">
-        <div class="px-4 py-3 border-b border-white/[.06] flex items-center justify-between gap-3">
+        <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)] flex items-center justify-between gap-3">
           <div class="min-w-0">
             <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
             <div class="text-xs text-slate-500 leading-snug mt-0.5">
@@ -1070,7 +1070,7 @@ const categoryBreakdown = computed(() => {
         </div>
 
         <div v-for="ob in openingBalances" :key="ob.player_id"
-          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/[.04] last:border-0">
+          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
           <div class="min-w-0">
             <div class="text-sm font-semibold"
               :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
@@ -1152,10 +1152,10 @@ const categoryBreakdown = computed(() => {
           </button>
 
           <!-- Expanded: individual debt rows (Splitwise style) -->
-          <div v-if="expandedPlayer === p.id" class="border-t border-white/[0.06]">
+          <div v-if="expandedPlayer === p.id" class="border-t border-[rgba(15,23,42,0.06)]">
             <!-- Debts this person owes -->
             <div v-for="o in p.owes" :key="o.toId + (o.kind ?? '')"
-              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[.04] last:border-0">
+              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-[rgba(15,23,42,0.04)] last:border-0">
               <div class="min-w-0">
                 <div class="text-sm text-slate-300">
                   <span class="font-semibold">{{ isMe(p.id) ? 'You' : p.name }}</span>
@@ -1169,7 +1169,7 @@ const categoryBreakdown = computed(() => {
             </div>
             <!-- Payments this person receives -->
             <div v-for="g in p.gets" :key="g.fromId + (g.kind ?? '')"
-              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[.04] last:border-0">
+              class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-[rgba(15,23,42,0.04)] last:border-0">
               <div class="min-w-0">
                 <div class="text-sm text-slate-300">
                   <span class="font-semibold">{{ g.from }}</span>
@@ -1198,7 +1198,7 @@ const categoryBreakdown = computed(() => {
         </p>
         <button @click="simplifyOn = !simplifyOn"
           class="shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-200"
-          :class="simplifyOn ? 'text-slate-950 border-transparent' : 'text-slate-400 border-white/15 hover:border-white/30'"
+          :class="simplifyOn ? 'text-slate-950 border-transparent' : 'text-slate-400 border-[rgba(15,23,42,0.15)] hover:border-[rgba(15,23,42,0.30)]'"
           :style="simplifyOn ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''">
           {{ simplifyOn ? 'ON' : 'OFF' }}
         </button>
@@ -1234,7 +1234,7 @@ const categoryBreakdown = computed(() => {
 
       <!-- ── Active FIFO Queue ── -->
       <div class="card overflow-hidden">
-        <div class="px-4 py-2.5 border-b border-white/[.06]">
+        <div class="px-4 py-2.5 border-b border-[rgba(15,23,42,0.06)]">
           <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
           <div class="text-xs text-slate-400">#1 is consumed first when wallet pays an expense</div>
         </div>
@@ -1245,7 +1245,7 @@ const categoryBreakdown = computed(() => {
         </div>
 
         <div v-for="(c, i) in fifoResult.active" :key="c.id"
-          class="px-4 py-3 border-b border-white/[.04] last:border-0">
+          class="px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold shrink-0"
@@ -1291,13 +1291,13 @@ const categoryBreakdown = computed(() => {
 
       <!-- ── Consumed contributions ── -->
       <div v-if="fifoResult.consumed.length" class="card overflow-hidden">
-        <div class="px-4 py-3 border-b border-white/[.06]">
+        <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
           <div class="text-sm font-semibold text-slate-300">✓ Wallet Consumed</div>
           <div class="text-xs text-slate-400 mt-0.5">Fully used — tap to see which expenses</div>
         </div>
 
         <div v-for="c in fifoResult.consumed" :key="c.id"
-          class="border-b border-white/[.04] last:border-0">
+          class="border-b border-[rgba(15,23,42,0.04)] last:border-0">
 
           <!-- Row (tap to expand) -->
           <button class="w-full px-4 py-3 flex items-center justify-between text-left"
@@ -1322,7 +1322,7 @@ const categoryBreakdown = computed(() => {
 
           <!-- Expanded: expense breakdown -->
           <div v-if="expandedConsumed === c.id"
-            class="px-4 pb-4 ml-9 space-y-2 border-t border-white/[.06]">
+            class="px-4 pb-4 ml-9 space-y-2 border-t border-[rgba(15,23,42,0.06)]">
             <div class="pt-3 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Used for:</div>
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between rounded-xl px-3 py-2.5"
@@ -1407,14 +1407,14 @@ const categoryBreakdown = computed(() => {
       </div>
 
       <div class="card overflow-hidden">
-        <div class="px-4 py-3 border-b border-white/[0.06]">
+        <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
           <div class="text-xs font-semibold text-slate-300">Monthly Breakdown</div>
         </div>
         <div v-if="!monthlyTrend.length" class="px-4 py-6 text-center text-sm text-slate-500">
           No expenses recorded yet.
         </div>
         <div v-for="m in monthlyTrend" :key="m.key"
-          class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0">
+          class="flex items-center justify-between px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
           <span class="text-sm text-slate-300">{{ m.label }}</span>
           <span class="font-bold text-slate-100">{{ aed(m.total) }}</span>
         </div>

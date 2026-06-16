@@ -150,7 +150,7 @@ onMounted(loadSchedule)
             class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
             :class="schedule.my_vote === 'attending'
               ? 'bg-emerald-500/15 border-emerald-500/60'
-              : 'border-white/10 hover:border-emerald-500/30 active:opacity-70'">
+              : 'border-[rgba(15,23,42,0.10)] hover:border-emerald-500/30 active:opacity-70'">
             <span class="text-3xl">✅</span>
             <span class="text-sm font-semibold text-slate-200">Attending</span>
             <span class="text-3xl font-bold text-emerald-400">{{ schedule.attending_count }}</span>
@@ -161,7 +161,7 @@ onMounted(loadSchedule)
             class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
             :class="schedule.my_vote === 'not_attending'
               ? 'bg-rose-500/15 border-rose-500/60'
-              : 'border-white/10 hover:border-rose-500/30 active:opacity-70'">
+              : 'border-[rgba(15,23,42,0.10)] hover:border-rose-500/30 active:opacity-70'">
             <span class="text-3xl">❌</span>
             <span class="text-sm font-semibold text-slate-200">Not Attending</span>
             <span class="text-3xl font-bold text-rose-400">{{ schedule.not_attending_count }}</span>
@@ -201,7 +201,7 @@ onMounted(loadSchedule)
         <div v-else>
           <div v-if="votes.length === 0" class="text-sm text-slate-500 text-center py-3">No votes yet.</div>
           <div v-for="v in votes" :key="v.user_id"
-            class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
+            class="flex items-center gap-3 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0">
             <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-slate-950"
               style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
               {{ (v.display_name || '?')[0].toUpperCase() }}

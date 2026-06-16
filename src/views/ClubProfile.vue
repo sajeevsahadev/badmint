@@ -175,7 +175,7 @@ async function saveRename() {
 
     <!-- Members leaderboard -->
     <div class="card overflow-hidden fade-up">
-      <div class="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)] flex items-center justify-between">
         <span class="text-xs font-bold text-slate-200">
           🏆 Leaderboard
           <span class="text-slate-500 font-normal ml-1">({{ members.filter(m => m.is_active).length }} active)</span>
@@ -190,7 +190,7 @@ async function saveRename() {
       <div v-if="leaderboard.length">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-white/[0.06]">
+            <tr class="border-b border-[rgba(15,23,42,0.06)]">
               <th class="pl-4 pr-2 py-2 text-left text-xs uppercase tracking-wider text-slate-500">#</th>
               <th class="pl-2 pr-2 py-2 text-left text-xs uppercase tracking-wider text-slate-500">Player</th>
               <th class="px-2 py-2 text-right text-xs uppercase tracking-wider text-slate-500">Elo</th>
@@ -200,7 +200,7 @@ async function saveRename() {
           </thead>
           <tbody>
             <tr v-for="(p, i) in leaderboard" :key="p.id"
-              class="border-b border-white/[0.04] last:border-0 transition-colors hover:bg-white/[0.02]">
+              class="border-b border-[rgba(15,23,42,0.04)] last:border-0 transition-colors hover:bg-[rgba(15,23,42,0.02)]">
               <td class="pl-4 pr-2 py-3">
                 <span class="text-sm">{{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}</span>
               </td>
@@ -220,15 +220,15 @@ async function saveRename() {
 
       <!-- Unranked members (guests/no matches yet) not in leaderboard -->
       <div v-if="members.filter(m => m.is_active && !leaderboard.some(l => l.id === m.id)).length"
-        class="border-t border-white/[0.06]">
+        class="border-t border-[rgba(15,23,42,0.06)]">
         <div class="px-4 py-2 text-[10px] uppercase tracking-widest text-slate-600">No matches yet</div>
         <RouterLink v-for="m in members.filter(m => m.is_active && !leaderboard.some(l => l.id === m.id))"
           :key="m.id" :to="'/player/' + m.id"
-          class="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0
-                 hover:bg-white/[0.02] transition-colors">
+          class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0
+                 hover:bg-[rgba(15,23,42,0.02)] transition-colors">
           <div class="relative shrink-0">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black"
-              style="background:rgba(255,255,255,0.06); color:#94a3b8">
+              style="background:rgba(15,23,42,0.06); color:#64748b">
               {{ initials(m.display_name) }}
             </div>
             <span v-if="m.user_id" class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-slate-900"

@@ -397,7 +397,7 @@ async function leaveClub(clubId) {
 
     <div class="space-y-2">
       <div v-for="r in requests" :key="r.id"
-        class="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        class="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-[rgba(15,23,42,0.03)] border border-[rgba(15,23,42,0.06)]">
         <!-- Avatar initial -->
         <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
           style="background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(0,229,255,.2));">
@@ -446,7 +446,7 @@ async function leaveClub(clubId) {
     </div>
 
     <!-- Generated link -->
-    <div v-if="inviteLink" class="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 mb-3 fade-up">
+    <div v-if="inviteLink" class="rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] p-3 mb-3 fade-up">
       <div class="label mb-1">Invite Link</div>
       <div class="text-xs text-slate-300 break-all font-mono mb-2.5 select-all">{{ inviteLink }}</div>
       <div class="flex gap-2">
@@ -481,7 +481,7 @@ async function leaveClub(clubId) {
       </div>
       <div>
         <label class="label">K-factor</label>
-        <div class="input text-center text-slate-500 bg-white/[0.02] cursor-not-allowed select-none">24</div>
+        <div class="input text-center text-slate-500 bg-[rgba(15,23,42,0.02)] cursor-not-allowed select-none">24</div>
         <div class="text-[10px] text-slate-600 mt-1">Fixed · not editable</div>
       </div>
     </div>
@@ -517,14 +517,14 @@ async function leaveClub(clubId) {
     </div>
 
     <div v-for="m in members" :key="m.user_id"
-      class="flex items-center justify-between py-2.5 border-b border-white/[0.05] last:border-0 gap-2">
+      class="flex items-center justify-between py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0 gap-2">
       <div class="flex-1 min-w-0">
         <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
       </div>
       <select
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
         :value="m.role"
-        class="text-xs rounded-lg border border-white/10 bg-white/[0.05] px-2 py-1 outline-none cursor-pointer"
+        class="text-xs rounded-lg border border-[rgba(15,23,42,0.10)] bg-[rgba(15,23,42,0.05)] px-2 py-1 outline-none cursor-pointer"
         @change="changeRole(m.user_id, $event.target.value, $event.target)">
         <option value="player">🏸 Player</option>
         <option value="manager">🛠 Manager</option>
@@ -534,7 +534,7 @@ async function leaveClub(clubId) {
     </div>
 
     <!-- Guest players (added manually, no Google account linked yet) -->
-    <div v-if="guestPlayers.length" class="mt-1 pt-3 border-t border-white/[0.06]">
+    <div v-if="guestPlayers.length" class="mt-1 pt-3 border-t border-[rgba(15,23,42,0.06)]">
       <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Guest players — no account linked</div>
 
       <div v-for="gp in guestPlayers" :key="gp.id" class="mb-1">
@@ -570,7 +570,7 @@ async function leaveClub(clubId) {
             {{ guestInviteNote.t }}
           </div>
           <div v-if="guestInviteLink" class="fade-up">
-            <div class="text-xs text-slate-400 break-all font-mono mb-2 bg-white/[0.04] rounded-lg p-2 select-all">
+            <div class="text-xs text-slate-400 break-all font-mono mb-2 bg-[rgba(15,23,42,0.04)] rounded-lg p-2 select-all">
               {{ guestInviteLink }}
             </div>
             <div class="flex gap-2">
@@ -664,7 +664,7 @@ async function leaveClub(clubId) {
       </div>
       <div v-if="facResults.length" class="mt-2 space-y-1">
         <button v-for="f in facResults" :key="f.id"
-          class="w-full text-left text-sm px-3 py-2 rounded-xl border border-white/10 hover:border-cyan-500/30 hover:bg-white/[0.03] transition"
+          class="w-full text-left text-sm px-3 py-2 rounded-xl border border-[rgba(15,23,42,0.10)] hover:border-cyan-500/30 hover:bg-[rgba(15,23,42,0.03)] transition"
           @click="linkFacility(f)">
           <span class="font-medium text-slate-200">{{ f.name }}</span>
           <span v-if="f.address" class="text-slate-500 ml-2 text-xs">{{ f.address }}</span>
@@ -704,7 +704,7 @@ async function leaveClub(clubId) {
   <!-- ── Browse / Join more clubs ── -->
   <RouterLink to="/join"
     class="card mb-4 p-4 flex items-center justify-between text-sm text-slate-400
-           hover:border-white/15 transition-all duration-200 fade-up">
+           hover:border-[rgba(15,23,42,0.15)] transition-all duration-200 fade-up">
     <div class="flex items-center gap-3">
       <span class="text-2xl">🏟️</span>
       <div>
@@ -730,7 +730,7 @@ async function leaveClub(clubId) {
     </div>
 
     <div v-for="c in clubs" :key="c.club_id"
-      class="flex items-center gap-2 py-2.5 border-b border-white/[0.05] last:border-0">
+      class="flex items-center gap-2 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0">
 
       <!-- Club info -->
       <div class="flex-1 min-w-0">
@@ -749,7 +749,7 @@ async function leaveClub(clubId) {
       <button v-if="c.role !== 'owner'"
         class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-150"
         :class="leaving === c.club_id
-          ? 'border-white/10 text-slate-600 cursor-wait'
+          ? 'border-[rgba(15,23,42,0.10)] text-slate-600 cursor-wait'
           : 'border-rose-500/25 text-rose-500/70 hover:border-rose-400/50 hover:text-rose-400'"
         :disabled="!!leaving"
         @click="leaveClub(c.club_id)">
@@ -777,7 +777,7 @@ async function leaveClub(clubId) {
         style="background:#0d1829; border:1px solid rgba(239,68,68,.25)">
 
         <!-- Header -->
-        <div class="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+        <div class="px-5 pt-5 pb-4 border-b border-[rgba(15,23,42,0.06)]">
           <div class="flex items-center gap-3 mb-1">
             <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shrink-0"
               style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">

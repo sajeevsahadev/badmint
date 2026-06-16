@@ -230,7 +230,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
     <!-- Match history -->
     <div class="card overflow-hidden fade-up">
-      <div class="px-4 py-3 border-b border-white/[0.06]">
+      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
         <span class="text-xs font-bold text-slate-200">Recent Matches</span>
         <span class="text-[10px] text-slate-600 ml-2">(last {{ matches.length }})</span>
       </div>
@@ -240,8 +240,8 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
       </div>
 
       <button v-for="m in matches" :key="m.id"
-        class="w-full text-left px-4 py-3 border-b border-white/[0.04] last:border-0
-               hover:bg-white/[0.03] transition-colors duration-150 group"
+        class="w-full text-left px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0
+               hover:bg-[rgba(15,23,42,0.03)] transition-colors duration-150 group"
         @click="router.push('/matches?open=' + m.id)">
         <div class="flex items-center justify-between mb-1">
           <span class="text-xs text-slate-500">{{ fmt(m.date) }} · {{ m.name }}</span>
@@ -264,7 +264,7 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
         </div>
       </button>
       <!-- Load more -->
-      <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-white/[0.05]">
+      <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-[rgba(15,23,42,0.05)]">
         <button class="btn-ghost w-full text-sm" :disabled="loadingMore" @click="loadMore">
           {{ loadingMore ? 'Loading…' : 'Load More Matches' }}
         </button>

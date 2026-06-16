@@ -203,7 +203,7 @@ const activityColor = (m30) =>
 
     <div v-for="(club, i) in filteredClubs" :key="club.id"
       class="card p-4 transition-all duration-200"
-      :class="myClubIds.includes(club.id) ? 'card-neon' : 'hover:border-white/15'">
+      :class="myClubIds.includes(club.id) ? 'card-neon' : 'hover:border-[rgba(15,23,42,0.15)]'">
 
       <!-- Top row: rank + name + emirate + status -->
       <div class="flex items-start justify-between gap-2 mb-2">
@@ -259,7 +259,7 @@ const activityColor = (m30) =>
       </div>
 
       <!-- Facility address + maps link -->
-      <div v-if="club.facility_address || club.maps_url" class="mt-2.5 pt-2.5 border-t border-white/[0.05] flex items-center justify-between gap-2">
+      <div v-if="club.facility_address || club.maps_url" class="mt-2.5 pt-2.5 border-t border-[rgba(15,23,42,0.05)] flex items-center justify-between gap-2">
         <span class="text-[11px] text-slate-500 truncate">📍 {{ club.facility_address }}</span>
         <a v-if="club.maps_url" :href="club.maps_url" target="_blank" rel="noopener"
           class="shrink-0 text-[11px] text-neon hover:opacity-80 transition">Maps →</a>
@@ -292,7 +292,7 @@ const activityColor = (m30) =>
 
     <div v-else class="space-y-3">
       <RouterLink v-for="f in filteredFacilities" :key="f.id" :to="'/facility/' + f.id"
-        class="card p-4 flex gap-3 transition-all duration-200 hover:border-white/20 hover:card-neon">
+        class="card p-4 flex gap-3 transition-all duration-200 hover:border-[rgba(15,23,42,0.20)] hover:card-neon">
 
         <!-- Thumbnail -->
         <div class="w-14 h-14 rounded-xl overflow-hidden shrink-0">
@@ -323,7 +323,7 @@ const activityColor = (m30) =>
       <!-- Add facility CTA -->
       <button v-if="user"
         class="card p-4 w-full flex items-center justify-center gap-2 text-sm text-slate-500
-               hover:text-neon hover:border-white/15 transition-all duration-200"
+               hover:text-neon hover:border-[rgba(15,23,42,0.15)] transition-all duration-200"
         @click="showCreateFacility = true">
         + Add Your Facility
       </button>

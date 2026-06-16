@@ -214,7 +214,7 @@ const canDelete = m =>
       <div v-for="m in group.matches" :key="m.id"
         :id="'match-' + m.id"
         class="card overflow-hidden transition-all duration-200"
-        :class="expanded === m.id ? 'card-neon' : 'hover:border-white/15'">
+        :class="expanded === m.id ? 'card-neon' : 'hover:border-[rgba(15,23,42,0.15)]'">
 
       <!-- Summary row -->
       <button class="w-full px-4 py-3 flex items-center gap-3 text-left" @click="toggle(m.id)">
@@ -252,7 +252,7 @@ const canDelete = m =>
       </button>
 
       <!-- Expanded detail -->
-      <div v-if="expanded === m.id" class="border-t border-white/[0.06] px-4 py-3">
+      <div v-if="expanded === m.id" class="border-t border-[rgba(15,23,42,0.06)] px-4 py-3">
         <div class="grid grid-cols-2 gap-3">
           <!-- Side A -->
           <div :class="m.sideA.winner ? 'card-neon' : 'card'" class="p-3">

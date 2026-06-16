@@ -290,7 +290,7 @@ async function submitAndStay() {
         :class="{
           'border-cyan-400/60 bg-cyan-50/10':    playerSide(p.id) === 'A',
           'border-amber-400/60 bg-amber-50/10':   playerSide(p.id) === 'B',
-          'border-white/[0.08] bg-white/[0.02] hover:border-white/20': !playerSide(p.id),
+          'border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.02)] hover:border-[rgba(15,23,42,0.20)]': !playerSide(p.id),
         }"
         @click="assignPlayer(p.id)">
 
@@ -304,7 +304,7 @@ async function submitAndStay() {
             style="background:#fbbf24">B</span>
           <span v-else
             class="w-6 h-6 rounded-lg shrink-0 border flex items-center justify-center text-slate-600"
-            style="border-color:rgba(255,255,255,.1); background:rgba(255,255,255,.04)">+</span>
+            style="border-color:rgba(15,23,42,.1); background:rgba(15,23,42,.04)">+</span>
 
           <div class="min-w-0">
             <span class="text-sm font-medium truncate block"
@@ -323,7 +323,7 @@ async function submitAndStay() {
           class="text-[10px] text-slate-500 shrink-0 ml-2">tap to remove</span>
       </button>
 
-      <div v-if="!displayPlayers.length" class="rounded-2xl p-4 text-center text-sm text-slate-500 border border-white/[0.08]">
+      <div v-if="!displayPlayers.length" class="rounded-2xl p-4 text-center text-sm text-slate-500 border border-[rgba(15,23,42,0.08)]">
         <span v-if="scheduleId && !showAllPlayers">
           No attendees saved for this schedule.
           <RouterLink to="/schedule" class="text-neon underline ml-1">Set attendees →</RouterLink>

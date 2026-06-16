@@ -304,7 +304,7 @@ onMounted(async () => {
 
       <div v-for="club in filtered" :key="club.id"
         class="card p-4 flex items-center justify-between gap-3 transition-all duration-200"
-        :class="statusMap[club.id] === 'member' ? 'card-neon' : 'hover:border-white/15'">
+        :class="statusMap[club.id] === 'member' ? 'card-neon' : 'hover:border-[rgba(15,23,42,0.15)]'">
         <div class="min-w-0">
           <div class="font-semibold text-slate-100 truncate">{{ club.name }}</div>
           <div class="text-[11px] text-slate-500 mt-0.5">

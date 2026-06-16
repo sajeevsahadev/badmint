@@ -110,7 +110,12 @@ async function addSlot() {
   }
 }
 
-async function deleteSlot(id) {
+const confirmDelSlotId = ref(null)
+
+async function deleteSlot() {
+  const id = confirmDelSlotId.value
+  confirmDelSlotId.value = null
+  if (!id) return
   await supabase.rpc('delete_facility_slot', { p_slot_id: id })
   await load()
 }
@@ -272,11 +277,11 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
             </span>
             <div class="flex flex-wrap gap-1.5 flex-1">
               <div v-for="s in scheduleByDay[day - 1]" :key="s.id"
-                class="flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1">
+                class="flex items-center gap-1.5 text-xs bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] rounded-lg px-2 py-1">
                 <span class="text-neon font-semibold">{{ fmtTime(s.start_time) }}–{{ fmtTime(s.end_time) }}</span>
                 <span v-if="s.slot_label" class="text-slate-500">{{ s.slot_label }}</span>
                 <button v-if="isOwner" class="text-slate-700 hover:text-rose-400 transition ml-1"
-                  @click="deleteSlot(s.id)">✕</button>
+                  @click="confirmDelSlotId = s.id">✕</button>
               </div>
             </div>
           </div>
@@ -286,14 +291,14 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
 
     <!-- ── Upcoming bookings ── -->
     <div class="card overflow-hidden mb-4 fade-up">
-      <div class="px-4 py-3 border-b border-white/[0.06]">
+      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
         <span class="text-xs font-bold text-slate-200">🏸 Upcoming Sessions</span>
       </div>
       <div v-if="!upcomingBookings.length" class="px-4 py-5 text-center text-sm text-slate-500">
         No upcoming bookings.
       </div>
       <div v-for="[date, entries] in upcomingBookings" :key="date"
-        class="px-4 py-3 border-b border-white/[0.04] last:border-0">
+        class="px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
         <div class="text-[10px] text-slate-500 font-semibold mb-1.5">{{ fmt(date) }}</div>
         <div v-for="e in entries" :key="e.id"
           class="flex items-center justify-between text-sm">
@@ -310,11 +315,11 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
 
     <!-- ── Past sessions ── -->
     <div v-if="pastBookings.length" class="card overflow-hidden mb-4 fade-up">
-      <div class="px-4 py-3 border-b border-white/[0.06]">
+      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
         <span class="text-xs font-bold text-slate-200">Recent Sessions</span>
       </div>
       <div v-for="b in pastBookings" :key="b.id"
-        class="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.04] last:border-0">
+        class="flex items-center justify-between px-4 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0">
         <RouterLink :to="'/club/' + b.club_id"
           class="text-sm font-semibold text-slate-300 hover:text-neon transition">
           {{ b.club_name }}
@@ -327,7 +332,7 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
     <div v-if="clubs.length" class="card p-4 fade-up">
       <div class="label">Clubs Playing Here</div>
       <div v-for="c in clubs" :key="c.id"
-        class="flex items-center gap-3 py-2 border-b border-white/[0.05] last:border-0">
+        class="flex items-center gap-3 py-2 border-b border-[rgba(15,23,42,0.05)] last:border-0">
         <div class="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-slate-950 shrink-0"
           style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
           {{ initials(c.name) }}
@@ -341,4 +346,27 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
     </div>
 
   </template>
+
+  <!-- Delete slot confirm -->
+  <Teleport to="body">
+    <div v-if="confirmDelSlotId" class="fixed inset-0 z-50 flex items-center justify-center px-5"
+      style="background:rgba(0,0,0,.75);backdrop-filter:blur(6px)"
+      @click.self="confirmDelSlotId = null">
+      <div class="w-full max-w-sm rounded-2xl p-6"
+        style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
+        <div class="text-center mb-4">
+          <div class="text-3xl mb-2">🗑️</div>
+          <p class="font-semibold text-slate-100 mb-1">Remove this schedule slot?</p>
+          <p class="text-xs text-slate-400">This removes the weekly time slot from the facility schedule.</p>
+        </div>
+        <div class="flex gap-3">
+          <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition"
+            @click="confirmDelSlotId = null">Cancel</button>
+          <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
+            style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
+            @click="deleteSlot">Yes, Remove</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>

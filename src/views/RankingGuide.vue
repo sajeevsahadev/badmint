@@ -69,7 +69,7 @@ const faqs = [
     <!-- Formula card -->
     <div class="card p-5 mb-5 ring-1 ring-teal-500/20">
       <div class="label">The Formula</div>
-      <div class="rounded-xl bg-white/5 px-4 py-3 font-mono text-sm text-center mb-3">
+      <div class="rounded-xl bg-[rgba(15,23,42,0.05)] px-4 py-3 font-mono text-sm text-center mb-3">
         <span class="text-teal-400">Rank Points</span> =
         <span class="text-amber-400">Skill</span> × 70% +
         <span class="text-purple-400">Attendance</span> × 30%
@@ -79,7 +79,7 @@ const faqs = [
           <div class="text-teal-400 font-semibold">Skill (Elo)</div>
           <div class="text-slate-400 mt-0.5">Normalised 0–100 within your club</div>
         </div>
-        <div class="rounded-lg bg-white/5 p-2 flex items-center justify-center text-slate-500">
+        <div class="rounded-lg bg-[rgba(15,23,42,0.05)] p-2 flex items-center justify-center text-slate-500">
           +
         </div>
         <div class="rounded-lg bg-purple-500/10 p-2">
@@ -116,7 +116,7 @@ const faqs = [
           <div class="rounded-lg bg-amber-500/15 px-2 py-1 text-amber-300 text-[11px]">Side B</div>
           <span>Sanjay (1050) + Khalid (1050) → average <strong>1050</strong></span>
         </div>
-        <div class="border-t border-white/10 pt-2">
+        <div class="border-t border-[rgba(15,23,42,0.10)] pt-2">
           Side B is slightly favoured. If <strong>Side A wins</strong>:
           Ahmed +14 pts, Ravi +14 pts, Sanjay −14 pts, Khalid −14 pts.
         </div>
@@ -136,7 +136,7 @@ const faqs = [
           {{ f.q }}
           <span class="text-slate-500 group-open:text-teal-400 transition text-lg leading-none">+</span>
         </summary>
-        <div class="px-4 pb-4 text-xs text-slate-400 leading-relaxed border-t border-white/5 pt-3">
+        <div class="px-4 pb-4 text-xs text-slate-400 leading-relaxed border-t border-[rgba(15,23,42,0.05)] pt-3">
           {{ f.a }}
         </div>
       </details>

@@ -165,8 +165,8 @@ onMounted(() => { load(); detectCountry() })
         <!-- Search results -->
         <div v-if="searchRes.length" class="card mt-1 overflow-hidden relative z-10">
           <RouterLink v-for="r in searchRes" :key="r.type + r.id" :to="r.to"
-            class="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.05] last:border-0
-                   hover:bg-white/[0.04] transition-colors">
+            class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0
+                   hover:bg-[rgba(15,23,42,0.04)] transition-colors">
             <span class="text-base">{{ r.type === 'club' ? '🏢' : '🏟️' }}</span>
             <div class="min-w-0">
               <div class="text-sm font-semibold text-slate-100 truncate">{{ r.name }}</div>
@@ -191,7 +191,7 @@ onMounted(() => { load(); detectCountry() })
           </div>
           <div class="grid gap-2" :class="clubs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
             <button v-for="c in clubs" :key="c.club_id"
-              class="card p-3.5 text-left transition-all duration-200 hover:border-white/20"
+              class="card p-3.5 text-left transition-all duration-200 hover:border-[rgba(15,23,42,0.20)]"
               :class="currentClub?.club_id === c.club_id ? 'card-neon' : ''"
               @click="switchMyClub(c.club_id)">
               <div class="flex items-center gap-2.5 mb-2">
@@ -300,7 +300,7 @@ onMounted(() => { load(); detectCountry() })
           </div>
           <div v-else class="grid grid-cols-2 gap-2">
             <RouterLink v-for="(c, i) in filteredClubs" :key="c.id" :to="'/club/' + c.id"
-              class="card p-3 transition-all duration-200 hover:border-white/20"
+              class="card p-3 transition-all duration-200 hover:border-[rgba(15,23,42,0.20)]"
               :class="myClubsWithScore.some(m => m.id === c.id) ? 'card-neon' : ''">
               <div class="flex items-start justify-between mb-1">
                 <span class="text-sm font-black" :class="i < 3 ? 'text-gold' : 'text-slate-500'">
@@ -329,8 +329,8 @@ onMounted(() => { load(); detectCountry() })
           <div v-else class="card overflow-hidden">
             <RouterLink v-for="(p, i) in topPlayers" :key="p.player_id"
               :to="'/player/' + p.player_id"
-              class="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0
-                     hover:bg-white/[0.02] transition-colors">
+              class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0
+                     hover:bg-[rgba(15,23,42,0.02)] transition-colors">
               <span class="text-sm w-6 shrink-0 font-bold"
                 :class="i < 3 ? 'text-gold' : 'text-slate-600'">
                 {{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}
@@ -350,13 +350,13 @@ onMounted(() => { load(); detectCountry() })
         <!-- ── Explore CTAs ── -->
         <div class="grid grid-cols-2 gap-2 mb-5 fade-up">
           <RouterLink to="/explore?tab=facilities"
-            class="card p-4 flex flex-col items-center text-center hover:border-white/20 transition-all duration-200">
+            class="card p-4 flex flex-col items-center text-center hover:border-[rgba(15,23,42,0.20)] transition-all duration-200">
             <span class="text-2xl mb-1.5">🏟️</span>
             <div class="text-xs font-bold text-slate-200">Find a Facility</div>
             <div class="text-[10px] text-slate-500 mt-0.5">Courts near you</div>
           </RouterLink>
           <RouterLink to="/explore"
-            class="card p-4 flex flex-col items-center text-center hover:border-white/20 transition-all duration-200">
+            class="card p-4 flex flex-col items-center text-center hover:border-[rgba(15,23,42,0.20)] transition-all duration-200">
             <span class="text-2xl mb-1.5">🌍</span>
             <div class="text-xs font-bold text-slate-200">Explore Clubs</div>
             <div class="text-[10px] text-slate-500 mt-0.5">Join a team</div>
@@ -375,7 +375,7 @@ onMounted(() => { load(); detectCountry() })
           <button
             class="card p-4 flex flex-col gap-2.5 text-left w-full
                    active:scale-[0.98] transition-all duration-150"
-            :class="canInstall ? 'card-neon hover:border-cyan-400/40' : 'hover:border-white/20'"
+            :class="canInstall ? 'card-neon hover:border-cyan-400/40' : 'hover:border-[rgba(15,23,42,0.20)]'"
             @click="canInstall ? promptInstall() : (showAndroidGuide = true)">
             <div class="flex items-center justify-between">
               <span class="text-2xl">🤖</span>
@@ -391,7 +391,7 @@ onMounted(() => { load(); detectCountry() })
             <div class="text-xs text-center py-1.5 border rounded-xl mt-auto transition-colors"
               :class="canInstall
                 ? 'btn-primary border-transparent'
-                : 'border-white/15 text-slate-400 hover:text-neon hover:border-neon/30'">
+                : 'border-[rgba(15,23,42,0.15)] text-slate-400 hover:text-neon hover:border-neon/30'">
               {{ canInstall ? 'Install Now →' : 'Show me how →' }}
             </div>
           </button>

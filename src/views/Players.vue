@@ -134,7 +134,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
   <!-- Invite share panel -->
   <div v-if="invite" class="card-violet p-4 mb-4 fade-up">
     <div class="label mb-1">Share Invite with {{ invite.name }}</div>
-    <div class="text-xs text-slate-300 font-mono break-all mb-3 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] select-all">
+    <div class="text-xs text-slate-300 font-mono break-all mb-3 px-3 py-2 rounded-xl bg-[rgba(15,23,42,0.04)] border border-[rgba(15,23,42,0.08)] select-all">
       {{ invite.link }}
     </div>
     <div class="grid grid-cols-3 gap-2">
@@ -155,15 +155,15 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
 
   <!-- Roster list -->
   <div v-if="players.length" class="card overflow-hidden fade-up">
-    <div class="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
+    <div class="px-4 py-2.5 border-b border-[rgba(15,23,42,0.06)] flex items-center justify-between">
       <span class="text-xs text-slate-500 font-medium">
         {{ players.length }} player{{ players.length !== 1 ? 's' : '' }} · sorted by Elo
       </span>
     </div>
 
     <div v-for="(p, i) in players" :key="p.id"
-      class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0 transition-colors duration-150"
-      :class="p.is_active ? 'hover:bg-white/[0.02]' : 'opacity-50'">
+      class="flex items-center justify-between px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0 transition-colors duration-150"
+      :class="p.is_active ? 'hover:bg-[rgba(15,23,42,0.02)]' : 'opacity-50'">
 
       <RouterLink :to="'/player/' + p.id" class="flex items-center gap-3 flex-1 min-w-0">
         <!-- Rank circle / inactive indicator -->
@@ -211,7 +211,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
         <!-- Active / Inactive toggle -->
         <button class="text-xs font-semibold px-2 py-1 rounded-lg transition border"
           :class="p.is_active
-            ? 'text-slate-500 border-white/10 hover:text-amber-400 hover:border-amber-500/30'
+            ? 'text-slate-500 border-[rgba(15,23,42,0.10)] hover:text-amber-400 hover:border-amber-500/30'
             : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'"
           :title="p.is_active ? 'Deactivate player' : 'Reactivate player'"
           @click.prevent="toggleActive(p)">

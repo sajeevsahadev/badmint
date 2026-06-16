@@ -98,13 +98,13 @@ const better = (row, side) => {
 
   <!-- Comparison table -->
   <div v-if="rA && rB" class="card overflow-hidden mb-4">
-    <div class="grid grid-cols-3 border-b border-white/10 py-3 px-3 text-center">
+    <div class="grid grid-cols-3 border-b border-[rgba(15,23,42,0.10)] py-3 px-3 text-center">
       <div class="font-semibold text-teal-400">{{ nameOf(a) }}</div>
       <div class="text-xs text-slate-500 self-center">vs</div>
       <div class="font-semibold text-amber-400">{{ nameOf(b) }}</div>
     </div>
     <div v-for="row in statRows" :key="row.label"
-      class="grid grid-cols-3 px-3 py-2 border-b border-white/[0.04] last:border-0 text-center text-sm">
+      class="grid grid-cols-3 px-3 py-2 border-b border-[rgba(15,23,42,0.04)] last:border-0 text-center text-sm">
       <div :class="better(row, 'A') ? 'text-slate-900 font-bold' : 'text-slate-400'">{{ row.vA }}</div>
       <div class="text-[10px] text-slate-500 self-center uppercase tracking-wider">{{ row.label }}</div>
       <div :class="better(row, 'B') ? 'text-slate-900 font-bold' : 'text-slate-400'">{{ row.vB }}</div>
@@ -132,12 +132,12 @@ const better = (row, side) => {
 
   <!-- Best pairs table -->
   <div v-if="pairs.length" class="card overflow-hidden">
-    <div class="px-3 py-2 border-b border-white/5">
+    <div class="px-3 py-2 border-b border-[rgba(15,23,42,0.05)]">
       <div class="text-xs font-semibold text-slate-300">🏅 Best Pairs in Club</div>
       <div class="text-[10px] text-slate-500">Highest win rate when playing together</div>
     </div>
     <div v-for="p in pairs" :key="p.p1 + p.p2"
-      class="flex items-center justify-between px-3 py-2.5 border-b border-white/[0.04] last:border-0">
+      class="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0">
       <div>
         <div class="text-sm font-medium">{{ p.p1_name }} + {{ p.p2_name }}</div>
         <div class="text-xs text-slate-500">{{ p.games }} games together</div>
