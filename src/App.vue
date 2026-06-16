@@ -7,15 +7,37 @@ import { useAuth } from './composables/useAuth'
 import { useClub } from './composables/useClub'
 import { useInstall } from './composables/useInstall'
 import { useSession } from './composables/useSession'
+import { useTheme } from './composables/useTheme'
+import { useBiometricLock } from './composables/useBiometricLock'
 import OnboardingGuide  from './components/OnboardingGuide.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
 
 const { user, ready, signOut } = useAuth()
+const { syncFromProfile } = useTheme()
 const { clubs, currentClub, loadClubs, selectClub } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 const { startSession, trackPage, endSession } = useSession()
+const { isLocked, armOnBoot, unlock } = useBiometricLock()
 const route  = useRoute()
 const router = useRouter()
+
+const unlocking = ref(false)
+const unlockErr = ref('')
+
+async function attemptUnlock() {
+  unlocking.value = true
+  unlockErr.value = ''
+  try { await unlock() }
+  catch (e) { unlockErr.value = e.message || 'Could not verify — try again.' }
+  unlocking.value = false
+}
+
+async function signOutFromLockScreen() {
+  isLocked.value = false
+  await endSession().catch(() => {})
+  await signOut()
+  router.push('/login')
+}
 
 const pendingCount   = ref(0)
 const showIOSHint    = ref(false)
@@ -93,6 +115,7 @@ function closeMenu() { showMenu.value = false }
 
 async function init() {
   if (!user.value) return
+  armOnBoot()
   try {
     await loadClubs()
     await refreshPending()
@@ -106,6 +129,9 @@ async function init() {
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   }).catch(() => {})
+  supabase.from('user_profiles').select('theme_pref').eq('user_id', user.value.id).maybeSingle()
+    .then(({ data }) => { if (data?.theme_pref) syncFromProfile(data.theme_pref) })
+    .catch(() => {})
 }
 
 async function refreshPending() {
@@ -135,12 +161,6 @@ watch(() => route.path, (path) => {
   if (clubs.value.some(c => ['owner', 'manager'].includes(c.role))) refreshPending()
 })
 
-async function logout() {
-  isAdmin.value = false
-  await endSession()
-  await signOut()
-  router.push('/login')
-}
 function onSwitch(e) {
   const c = clubs.value.find(x => x.club_id === e.target.value)
   if (c) selectClub(c)
@@ -155,7 +175,10 @@ const nav = computed(() => [
   { to: '/manage',    label: 'Manage',    icon: '⚙️' },
 ])
 
-const clubFreeRoutes = ['/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin']
+const clubFreeRoutes = [
+  '/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin',
+  '/settings/email', '/settings/notifications', '/settings/security', '/settings/appearance',
+]
 const needsClub = computed(() =>
   !currentClub.value &&
   !clubFreeRoutes.includes(route.path)
@@ -177,6 +200,28 @@ const needsClub = computed(() =>
   </div>
 
   <template v-else>
+
+    <!-- ── Biometric app-lock overlay ──────────────────────────────────────────
+         Re-gates an ALREADY-active session on this device after the configured
+         timeout. Never a substitute for Google sign-in — "Sign out" below always
+         leads back to a fresh login. -->
+    <Teleport to="body">
+      <div v-if="isLocked" class="fixed inset-0 z-[400] flex items-center justify-center px-6"
+        style="background:rgba(238,244,255,.97); backdrop-filter:blur(12px);">
+        <div class="w-full max-w-xs text-center">
+          <div class="text-5xl mb-4">🔒</div>
+          <h2 class="font-display text-xl font-bold gradient-text mb-1">Badminton 360 is locked</h2>
+          <p class="text-sm text-slate-500 mb-6">Verify it's you to continue.</p>
+          <button class="btn-primary w-full py-3.5 mb-3" :disabled="unlocking" @click="attemptUnlock">
+            {{ unlocking ? 'Verifying…' : '🔓 Unlock' }}
+          </button>
+          <p v-if="unlockErr" class="text-xs text-rose-500 mb-3">⚠ {{ unlockErr }}</p>
+          <button class="text-xs text-slate-400 hover:text-slate-600 transition" @click="signOutFromLockScreen">
+            Trouble unlocking? Sign out
+          </button>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- ── PWA update banner ──────────────────────────────────────────────────
          Shown when a new SW is waiting but the app was already past the loading
@@ -418,13 +463,13 @@ const needsClub = computed(() =>
 
             </div>
 
-            <!-- Sign out -->
+            <!-- Account & sign out live on the Profile page now -->
             <div style="border-top:1px solid rgba(0,0,0,.07)" class="p-4">
-              <button @click="logout(); closeMenu()"
+              <RouterLink to="/profile" @click="closeMenu"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm
-                       text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition">
-                <span class="text-base">🚪</span> Sign out
-              </button>
+                       text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 transition">
+                <span class="text-base">👤</span> Profile &amp; Settings
+              </RouterLink>
             </div>
 
           </div>

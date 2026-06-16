@@ -1,7 +1,11 @@
 # CLAUDE.md — Badminton 360 Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v18 and the Badminton 360 rebrand (commit bfbb092).
+> Last updated: June 2026 — reflects all migrations v1–v32, the Badminton 360 rebrand (commit bfbb092),
+> and the Profile settings expansion (gender, email/push prefs, biometric app-lock, appearance, privacy policy).
+> Note: this file previously under-documented v18–v31 and described a dark "neo/cyberpunk" design system
+> that no longer matched the deployed app (it has been light-themed since some point before v19). Both gaps
+> are corrected as of this update — treat anything below as reflecting the actual current codebase.
 
 ---
 
@@ -27,7 +31,7 @@ A group of 6–30 friends books a badminton court at a sports academy or school 
 | Layer | Technology |
 |---|---|
 | Frontend | Vue 3 (Composition API) + Vite |
-| Styling | Tailwind CSS v3 + custom CSS (neo/cyberpunk theme) |
+| Styling | Tailwind CSS v3 + custom CSS (light theme — see Design system below) |
 | PWA | vite-plugin-pwa — installable, offline-capable |
 | Auth | Supabase Auth — Google OAuth only |
 | Database | Supabase (PostgreSQL) |
@@ -35,15 +39,17 @@ A group of 6–30 friends books a badminton court at a sports academy or school 
 | Repo | `https://github.com/sajeevsahadev/badmint` |
 | Live URL | `https://badminton360.app` (custom domain via Cloudflare DNS) · `https://badmint.vercel.app` (Vercel default) |
 
-**Design system:**
-- Background: `#050d1a` (deep navy)
-- Primary/neon: `#00e5ff` (electric cyan)
-- Secondary: `#a855f7` (violet)
-- Accent: `#fbbf24` (gold/amber)
+**Design system (actual, as shipped in `src/style.css` — light theme):**
+- Background: `#eef4ff` (soft blue-white) with three radial-gradient glow accents (cyan/violet/amber) in the corners
+- Cards: solid white (`#ffffff`) with soft shadows — `.card`, `.card-neon`/`.card-violet`/`.card-amber` add a colour-tinted glow border, not glassmorphism
+- Primary/neon: `#00b4d8` / darkened to `#0099b8` for text (`.text-neon`) so it reads on white
+- Secondary/violet: `#a855f7` / darkened to `#8b5cf6` for text (`.text-violet`)
+- Accent/gold: `#fbbf24` / darkened to `#d97706` for text (`.text-gold`)
 - Fonts: Bricolage Grotesque (display) + Outfit (body)
-- Cards: glassmorphism — `bg-white/[0.03]` + `backdrop-blur-xl`
+- Tailwind's near-white `slate-100/200/300` text utilities are remapped to dark equivalents at the bottom of `style.css` ("Light-theme text remapping") so templates written for the old dark theme still read correctly — **note**: this remap does NOT cover `border-white/[opacity]` utilities, so a few older borders (e.g. card section dividers) are faint-to-invisible on the white background. Known cosmetic gap, not yet swept across the codebase.
 - Custom CSS classes: `.card`, `.card-neon`, `.card-violet`, `.card-amber`, `.btn-primary`, `.btn-ghost`, `.btn-violet`, `.btn-success`, `.btn-danger`, `.gradient-text`, `.text-neon`, `.text-violet`, `.text-gold`, `.badge-*`, `.shimmer`, `.fade-up`
 - (The UAE flag hero and `@keyframes flagWave` were removed in the B360 rebrand — Home hero is now a global cyan/violet/amber gradient theme)
+- **Appearance preference exists (Profile → Appearance) but only Light is real.** `tailwind.config.js` has `darkMode: 'class'` wired and `useTheme.js` toggles a `dark` class on `<html>`, but no dark palette has been written yet — selecting Dark just saves the preference for when it ships (see Not Yet Implemented).
 
 ---
 
@@ -88,10 +94,14 @@ badmint/
     │   ├── useClub.js              # clubs, currentClub, loadClubs, selectClub, createClub, isManager
     │   ├── useInstall.js           # PWA install prompt (Android + iOS detection + isInstalled)
     │   ├── useGeo.js               # Auto country detection (ipapi.co + locale fallback, localStorage cache)
-    │   └── useSession.js           # startSession, trackPage, trackAction, endSession
+    │   ├── useSession.js           # startSession, trackPage, trackAction, endSession
+    │   ├── usePushNotifications.js # subscribe(clubId), isSubscribed, getPermission — needs VAPID key
+    │   ├── useTheme.js             # [v32] light/dark/system preference, localStorage + theme_pref sync
+    │   └── useBiometricLock.js     # [v32] WebAuthn app-lock: register/verify/disable/forgetThisDevice/timeout
     ├── components/
     │   ├── InfoTip.vue             # Inline ? tooltip (positioned right-0 top-6 to avoid overflow)
-    │   └── PageHeader.vue          # icon + title + subtitle + collapsible #help slot
+    │   ├── PageHeader.vue          # icon + title + subtitle + collapsible #help slot
+    │   └── ToggleSwitch.vue        # [v32] reusable on/off switch (v-model="modelValue", :disabled)
     └── views/
         ├── Home.vue                # Public landing: global hero, story landing (logged out), Top Clubs/Players (logged in)
         ├── Login.vue               # Google sign-in, feature grid
@@ -106,10 +116,16 @@ badmint/
         ├── Manage.vue              # Club admin: requests, invites, weights, facility, roles, leave club
         ├── Explore.vue             # Public: Clubs tab | Facilities tab (inline create modal) | Players tab
         ├── JoinClub.vue            # Browse clubs + join request + invite token onboarding
-        ├── Profile.vue             # Own profile editor + leave club option per stat row
+        ├── Profile.vue             # Own profile editor (incl. gender), Settings list, Sign Out, Danger Zone, footer
         ├── PlayerProfile.vue       # Public player page (stats, matches — no phone/email)
         ├── ClubProfile.vue         # Public club page (stats, members with profile links)
-        └── FacilityProfile.vue     # Public facility page (schedule, bookings, clubs)
+        ├── FacilityProfile.vue     # Public facility page (schedule, bookings, clubs)
+        ├── PrivacyPolicy.vue       # [v32] Public privacy policy (/privacy) — linked from Profile footer
+        └── settings/               # [v32] Sub-pages reached from Profile → Settings list
+            ├── EmailSettings.vue       # email_prefs toggles (invites/match/digest/payment/news)
+            ├── PushSettings.vue        # push_prefs toggles + subscribe via usePushNotifications
+            ├── SecuritySettings.vue    # Biometric app-lock toggle, timeout, Trusted Devices list
+            └── AppearanceSettings.vue  # Light/Dark/System picker (Dark shows "Soon" badge)
 ```
 
 ---
@@ -130,14 +146,22 @@ badmint/
 | `/guide` | RankingGuide.vue | Required | Ranking explainer |
 | `/manage` | Manage.vue | Required | Club administration |
 | `/join` | JoinClub.vue | Required | Browse + join + invite token |
-| `/profile` | Profile.vue | Required | Edit own profile |
+| `/profile` | Profile.vue | Required | Edit own profile, Settings list, Sign Out, Delete Account |
 | `/player/:id` | PlayerProfile.vue | Required | Public player view |
 | `/club/:id` | ClubProfile.vue | Required | Public club view |
+| `/settings/email` | EmailSettings.vue | Required | [v32] Email notification preferences |
+| `/settings/notifications` | PushSettings.vue | Required | [v32] Push notification preferences + subscribe |
+| `/settings/security` | SecuritySettings.vue | Required | [v32] Biometric app-lock + Trusted Devices |
+| `/settings/appearance` | AppearanceSettings.vue | Required | [v32] Theme preference (Light live, Dark/System deferred) |
+| `/privacy` | PrivacyPolicy.vue | **Public** | [v32] GDPR-aligned privacy policy |
+
+All four `/settings/*` routes (plus `/profile`) are listed in App.vue's `clubFreeRoutes` — they must stay reachable for users with zero clubs, or the "join/create a club" welcome screen blocks them instead of rendering the page.
 
 **Auth guard logic** (`router/index.js`):
 - Uses `sessionStorage` key `bm_after_login` ONLY for `/join` and `/player/:id` deep-links
 - Redirect is consumed only when landing on `/` (post-OAuth) — NOT on every navigation
 - Supabase client has `persistSession: true` — users stay logged in until explicit sign-out
+- Biometric app-lock (see §10) is a separate, client-side-only gate layered on top of this — it never substitutes for the Supabase session check above
 
 ---
 
@@ -167,6 +191,16 @@ badmint/
 21. `supabase/v20_schema.sql` — Open poll voting (any auth user, no club membership required) + public get_schedule_votes (grant to anon) + get_club_leaderboard security-definer RPC (bypasses v_leaderboard RLS for public club profiles)
 22. `supabase/v21_schema.sql` — get_schedule_votes: add auth.users join so Google display name shows for voters who haven't set up their profile
 23. `supabase/v22_schema.sql` — Super admin panel: admin_get_clubs, admin_rename_club, admin_get_facilities, admin_update_facility, admin_delete_facility, admin_get_tournaments; self-grant INSERT for sajeevsahadev@gmail.com; AdminPanel.vue expanded to 6 tabs (Stats/Users/Clubs/Facilities/Tournaments/Roles)
+24. `supabase/v23_schema.sql` — Wallet contributions: restrict INSERT to managers/owners only
+25. `supabase/v24_schema.sql` — `delete_join_request()` RPC so managers can remove rejected join requests
+26. `supabase/v25_schema.sql` — DB-level trigger guard: a club must always retain at least one owner
+27. `supabase/v26_schema.sql` — Guest player account linking via invite (`invite_guest_player()`, `club_invites.guest_player_id`)
+28. `supabase/v27_schema.sql` — Performance indexes (club_members.user_id, match_sides.match_id, etc.) for scale
+29. `supabase/v28_schema.sql` — Admin panel fixes: `get_all_users` session stats, `admin_get_clubs`/`admin_get_facilities` dedup, `admin_create_facility`
+30. `supabase/v29_schema.sql` — `admin_delete_club()` — app_admin can force-delete any club via CASCADE, bypassing the match-count guard
+31. `supabase/v30_schema.sql` — `facilities.courts_count` column; dropped the UAE-only `emirate` CHECK constraint (globalization)
+32. `supabase/v31_schema.sql` — GDPR account deletion: `created_by`/`registered_by` FKs made nullable; `check_can_delete_account()` + `delete_account_data()` RPCs (blocks on club ownership, match history, wallet/PaySplit balance); paired with the `delete-account` Edge Function
+33. `supabase/v32_schema.sql` — Profile settings expansion: `user_profiles` gains `gender`, `theme_pref`, `email_prefs` jsonb, `push_prefs` jsonb; **consolidates `upsert_profile` into a single 7-param function** (drops the old v2 3-param + v3 6-param overloads); adds `update_theme_pref()`, `update_notification_prefs()`; adds `webauthn_credentials` table for the biometric app-lock
 
 ---
 
@@ -248,23 +282,38 @@ invited_by, created_at, expires_at (now + 7 days)
 
 ---
 
-### User Profiles (v2 + v3)
+### User Profiles (v2 + v3 + v32)
 
 **`user_profiles`**
 ```
 user_id (PK, → auth.users), nickname, phone, bio, avatar_url
-+ [v3] full_name, emirate, country (default 'UAE')
-+ [v5] last_seen_at (timestamptz) — updated on every navigation for online status
++ [v3]  full_name, emirate, country (default 'UAE')
++ [v5]  last_seen_at (timestamptz) — updated on every navigation for online status
++ [v32] gender ('male'|'female'|'non_binary'|'unspecified', nullable)
++ [v32] theme_pref ('light'|'dark'|'system', default 'system')
++ [v32] email_prefs jsonb (default {invites,match_recorded,weekly_digest,payment_reminders,news})
++ [v32] push_prefs  jsonb (default {invites,match_recorded,schedule_polls,payment_reminders})
 updated_at
 ```
-- RLS: public read (all columns); only own user can write
-- **Privacy rule**: `phone` and `email` are NEVER shown to other users. Only `nickname`, `bio`, `emirate` are public.
-- **Critical**: `upsert_profile` has TWO PostgreSQL overloads (v2 3-param, v3 6-param). Always pass all 6 named params to avoid ambiguity:
+- RLS: public read (all columns) via `up_read using (true)`; only own user can write via `up_write`.
+  **Known gap**: this means `phone`/`gender` are technically SELECT-able by any authenticated client straight
+  through the Supabase REST API even though no view in the app displays them to other users — the privacy
+  rule below is enforced by client code, not by column-level RLS. Worth a dedicated follow-up (split into a
+  public-safe view, or a security-definer RPC for public profile reads that excludes these columns).
+- **Privacy rule (app-enforced)**: `phone`, `email`, and `gender` are NEVER shown to other users. Only `nickname`, `bio`, `emirate` are public.
+- **`upsert_profile` is now ONE consolidated 7-param function (v32)** — the old "two overloads, always pass 6 params" landmine from v2/v3 is gone; both prior overloads were dropped. Still pass every param explicitly for clarity (all but `p_nickname` have defaults of `null`):
   ```js
   supabase.rpc('upsert_profile', {
-    p_nickname, p_full_name: null, p_phone, p_bio, p_emirate: null, p_country: null
+    p_nickname, p_full_name: null, p_phone, p_bio, p_emirate: null, p_country: null, p_gender: null
   })
   ```
+
+**`webauthn_credentials`** (v32 — biometric app-lock)
+```
+id, user_id (→ auth.users), credential_id (unique text), device_label, created_at, last_used_at
+```
+- RLS: own-row only (`wc_own_all`). No public key or signature is stored/verified server-side — see §10 for the security model.
+- Powers the "Trusted Devices" list in `SecuritySettings.vue`; removing a row here is checked (best-effort, online-only) by `useBiometricLock.verify()` on that device to support remote revocation.
 
 ---
 
@@ -391,7 +440,9 @@ elo_score, part_score, composite, club_rank
 | `reject_join(p_request_id)` | Manager | Rejects join request |
 | `invite_member(p_club_id, p_email)` | Manager | Creates invite token; returns token string |
 | `accept_invite(p_token)` | Any auth | Accepts invite; adds to club + creates player row |
-| `upsert_profile(p_nickname, p_full_name, p_phone, p_bio, p_emirate, p_country)` | Own user | Creates/updates user_profiles — **always pass all 6 params** |
+| `upsert_profile(p_nickname, p_full_name, p_phone, p_bio, p_emirate, p_country, p_gender)` | Own user | Creates/updates user_profiles — single consolidated function as of v32 |
+| `update_theme_pref(p_theme)` | Own user | Sets `user_profiles.theme_pref` ('light'\|'dark'\|'system') |
+| `update_notification_prefs(p_email_prefs?, p_push_prefs?)` | Own user | Upserts `email_prefs`/`push_prefs` jsonb — pass only the one(s) you're changing, the other is left untouched |
 | `toggle_player_active(p_player_id)` | Manager | Toggles is_active; returns new boolean |
 | `rename_match(p_match_id, p_name)` | Manager | Updates match display_name |
 | `update_club_facility(p_club_id, ...)` | Manager | Updates clubs' direct facility fields |
@@ -421,6 +472,11 @@ elo_score, part_score, composite, club_rank
 | `admin_update_facility(p_id, p_name, ...)` | App Admin | Edit any facility details (v22) |
 | `admin_delete_facility(p_id)` | App Admin | Delete facility + cascade unlink clubs/schedule/bookings (v22) |
 | `admin_get_tournaments()` | App Admin | All tournaments with club + creator email (v22) |
+| `delete_join_request(p_request_id)` | Manager | Removes a (typically rejected) join request row (v24) |
+| `invite_guest_player(p_club_id, p_player_id, p_email)` | Manager | Sends an invite tied to an existing guest player so they can claim it (v26) |
+| `admin_delete_club(p_club_id)` | App Admin | Force-deletes any club via CASCADE, skipping the match-count guard `delete_club` enforces for owners (v29) |
+| `check_can_delete_account()` | Own user | GDPR pre-check — returns `{can_delete, reason, details}`; blocks on club ownership, match history, or non-zero wallet/PaySplit balance (v31) |
+| `delete_account_data()` | Own user | GDPR deletion — anonymises `created_by`/`registered_by` FKs to NULL, deletes own PaySplit expenses/profile/sessions; called by the `delete-account` Edge Function right before `auth.admin.deleteUser()` (v31) |
 
 ---
 
@@ -459,14 +515,35 @@ const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 const { sessionId, startSession, trackPage, trackAction, endSession } = useSession()
 ```
 
+### `useTheme.js` (v32)
+```js
+const { theme, resolvedTheme, setTheme, syncFromProfile, DARK_THEME_READY } = useTheme()
+// theme.value → 'light' | 'dark' | 'system' (persisted to localStorage 'b360_theme' + user_profiles.theme_pref)
+// resolvedTheme → 'light' | 'dark', resolving 'system' via matchMedia('prefers-color-scheme: dark')
+// DARK_THEME_READY = false — applyTheme() still toggles the 'dark' class on <html> for forward-compat,
+// but there is no dark CSS yet, so it's a visual no-op until that work lands (see Not Yet Implemented).
+```
+
+### `useBiometricLock.js` (v32)
+```js
+const { isEnabled, isLocked, hasCredentialOnThisDevice, timeoutMs,
+        isPlatformAvailable, armOnBoot, register, disable, forgetThisDevice, setTimeout, verify, unlock } = useBiometricLock()
+```
+- `register(userId, label)` runs the WebAuthn registration ceremony (`navigator.credentials.create`, platform authenticator only) and stores the credential id in `webauthn_credentials` + localStorage.
+- `verify()` runs `navigator.credentials.get()`; a successful resolve is the only proof required (no server-side signature check) — see §10 for why that's an acceptable threat model here. Also does a best-effort online check that the credential wasn't remotely removed from Trusted Devices.
+- `armOnBoot()` (called from `App.vue init()`) sets `isLocked = true` on cold start if enabled; a `visibilitychange` listener re-locks after `timeoutMs` of being hidden.
+- `disable()` turns the gate off on this device without forgetting the credential (toggling back on doesn't need re-registration); `forgetThisDevice()` removes it everywhere.
+
 ---
 
 ## 8. App Shell (App.vue)
 
 - **Loading splash** shown while `ready === false`
-- **Top bar** (authenticated routes only): Badmint logo (RouterLink → `/`) | club switcher | iOS install trigger | profile avatar (→ /profile) | Sign out
+- **Top bar** (authenticated routes only): Badmint logo (RouterLink → `/`) | club switcher | iOS install trigger | profile avatar (→ /profile)
+- **Biometric lock overlay** (v32, highest z-index `z-[400]`): rendered above everything, including the update banner and any open modal, whenever `useBiometricLock().isLocked` is true. "Unlock" runs the WebAuthn ceremony; "Trouble unlocking? Sign out" always falls back to a real sign-out + `/login` — the lock never traps a user who can't pass biometric.
 - **PWA install banners**: Android `beforeinstallprompt` banner + iOS share instructions (authenticated shell only)
 - **No-club welcome screen**: shown when `!currentClub && route not in clubFreeRoutes`; offers Browse/Join/Create
+- **Sign out lives on `/profile` now (v32), not the hamburger menu.** The hamburger's Account section footer links to "Profile & Settings" instead. `App.vue` no longer imports `signOut`/`endSession` directly for this purpose — re-add them there only if some other shell-level flow needs sign-out again (e.g. the lock screen's fallback, which does need its own copy of this logic — see `signOutFromLockScreen()`).
 - **Bottom nav (5 tabs): Home 🏠 | Rankings 🏆 | Matches 📋 | Players 👥 | Manage ⚙️**
   - **Shown for ALL logged-in users on EVERY page** (including public routes: `/`, `/explore`, `/facility/:id`)
   - Uses `exact-active-class` (not `active-class`) so the Home tab only highlights on exactly `/`
@@ -520,12 +597,15 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 7. **`is_manager()` / `is_member()`** use `auth.uid()` — only works in RLS context. Returns false in SQL Editor.
 8. **Inactive players** are excluded from `v_leaderboard`, `v_top_scorers`, and Add Match picker. Their Elo is frozen.
 9. **K-factor is FIXED at 24.** The UI shows it as read-only. `saveCfg` always writes `k_factor: 24`. Never allow user-configurable K again without reconsidering the global ranking fairness.
-10. **`upsert_profile` overload**: Two PG function signatures exist. Always call with all 6 named params to avoid `"could not choose best candidate function"` error.
+10. **`upsert_profile` is one function as of v32** — the old two-overload ambiguity is gone (both prior versions were `DROP FUNCTION`'d). Still name every param explicitly when calling it.
 11. **Explore `requestMap`**: Only includes `pending` status from join_requests (not `approved`). A user who was `approved` but has since left shows the Join button — the `approved` status is intentionally excluded to handle post-leave state.
 12. **`useClub.loadClubs()` deduplicates** by `club_id` — guards against RLS edge case with multiple rows.
 13. **Player names are RouterLinks** across all views (Dashboard, Matches, Explore, Players, ClubProfile) → `/player/:id`. Always use the player's `id` (from `players` table), not `user_id`.
 14. **Facility bookings auto-create** when a match is recorded for a club with `facility_id` set.
 15. **Leave Club blocks**: owners must transfer ownership first; players with match history must be deactivated instead. The `leave_club` RPC enforces both and also deletes the `join_requests` row.
+16. **Biometric app-lock is "app-lock only" — never a login replacement (v32, deliberate security decision).** It can only re-reveal a session that's *already* signed in on that device, gated by `navigator.credentials.get()` succeeding (no server-side signature verification — that's an accepted trade-off given the data behind it is club rankings/expenses among friends, not financial accounts). A real Sign Out (`Profile.vue` or the lock screen's "Sign out" fallback) always requires Google sign-in again; biometric can never substitute for it, even for the same device/user. Don't build a "biometric restores a signed-out session" flow without re-opening this decision explicitly.
+17. **Push subscriptions are one-per-(user, device), not one-per-club.** `push_subscriptions` is keyed `UNIQUE(user_id, endpoint)`, and a device only ever has one push `endpoint`. Calling `subscribe(clubId)` again for a different club on the same device **overwrites** which club that device is subscribed to — it does not add a second subscription. `PushSettings.vue` is scoped to `currentClub` for this reason; don't assume multi-club push fan-out works today.
+18. **Settings sub-pages (`/settings/*`) must stay in `App.vue`'s `clubFreeRoutes`.** Same reasoning as `/profile` — these are account-level, not club-level, and must render for users with zero clubs.
 
 ---
 
@@ -565,8 +645,29 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 - `requestMap`: only includes `pending` status from join_requests — `approved` is excluded to handle post-leave state
 
 ### Profile.vue
-- `upsert_profile` call: passes all 6 named params (p_nickname, p_full_name:null, p_phone, p_bio, p_emirate:null, p_country:null)
+- `upsert_profile` call: passes all 7 named params, now including `p_gender` (v32)
+- Gender field: select with `''` (Prefer not to set, → NULL) / male / female / non_binary / `unspecified` (Rather not to say — a deliberate, distinct choice from leaving it blank)
+- **Settings card** (v32): 4 RouterLink rows → `/settings/email`, `/settings/notifications`, `/settings/security`, `/settings/appearance`
+- **Sign Out** (v32): moved here from the App.vue hamburger menu — styled as a plain list row, not a danger action
 - My Club Rankings: Leave button per row (hidden if owner or games > 0)
+- Footer (v32): tagline, `/privacy` link, version number from `package.json` — renders last, below Danger Zone (GDPR delete account, v31)
+
+### settings/EmailSettings.vue, PushSettings.vue (v32)
+- Both load/save a jsonb prefs blob (`email_prefs` / `push_prefs`) via `update_notification_prefs()`, with an explicit "Save Changes" button (not auto-save per toggle)
+- **Be honest about what's real**: most categories are saved-but-not-yet-wired-to-actual-sending. `EmailSettings.vue` shows a banner saying so; club invite emails always send today regardless of the `invites` toggle (the invite RPC doesn't check it). Don't remove these disclosures without actually building the corresponding senders.
+- `PushSettings.vue` subscribes via `usePushNotifications().subscribe(currentClub.value.club_id)` — see Design Rule 17 for why this is single-club-scoped. Shows a "still being wired up" notice when `VITE_VAPID_PUBLIC_KEY` is unset.
+
+### settings/SecuritySettings.vue (v32)
+- Toggle calls `useBiometricLock().register()` (WebAuthn ceremony) or `.disable()`
+- Lock Timeout buttons (Immediately/1min/5min/30min) call `.setTimeout(ms)`
+- Trusted Devices list reads `webauthn_credentials` directly (RLS-scoped to own rows); "Remove" deletes the row and, if it's this device's credential, also calls `forgetThisDevice()` to clear local state immediately
+
+### settings/AppearanceSettings.vue (v32)
+- Light / Dark / System picker; Dark shows a `.badge-pending` "Soon" tag since `DARK_THEME_READY` is `false` — don't remove that badge until a real dark palette ships
+
+### PrivacyPolicy.vue (v32)
+- Public route `/privacy`; standalone page (no shell top bar since it's `meta:{public:true}`) with its own `‹ Back` button
+- Discloses third-party processors actually in use (Supabase, Google, Resend, ipapi.co) — keep this list honest if new ones are added
 
 ---
 
@@ -633,13 +734,19 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Badminton 360 rebrand + globalization** (commit bfbb092) — all branding renamed to Badminton 360 / B360; UAE flag hero, emirate chips and UAE-specific copy removed; `useGeo` auto country detection; JoinClub emirate dropdown → free-text City/Region; canonical domain badminton360.app
 - **PaySplits: Simplify debts toggle + opening balances** (v19) — Splitwise-style toggle in Balance tab (ON = fewest payments via greedy netting incl. wallet + opening balances; OFF = debts as recorded, wallet/opening shown vs "Club Pool"); admin-only per-player opening balance (± amount, one entry per player, for migrating from another app); warning when opening balances don't net to zero
 - **Super Admin Panel** (v22) — `/admin` route guarded at router level; 6-tab panel (Stats | Users | Clubs | Facilities | Tournaments | Roles); admin can view, rename/delete clubs, edit/delete facilities, delete tournaments, grant/revoke roles; sajeevsahadev@gmail.com self-grant INSERT in v22_schema.sql
+- **GDPR account deletion** (v31) — Profile → Danger Zone; `check_can_delete_account()` pre-check blocks on club ownership, match history, or non-zero wallet/PaySplit balance; `delete-account` Edge Function anonymises FKs then calls `auth.admin.deleteUser()`
+- **Onboarding wizard re-trigger** — accessible any time from the hamburger menu's "Club Setup Wizard" action, not just on first login
+- **Profile settings expansion** (v32) — Gender field (incl. "Rather not to say"); Email Settings + Push Settings preference pages (saved now, most categories not wired to real sending yet — see notes under those views); Security page with a real WebAuthn biometric app-lock (register/verify/Trusted Devices/timeout, app-lock-only — never replaces Google sign-in); Appearance picker (Light fully live, Dark/System save the preference but show "Soon" since no dark palette exists); Sign Out moved from the hamburger to Profile; Privacy Policy page (`/privacy`)
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
 - **Admin dashboard UI** — Full CRUD on all entities now implemented (v22)
 - **Facility admin role** — creator is currently the de-facto owner; formal role pending
 - **Online court booking** — schedule visible but can't reserve online
-- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable); requires VAPID key setup and a Supabase Edge Function to send
+- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable + per-club subscribe UI in `/settings/notifications`); requires VAPID key setup and a Supabase Edge Function to send. Also currently single-club-scoped per device (Design Rule 17) — multi-club fan-out needs a schema change.
+- **Real Dark theme** — `useTheme.js` + `darkMode:'class'` + the Appearance picker are wired, but no dark CSS palette has been written; selecting Dark just saves the preference for later. Converting `style.css` + every view to theme-aware CSS variables is its own pass (~20 files).
+- **Email notification sending** — `EmailSettings.vue` preferences are saved and ready, but only club invite emails actually send today; match-recorded/weekly-digest/payment-reminder/news sender jobs don't exist yet
+- **`user_profiles` column-level privacy** — RLS currently allows any authenticated client to SELECT `phone`/`gender` directly via the REST API even though no view displays them; the privacy rule is enforced client-side only. Worth a follow-up (public-safe view or security-definer RPC).
 - **Season reset** — snapshot Elo, reset to 1000 for new season
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days

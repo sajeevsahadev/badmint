@@ -1,11 +1,18 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { useSession } from '../composables/useSession'
+import pkg from '../../package.json'
 
-const { user } = useAuth()
+const router = useRouter()
+const { user, signOut } = useAuth()
 const { clubs } = useClub()
+const { endSession } = useSession()
+
+const appVersion = pkg.version
 
 const profile  = ref(null)   // user_profiles row
 const myStats  = ref([])     // leaderboard entries for all clubs this user is a player in
@@ -15,9 +22,17 @@ const saved    = ref(false)
 const error    = ref(null)
 
 // Edit form
-const form = ref({ nickname: '', phone: '', bio: '' })
+const form = ref({ nickname: '', phone: '', bio: '', gender: '' })
 let _savedTimer = null
 onUnmounted(() => clearTimeout(_savedTimer))
+
+const GENDER_OPTIONS = [
+  { value: '',            label: 'Prefer not to set' },
+  { value: 'male',        label: 'Male' },
+  { value: 'female',      label: 'Female' },
+  { value: 'non_binary',  label: 'Non-binary' },
+  { value: 'unspecified', label: 'Rather not to say' },
+]
 
 async function load() {
   if (!user.value) return
@@ -44,6 +59,7 @@ async function load() {
   form.value.nickname = prof?.nickname ?? user.value.user_metadata?.full_name ?? ''
   form.value.phone    = prof?.phone ?? ''
   form.value.bio      = prof?.bio ?? ''
+  form.value.gender   = prof?.gender ?? ''
   loading.value = false
 }
 
@@ -59,6 +75,7 @@ async function save() {
     p_bio:       form.value.bio.trim()   || null,
     p_emirate:   profile.value?.emirate  ?? null,
     p_country:   profile.value?.country  ?? null,
+    p_gender:    form.value.gender || null,
   })
   saving.value = false
   if (err) { error.value = err.message }
@@ -66,6 +83,7 @@ async function save() {
     saved.value = true
     if (!profile.value) profile.value = {}
     profile.value.nickname = form.value.nickname.trim()
+    profile.value.gender   = form.value.gender || null
     clearTimeout(_savedTimer)
     _savedTimer = setTimeout(() => { saved.value = false }, 3000)
   }
@@ -95,6 +113,15 @@ async function leaveClub(clubId) {
     await load()
     leaveNote.value = 'You have left the club.'
   }
+}
+
+// ── Sign out ──────────────────────────────────────────────────────────────────
+const loggingOut = ref(false)
+async function logout() {
+  loggingOut.value = true
+  await endSession().catch(() => {})
+  await signOut()
+  router.push('/login')
 }
 
 // ── Delete Account (GDPR) ────────────────────────────────────────────────────
@@ -182,6 +209,12 @@ async function confirmDelete() {
           <input v-model="form.phone" class="input" type="tel" placeholder="+971 50 123 4567" />
         </div>
         <div>
+          <label class="label">Gender <span class="text-slate-600">(optional)</span></label>
+          <select v-model="form.gender" class="input">
+            <option v-for="opt in GENDER_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+        </div>
+        <div>
           <label class="label">Bio <span class="text-slate-600">(optional)</span></label>
           <textarea v-model="form.bio" class="input resize-none" rows="2"
             placeholder="Tell the court about yourself…" maxlength="120" />
@@ -196,15 +229,56 @@ async function confirmDelete() {
       </button>
     </div>
 
+    <!-- Settings -->
+    <div class="card overflow-hidden mb-4 fade-up">
+      <div class="px-4 py-3 border-b" style="border-color:rgba(15,23,42,.06)">
+        <div class="text-xs font-bold text-slate-700">Settings</div>
+      </div>
+      <RouterLink to="/settings/email"
+        class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
+        style="border-color:rgba(15,23,42,.04)">
+        <span class="text-lg w-6 text-center shrink-0">📧</span>
+        <span class="text-sm font-medium text-slate-700 flex-1">Email Settings</span>
+        <span class="text-slate-300">›</span>
+      </RouterLink>
+      <RouterLink to="/settings/notifications"
+        class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
+        style="border-color:rgba(15,23,42,.04)">
+        <span class="text-lg w-6 text-center shrink-0">🔔</span>
+        <span class="text-sm font-medium text-slate-700 flex-1">Device &amp; Push Notifications</span>
+        <span class="text-slate-300">›</span>
+      </RouterLink>
+      <RouterLink to="/settings/security"
+        class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
+        style="border-color:rgba(15,23,42,.04)">
+        <span class="text-lg w-6 text-center shrink-0">🔒</span>
+        <span class="text-sm font-medium text-slate-700 flex-1">Security</span>
+        <span class="text-slate-300">›</span>
+      </RouterLink>
+      <RouterLink to="/settings/appearance"
+        class="flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] transition">
+        <span class="text-lg w-6 text-center shrink-0">🎨</span>
+        <span class="text-sm font-medium text-slate-700 flex-1">Appearance</span>
+        <span class="text-slate-300">›</span>
+      </RouterLink>
+    </div>
+
+    <!-- Sign out -->
+    <button class="card w-full flex items-center gap-3 px-4 py-3.5 mb-4 hover:bg-black/[0.02] transition text-left fade-up"
+      :disabled="loggingOut" @click="logout">
+      <span class="text-lg w-6 text-center shrink-0">🚪</span>
+      <span class="text-sm font-medium text-slate-700 flex-1">{{ loggingOut ? 'Signing out…' : 'Sign Out' }}</span>
+    </button>
+
     <!-- Club stats + leave -->
     <div v-if="myStats.length" class="card overflow-hidden mb-4 fade-up">
-      <div class="px-4 py-3 border-b border-white/[0.06]">
-        <div class="text-xs font-bold text-slate-200">My Club Rankings</div>
+      <div class="px-4 py-3 border-b" style="border-color:rgba(15,23,42,.06)">
+        <div class="text-xs font-bold text-slate-700">My Club Rankings</div>
       </div>
       <div v-for="s in myStats" :key="s.id"
-        class="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] last:border-0 gap-2">
+        class="flex items-center justify-between px-4 py-3 border-b last:border-0 gap-2" style="border-color:rgba(15,23,42,.04)">
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold text-slate-100">{{ clubName(s.club_id) }}</div>
+          <div class="text-sm font-semibold text-slate-700">{{ clubName(s.club_id) }}</div>
           <div class="text-[11px] text-slate-500">{{ s.display_name }}</div>
         </div>
         <div class="text-right shrink-0">
@@ -251,6 +325,15 @@ async function confirmDelete() {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center py-8 fade-up">
+      <p class="text-xs text-slate-400 mb-2">Made with 🏸 and ❤️ for badminton communities everywhere</p>
+      <p class="text-[11px]">
+        <RouterLink to="/privacy" class="text-slate-400 hover:text-cyan-600 transition">Privacy Policy</RouterLink>
+      </p>
+      <p class="text-[10px] text-slate-300 mt-2">Badminton 360 v{{ appVersion }}</p>
     </div>
 
   </template>
