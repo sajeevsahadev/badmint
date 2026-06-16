@@ -54,10 +54,8 @@ async function load() {
   // 2. Public profile (nickname + bio only — deliberately no phone/email)
   const [profRes, statsRes, clubRes, matchRes] = await Promise.all([
     p.user_id
-      ? supabase.from('user_profiles')
-          .select('nickname, bio, emirate, avatar_url')   // ← phone & email intentionally omitted
-          .eq('user_id', p.user_id)
-          .maybeSingle()
+      ? supabase.rpc('get_public_profiles', { p_user_ids: [p.user_id] })
+          .then(({ data, error }) => ({ data: data?.[0] ?? null, error }))
       : { data: null },
 
     supabase.from('v_leaderboard')

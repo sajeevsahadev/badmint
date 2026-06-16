@@ -61,7 +61,7 @@ async function load() {
   // Enrich members with names from user_profiles (nickname > full_name) then players fallback
   const memberIds = (m ?? []).map(x => x.user_id)
   const { data: profiles } = memberIds.length
-    ? await supabase.from('user_profiles').select('user_id, nickname, full_name').in('user_id', memberIds)
+    ? await supabase.rpc('get_member_profile_names', { p_club_id: cid })
     : { data: [] }
 
   const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p]))

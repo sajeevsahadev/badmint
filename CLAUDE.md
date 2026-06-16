@@ -1,8 +1,9 @@
 # CLAUDE.md — Badminton 360 Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v32, the Badminton 360 rebrand (commit bfbb092),
-> and the Profile settings expansion (gender, email/push prefs, biometric app-lock, appearance, privacy policy).
+> Last updated: June 2026 — reflects all migrations v1–v33, the Badminton 360 rebrand (commit bfbb092),
+> the Profile settings expansion (gender, email/push prefs, biometric app-lock, appearance, privacy policy),
+> and the `user_profiles` RLS lockdown (v33 — phone/gender/full_name were publicly SELECT-able; fixed).
 > Note: this file previously under-documented v18–v31 and described a dark "neo/cyberpunk" design system
 > that no longer matched the deployed app (it has been light-themed since some point before v19). Both gaps
 > are corrected as of this update — treat anything below as reflecting the actual current codebase.
@@ -201,6 +202,7 @@ All four `/settings/*` routes (plus `/profile`) are listed in App.vue's `clubFre
 31. `supabase/v30_schema.sql` — `facilities.courts_count` column; dropped the UAE-only `emirate` CHECK constraint (globalization)
 32. `supabase/v31_schema.sql` — GDPR account deletion: `created_by`/`registered_by` FKs made nullable; `check_can_delete_account()` + `delete_account_data()` RPCs (blocks on club ownership, match history, wallet/PaySplit balance); paired with the `delete-account` Edge Function
 33. `supabase/v32_schema.sql` — Profile settings expansion: `user_profiles` gains `gender`, `theme_pref`, `email_prefs` jsonb, `push_prefs` jsonb; **consolidates `upsert_profile` into a single 7-param function** (drops the old v2 3-param + v3 6-param overloads); adds `update_theme_pref()`, `update_notification_prefs()`; adds `webauthn_credentials` table for the biometric app-lock
+34. `supabase/v33_schema.sql` — **Security fix**: tightens `user_profiles` RLS from `up_read using (true)` (anyone could SELECT phone/gender/full_name) to owner-only; adds `resolve_public_nickname()`, `get_public_profiles()`, `get_member_profile_names()` RPCs; redefines `v_leaderboard`/`v_best_pairs`/`v_top_scorers` to resolve nicknames via the new SECURITY DEFINER function instead of a raw join to `user_profiles`
 
 ---
 
@@ -282,7 +284,7 @@ invited_by, created_at, expires_at (now + 7 days)
 
 ---
 
-### User Profiles (v2 + v3 + v32)
+### User Profiles (v2 + v3 + v32 + v33)
 
 **`user_profiles`**
 ```
@@ -295,12 +297,12 @@ user_id (PK, → auth.users), nickname, phone, bio, avatar_url
 + [v32] push_prefs  jsonb (default {invites,match_recorded,schedule_polls,payment_reminders})
 updated_at
 ```
-- RLS: public read (all columns) via `up_read using (true)`; only own user can write via `up_write`.
-  **Known gap**: this means `phone`/`gender` are technically SELECT-able by any authenticated client straight
-  through the Supabase REST API even though no view in the app displays them to other users — the privacy
-  rule below is enforced by client code, not by column-level RLS. Worth a dedicated follow-up (split into a
-  public-safe view, or a security-definer RPC for public profile reads that excludes these columns).
-- **Privacy rule (app-enforced)**: `phone`, `email`, and `gender` are NEVER shown to other users. Only `nickname`, `bio`, `emirate` are public.
+- **RLS is owner-only as of v33** (`up_read_own using (user_id = auth.uid())`) — fixes a real gap where the old `up_read using (true)` policy let ANY authenticated client SELECT `phone`/`gender`/`full_name` for ANY user straight through the Supabase REST API, regardless of what the UI chose to display. `up_write` (own row, all operations) is unchanged.
+- **Cross-user profile reads now go through SECURITY DEFINER RPCs (v33), never the raw table:**
+  - `resolve_public_nickname(p_user_id)` — internal helper; only ever returns `nickname`. Used INSIDE `v_leaderboard`/`v_best_pairs`/`v_top_scorers` instead of a raw `LEFT JOIN user_profiles`, specifically so those views keep resolving other players' nicknames correctly now that RLS is tightened — see Design Rule 19 for why a raw join couldn't be trusted to bypass RLS on its own.
+  - `get_public_profiles(p_user_ids uuid[])` — returns `nickname, bio, emirate, avatar_url` for a batch of users. Used by `PlayerProfile.vue` and `playerNames.js` (`withNicknames()`/`buildNameMap()`) for anyone viewing another player's public info.
+  - `get_member_profile_names(p_club_id)` — returns `nickname, full_name` for members of a club, scoped to callers who are themselves a member of that club. Used by `Manage.vue`'s member list. `full_name` deliberately is NOT in `get_public_profiles` — it's the Google account name, more sensitive than a self-chosen nickname, so it only flows to fellow club members, not the whole app.
+- **Privacy rule (now DB-enforced, not just app-enforced)**: `phone` and `email` are NEVER shown to other users. `gender` and `full_name` are limited to the scopes above (self, or fellow club members for full_name). Only `nickname`, `bio`, `emirate`, `avatar_url` are broadly public.
 - **`upsert_profile` is now ONE consolidated 7-param function (v32)** — the old "two overloads, always pass 6 params" landmine from v2/v3 is gone; both prior overloads were dropped. Still pass every param explicitly for clarity (all but `p_nickname` have defaults of `null`):
   ```js
   supabase.rpc('upsert_profile', {
@@ -443,6 +445,9 @@ elo_score, part_score, composite, club_rank
 | `upsert_profile(p_nickname, p_full_name, p_phone, p_bio, p_emirate, p_country, p_gender)` | Own user | Creates/updates user_profiles — single consolidated function as of v32 |
 | `update_theme_pref(p_theme)` | Own user | Sets `user_profiles.theme_pref` ('light'\|'dark'\|'system') |
 | `update_notification_prefs(p_email_prefs?, p_push_prefs?)` | Own user | Upserts `email_prefs`/`push_prefs` jsonb — pass only the one(s) you're changing, the other is left untouched |
+| `get_public_profiles(p_user_ids uuid[])` | Any auth | (v33) `nickname, bio, emirate, avatar_url` for a batch of users — the only sanctioned way to read OTHER users' profile fields |
+| `get_member_profile_names(p_club_id)` | Member | (v33) `nickname, full_name` for fellow members of a club you also belong to |
+| `resolve_public_nickname(p_user_id)` | Internal | (v33) SECURITY DEFINER helper used inside `v_leaderboard`/`v_best_pairs`/`v_top_scorers` — not meant to be called directly, but harmless if it were (only returns nickname) |
 | `toggle_player_active(p_player_id)` | Manager | Toggles is_active; returns new boolean |
 | `rename_match(p_match_id, p_name)` | Manager | Updates match display_name |
 | `update_club_facility(p_club_id, ...)` | Manager | Updates clubs' direct facility fields |
@@ -606,6 +611,7 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 16. **Biometric app-lock is "app-lock only" — never a login replacement (v32, deliberate security decision).** It can only re-reveal a session that's *already* signed in on that device, gated by `navigator.credentials.get()` succeeding (no server-side signature verification — that's an accepted trade-off given the data behind it is club rankings/expenses among friends, not financial accounts). A real Sign Out (`Profile.vue` or the lock screen's "Sign out" fallback) always requires Google sign-in again; biometric can never substitute for it, even for the same device/user. Don't build a "biometric restores a signed-out session" flow without re-opening this decision explicitly.
 17. **Push subscriptions are one-per-(user, device), not one-per-club.** `push_subscriptions` is keyed `UNIQUE(user_id, endpoint)`, and a device only ever has one push `endpoint`. Calling `subscribe(clubId)` again for a different club on the same device **overwrites** which club that device is subscribed to — it does not add a second subscription. `PushSettings.vue` is scoped to `currentClub` for this reason; don't assume multi-club push fan-out works today.
 18. **Settings sub-pages (`/settings/*`) must stay in `App.vue`'s `clubFreeRoutes`.** Same reasoning as `/profile` — these are account-level, not club-level, and must render for users with zero clubs.
+19. **Never read another user's `user_profiles` row via a raw `LEFT JOIN`/`.from('user_profiles')` — always go through `get_public_profiles()`, `get_member_profile_names()`, or `resolve_public_nickname()` (v33).** RLS now restricts `user_profiles` SELECT to the owner's own row. Whether a plain SQL `VIEW` bypasses RLS via its owner's privileges depends on Postgres/Supabase specifics this codebase has clearly been burned by before (see `get_club_leaderboard`'s comment about bypassing "v_leaderboard / players RLS") — don't re-introduce a raw cross-user join into a view and assume it'll keep working; wrap it in a SECURITY DEFINER function call instead, which bypasses RLS unambiguously regardless of view semantics.
 
 ---
 
@@ -737,6 +743,7 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **GDPR account deletion** (v31) — Profile → Danger Zone; `check_can_delete_account()` pre-check blocks on club ownership, match history, or non-zero wallet/PaySplit balance; `delete-account` Edge Function anonymises FKs then calls `auth.admin.deleteUser()`
 - **Onboarding wizard re-trigger** — accessible any time from the hamburger menu's "Club Setup Wizard" action, not just on first login
 - **Profile settings expansion** (v32) — Gender field (incl. "Rather not to say"); Email Settings + Push Settings preference pages (saved now, most categories not wired to real sending yet — see notes under those views); Security page with a real WebAuthn biometric app-lock (register/verify/Trusted Devices/timeout, app-lock-only — never replaces Google sign-in); Appearance picker (Light fully live, Dark/System save the preference but show "Soon" since no dark palette exists); Sign Out moved from the hamburger to Profile; Privacy Policy page (`/privacy`)
+- **`user_profiles` RLS lockdown** (v33) — fixed a real gap where `phone`/`gender`/`full_name` were SELECT-able by any authenticated client via the REST API; RLS is now owner-row-only, with `get_public_profiles()`/`get_member_profile_names()`/`resolve_public_nickname()` SECURITY DEFINER RPCs covering every legitimate cross-user read that used to rely on the open policy
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
@@ -746,7 +753,6 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable + per-club subscribe UI in `/settings/notifications`); requires VAPID key setup and a Supabase Edge Function to send. Also currently single-club-scoped per device (Design Rule 17) — multi-club fan-out needs a schema change.
 - **Real Dark theme** — `useTheme.js` + `darkMode:'class'` + the Appearance picker are wired, but no dark CSS palette has been written; selecting Dark just saves the preference for later. Converting `style.css` + every view to theme-aware CSS variables is its own pass (~20 files).
 - **Email notification sending** — `EmailSettings.vue` preferences are saved and ready, but only club invite emails actually send today; match-recorded/weekly-digest/payment-reminder/news sender jobs don't exist yet
-- **`user_profiles` column-level privacy** — RLS currently allows any authenticated client to SELECT `phone`/`gender` directly via the REST API even though no view displays them; the privacy rule is enforced client-side only. Worth a follow-up (public-safe view or security-definer RPC).
 - **Season reset** — snapshot Elo, reset to 1000 for new season
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days

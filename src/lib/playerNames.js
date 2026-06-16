@@ -10,10 +10,7 @@ export async function withNicknames(players) {
   if (!players?.length) return players ?? []
   const linked = players.filter(p => p.user_id).map(p => p.user_id)
   if (!linked.length) return players
-  const { data } = await supabase
-    .from('user_profiles')
-    .select('user_id, nickname')
-    .in('user_id', linked)
+  const { data } = await supabase.rpc('get_public_profiles', { p_user_ids: linked })
   const nickMap = Object.fromEntries(
     (data ?? []).filter(p => p.nickname).map(p => [p.user_id, p.nickname])
   )
