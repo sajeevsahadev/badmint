@@ -566,8 +566,9 @@ async function saveExpense() {
     p_paid_from_wallet: isWallet
   }
 
+  const { p_club_id: _cid, ...updateParams } = params
   const { error } = editingId.value
-    ? await supabase.rpc('update_expense', { p_expense_id: editingId.value, ...params })
+    ? await supabase.rpc('update_expense', { p_expense_id: editingId.value, ...updateParams })
     : await supabase.rpc('add_expense', params)
 
   formSaving.value = false
