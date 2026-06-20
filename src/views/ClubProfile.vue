@@ -10,13 +10,14 @@ const router = useRouter()
 const { user } = useAuth()
 const { clubs } = useClub()
 
-const clubId     = route.params.id
-const club       = ref(null)
-const ranking    = ref(null)
-const members    = ref([])
+const clubId      = route.params.id
+const adminView   = ref(false)   // true when ?admin=1 and user is app_admin
+const club        = ref(null)
+const ranking     = ref(null)
+const members     = ref([])
 const leaderboard = ref([])
-const loading    = ref(true)
-const notMember  = ref(false)
+const loading     = ref(true)
+const notMember   = ref(false)
 
 // Join request state
 const joinBusy    = ref(false)
@@ -30,6 +31,14 @@ const isManager = computed(() => ['owner','manager'].includes(myRole.value))
 async function load() {
   loading.value = true
   notMember.value = false
+  adminView.value = false
+
+  // Check if this is an admin view request
+  const wantsAdmin = route.query.admin === '1' && !!user.value
+  if (wantsAdmin) {
+    const { data: roles } = await supabase.rpc('get_my_roles')
+    adminView.value = (roles ?? []).some(r => r.role === 'app_admin')
+  }
 
   // Always fetch public club info via get_public_clubs (bypasses RLS)
   const [rankRes, lbRes] = await Promise.all([
@@ -41,12 +50,10 @@ async function load() {
   ranking.value = publicClub
 
   if (!publicClub) {
-    // Club truly doesn't exist
     loading.value = false
     return
   }
 
-  // Reconstruct club object from public data
   club.value = {
     id:               publicClub.id,
     name:             publicClub.name,
@@ -60,15 +67,14 @@ async function load() {
 
   leaderboard.value = (lbRes.data ?? []).filter(p => p.games > 0)
 
-  if (isMyClub.value) {
-    // Member — fetch full player list
+  if (isMyClub.value || adminView.value) {
+    // Member or admin — fetch full player list
     const memberRes = await supabase.rpc('get_club_players', { p_club_id: clubId })
     members.value = memberRes.data ?? []
   } else {
     // Not a member — show limited view + join prompt
     notMember.value = true
     members.value   = []
-    // Check if a join request already exists
     if (user.value) {
       const { data } = await supabase
         .from('join_requests')
@@ -166,8 +172,18 @@ async function saveRename() {
   </div>
 
   <template v-else>
+    <!-- Admin view banner -->
+    <div v-if="adminView" class="mb-4 rounded-2xl bg-amber-50 border border-amber-300 px-4 py-3 flex items-center gap-3 fade-up">
+      <span class="text-xl shrink-0">👑</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-amber-800">You are viewing this club as Super Admin</p>
+        <p class="text-xs text-amber-600">This view is only visible to admins. Members see a restricted version.</p>
+      </div>
+      <button class="shrink-0 text-xs text-amber-700 underline hover:no-underline" @click="router.back()">← Back to Admin</button>
+    </div>
+
     <!-- Back -->
-    <button class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4"
+    <button v-else class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4"
       @click="router.back()">
       ← Back
     </button>

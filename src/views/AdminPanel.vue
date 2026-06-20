@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { deviceIcon } from '../utils/formatters'
@@ -408,6 +408,9 @@ const statItems = computed(() => !stats.value ? [] : [
                 </div>
               </div>
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                <RouterLink :to="'/club/' + c.club_id + '?admin=1'"
+                  class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px] flex items-center"
+                  title="View club">👁</RouterLink>
                 <button class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Rename" @click="openRename(c)">✏️</button>
                 <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
