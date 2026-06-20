@@ -297,7 +297,7 @@ async function saveRename() {
                 <span class="text-sm">{{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}</span>
               </td>
               <td class="pl-2 pr-2 py-3">
-                <RouterLink :to="'/player/' + p.id"
+                <RouterLink :to="'/player/' + p.id + (adminView ? '?admin=1' : '')"
                   class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate block min-w-0">
                   {{ p.display_name }}
                 </RouterLink>
@@ -315,7 +315,7 @@ async function saveRename() {
         class="border-t border-[rgba(15,23,42,0.06)]">
         <div class="px-4 py-2 text-[10px] uppercase tracking-widest text-slate-600">No matches yet</div>
         <RouterLink v-for="m in members.filter(m => m.is_active && !leaderboard.some(l => l.id === m.id))"
-          :key="m.id" :to="'/player/' + m.id"
+          :key="m.id" :to="'/player/' + m.id + (adminView ? '?admin=1' : '')"
           class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0
                  hover:bg-[rgba(15,23,42,0.02)] transition-colors">
           <div class="relative shrink-0">

@@ -10,6 +10,7 @@ const router = useRouter()
 const { user } = useAuth()
 
 const playerId = route.params.id
+const adminView  = ref(false)
 
 const player      = ref(null)
 const profile     = ref(null)
@@ -41,6 +42,65 @@ async function load() {
   loadError.value = null
   try {
 
+  // Check for admin view
+  const wantsAdmin = route.query.admin === '1' && !!user.value
+  if (wantsAdmin) {
+    const { data: roles } = await supabase.rpc('get_my_roles')
+    adminView.value = (roles ?? []).some(r => r.role === 'app_admin')
+  }
+
+  if (adminView.value) {
+    // ── Admin path: use SECURITY DEFINER RPCs that bypass RLS ──────────
+    const [playerRes, matchRes] = await Promise.all([
+      supabase.rpc('admin_get_player', { p_player_id: playerId }),
+      supabase.rpc('admin_get_player_matches', { p_player_id: playerId, p_limit: matchLimit.value }),
+    ])
+
+    const p = playerRes.data?.[0] ?? null
+    if (!p) { loading.value = false; return }
+
+    player.value   = { id: p.id, display_name: p.display_name, elo: p.elo, club_id: p.club_id, user_id: p.user_id }
+    clubName.value = p.club_name ?? ''
+    emirates.value = p.emirates ?? ''
+
+    // Fetch public profile via existing SECURITY DEFINER RPC
+    if (p.user_id) {
+      const { data: profs } = await supabase.rpc('get_public_profiles', { p_user_ids: [p.user_id] })
+      profile.value = profs?.[0] ?? null
+    }
+
+    // Stats from get_club_leaderboard (already SECURITY DEFINER)
+    const { data: lb } = await supabase.rpc('get_club_leaderboard', { p_club_id: p.club_id })
+    stats.value = (lb ?? []).find(r => r.id === playerId) ?? null
+
+    // Map matches from admin RPC shape → same shape used by template
+    const rawMatches = matchRes.data ?? []
+    hasMoreMatches.value = rawMatches.length >= matchLimit.value
+    matches.value = rawMatches.map(m => {
+      const sideA = m.side_a
+      const sideB = m.side_b
+      const playerInA = (sideA?.participants ?? []).some(mp => mp.player_id === playerId)
+      const mySide  = playerInA ? sideA : sideB
+      const oppSide = playerInA ? sideB : sideA
+      const myMp = (mySide?.participants ?? []).find(mp => mp.player_id === playerId)
+      return {
+        id: m.match_id,
+        date: m.played_on,
+        name: m.display_name ?? `Match #${m.match_number}`,
+        won: mySide?.is_winner ?? false,
+        myScore:  mySide?.score  ?? 0,
+        oppScore: oppSide?.score ?? 0,
+        myTeam:  (mySide?.participants  ?? []).map(mp => mp.display_name).filter(Boolean),
+        oppTeam: (oppSide?.participants ?? []).map(mp => mp.display_name).filter(Boolean),
+        eloDelta: myMp?.elo_after != null ? Math.round(myMp.elo_after - myMp.elo_before) : null,
+      }
+    })
+
+    loading.value = false
+    return
+  }
+
+  // ── Normal member path ──────────────────────────────────────────────
   // 1. Player base row
   const { data: p } = await supabase
     .from('players')
@@ -55,7 +115,7 @@ async function load() {
   const [profRes, statsRes, clubRes, matchRes] = await Promise.all([
     p.user_id
       ? supabase.rpc('get_public_profiles', { p_user_ids: [p.user_id] })
-          .then(({ data, error }) => ({ data: data?.[0] ?? null, error }))
+          .then(({ data }) => ({ data: data?.[0] ?? null }))
       : { data: null },
 
     supabase.from('v_leaderboard')
@@ -89,7 +149,6 @@ async function load() {
   clubName.value = clubRes.data?.name ?? ''
   emirates.value = profRes.data?.emirate ?? clubRes.data?.emirates ?? ''
 
-  // Collect all participant IDs for nickname resolution
   const allParticipantIds = [...new Set(
     (matchRes.data ?? []).flatMap(m =>
       (m.match_sides ?? []).flatMap(s =>
@@ -99,36 +158,33 @@ async function load() {
   )]
   const nameMap = await buildNameMap(allParticipantIds)
 
-  // Filter matches that include this player
-  const rawMatches = (matchRes.data ?? [])
+  const rawMatches = matchRes.data ?? []
   const filtered = rawMatches
     .filter(m => m.match_sides?.some(s =>
       s.match_participants?.some(mp => mp.players?.id === playerId)
     ))
-  // If we got back exactly the limit, there may be more pages
   hasMoreMatches.value = rawMatches.length >= matchLimit.value
-  matches.value = filtered
-    .map(m => {
-      const sideA = m.match_sides?.find(s => s.side === 'A')
-      const sideB = m.match_sides?.find(s => s.side === 'B')
-      const playerInA = sideA?.match_participants?.some(mp => mp.players?.id === playerId)
-      const mySide = playerInA ? sideA : sideB
-      const oppSide = playerInA ? sideB : sideA
-      return {
-        id: m.id,
-        date: m.played_on,
-        name: m.display_name ?? `Match #${m.match_number}`,
-        won: mySide?.is_winner ?? false,
-        myScore:  mySide?.score  ?? 0,
-        oppScore: oppSide?.score ?? 0,
-        myTeam:  (mySide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
-        oppTeam: (oppSide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
-        eloDelta: (() => {
-          const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
-          return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
-        })()
-      }
-    })
+  matches.value = filtered.map(m => {
+    const sideA = m.match_sides?.find(s => s.side === 'A')
+    const sideB = m.match_sides?.find(s => s.side === 'B')
+    const playerInA = sideA?.match_participants?.some(mp => mp.players?.id === playerId)
+    const mySide  = playerInA ? sideA : sideB
+    const oppSide = playerInA ? sideB : sideA
+    return {
+      id: m.id,
+      date: m.played_on,
+      name: m.display_name ?? `Match #${m.match_number}`,
+      won: mySide?.is_winner ?? false,
+      myScore:  mySide?.score  ?? 0,
+      oppScore: oppSide?.score ?? 0,
+      myTeam:  (mySide?.match_participants  ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
+      oppTeam: (oppSide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
+      eloDelta: (() => {
+        const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
+        return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
+      })()
+    }
+  })
 
   loading.value = false
   } catch (e) {
@@ -170,8 +226,18 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
   <template v-else>
 
-    <!-- Back button -->
-    <button class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4 fade-up"
+    <!-- Admin view banner -->
+    <div v-if="adminView" class="mb-4 rounded-2xl bg-amber-50 border border-amber-300 px-4 py-3 flex items-center gap-3 fade-up">
+      <span class="text-xl shrink-0">👑</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-amber-800">You are viewing this player as Super Admin</p>
+        <p class="text-xs text-amber-600">Full match history and stats visible. This view is admin-only.</p>
+      </div>
+      <button class="shrink-0 text-xs text-amber-700 underline hover:no-underline" @click="router.back()">← Back</button>
+    </div>
+
+    <!-- Back button (non-admin) -->
+    <button v-else class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4 fade-up"
       @click="router.back()">
       ← Back
     </button>
