@@ -16,32 +16,82 @@ const ranking    = ref(null)
 const members    = ref([])
 const leaderboard = ref([])
 const loading    = ref(true)
+const notMember  = ref(false)
 
-const isMyClub = computed(() => clubs.value.some(c => c.club_id === clubId))
-const myRole   = computed(() => clubs.value.find(c => c.club_id === clubId)?.role)
+// Join request state
+const joinBusy    = ref(false)
+const joinStatus  = ref(null)   // null | 'pending' | 'sent' | 'error'
+const joinNote    = ref('')
+
+const isMyClub  = computed(() => clubs.value.some(c => c.club_id === clubId))
+const myRole    = computed(() => clubs.value.find(c => c.club_id === clubId)?.role)
 const isManager = computed(() => ['owner','manager'].includes(myRole.value))
 
 async function load() {
   loading.value = true
-  const [clubRes, rankRes, memberRes, lbRes] = await Promise.all([
-    supabase.from('clubs')
-      .select('id, name, emirates, facility_name, facility_address, maps_url, description, created_at')
-      .eq('id', clubId).single(),
+  notMember.value = false
 
+  // Always fetch public club info via get_public_clubs (bypasses RLS)
+  const [rankRes, lbRes] = await Promise.all([
     supabase.rpc('get_public_clubs'),
-
-    supabase.rpc('get_club_players', { p_club_id: clubId }),
-
     supabase.rpc('get_club_leaderboard', { p_club_id: clubId }),
   ])
 
-  club.value        = clubRes.data
-  members.value     = memberRes.data ?? []
+  const publicClub = (rankRes.data ?? []).find(c => c.id === clubId) ?? null
+  ranking.value = publicClub
+
+  if (!publicClub) {
+    // Club truly doesn't exist
+    loading.value = false
+    return
+  }
+
+  // Reconstruct club object from public data
+  club.value = {
+    id:               publicClub.id,
+    name:             publicClub.name,
+    emirates:         publicClub.emirates,
+    facility_name:    publicClub.facility_name,
+    facility_address: publicClub.facility_address,
+    maps_url:         publicClub.maps_url,
+    description:      publicClub.description,
+    created_at:       publicClub.created_at,
+  }
+
   leaderboard.value = (lbRes.data ?? []).filter(p => p.games > 0)
 
-  // Find this club's ranking from the public list
-  ranking.value = (rankRes.data ?? []).find(c => c.id === clubId) ?? null
+  if (isMyClub.value) {
+    // Member — fetch full player list
+    const memberRes = await supabase.rpc('get_club_players', { p_club_id: clubId })
+    members.value = memberRes.data ?? []
+  } else {
+    // Not a member — show limited view + join prompt
+    notMember.value = true
+    members.value   = []
+    // Check if a join request already exists
+    if (user.value) {
+      const { data } = await supabase
+        .from('join_requests')
+        .select('status')
+        .eq('club_id', clubId)
+        .eq('user_id', user.value.id)
+        .maybeSingle()
+      if (data) joinStatus.value = data.status
+    }
+  }
+
   loading.value = false
+}
+
+async function sendJoinRequest() {
+  joinBusy.value = true; joinNote.value = ''
+  const { error } = await supabase.rpc('request_join', { p_club_id: clubId })
+  joinBusy.value = false
+  if (error) {
+    joinNote.value = error.message
+  } else {
+    joinStatus.value = 'pending'
+  }
 }
 
 onMounted(load)
@@ -85,8 +135,34 @@ async function saveRename() {
   </div>
 
   <div v-else-if="!club" class="card p-8 text-center text-slate-400">
+    <p class="text-3xl mb-2">🏸</p>
     <p class="font-semibold mb-2">Club not found</p>
     <button class="btn-ghost px-6 text-sm mt-2" @click="router.back()">← Back</button>
+  </div>
+
+  <!-- Not a member banner (shown above club content) -->
+  <div v-if="club && notMember" class="card-violet p-5 mb-4 text-center">
+    <p class="text-2xl mb-1">🔒</p>
+    <p class="font-bold text-slate-800 mb-1">You're not a member of this club</p>
+    <p class="text-sm text-slate-500 mb-4">Only members can see the full roster and match history.</p>
+
+    <div v-if="!user" class="space-y-2">
+      <p class="text-sm text-slate-500">Sign in to send a join request.</p>
+      <RouterLink to="/login" class="btn-primary inline-block px-6 py-2 text-sm">Sign In</RouterLink>
+    </div>
+
+    <div v-else-if="joinStatus === 'pending'" class="text-sm text-amber-600 font-medium">
+      ⏳ Your join request is pending approval by the club manager.
+    </div>
+    <div v-else-if="joinStatus === 'approved'" class="text-sm text-emerald-600 font-medium">
+      ✅ Your request was approved — refresh the page to see the full club.
+    </div>
+    <div v-else>
+      <button class="btn-primary px-8 py-2 text-sm" :disabled="joinBusy" @click="sendJoinRequest">
+        {{ joinBusy ? 'Sending…' : '📨 Send Join Request' }}
+      </button>
+      <p v-if="joinNote" class="text-rose-500 text-xs mt-2">{{ joinNote }}</p>
+    </div>
   </div>
 
   <template v-else>
