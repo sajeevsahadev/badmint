@@ -18,7 +18,7 @@ RETURNS TABLE(
 ) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM app_roles WHERE user_id = auth.uid() AND role = 'app_admin'
+    SELECT 1 FROM app_roles ar WHERE ar.user_id = auth.uid() AND ar.role = 'app_admin'
   ) THEN RAISE EXCEPTION 'Admin access required'; END IF;
 
   RETURN QUERY
@@ -47,7 +47,7 @@ DECLARE
   v_club_id uuid;
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM app_roles WHERE user_id = auth.uid() AND role = 'app_admin'
+    SELECT 1 FROM app_roles ar WHERE ar.user_id = auth.uid() AND ar.role = 'app_admin'
   ) THEN RAISE EXCEPTION 'Admin access required'; END IF;
 
   SELECT p.club_id INTO v_club_id FROM players p WHERE p.id = p_player_id;
