@@ -1587,7 +1587,10 @@ const categoryBreakdown = computed(() => {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="label">Amount (AED)</label>
-                <input v-model="form.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 pointer-events-none">AED</span>
+                  <input v-model="form.amount" type="number" min="0.01" step="0.01" class="input pl-12 text-right font-semibold" placeholder="0.00" />
+                </div>
               </div>
               <div>
                 <label class="label">Date</label>
@@ -1650,52 +1653,58 @@ const categoryBreakdown = computed(() => {
               <!-- Single payer select -->
               <select v-if="!form.multiPayer" v-model="form.paid_player_id" class="input">
                 <option value="" disabled>Who paid?</option>
-                <option v-for="p in players" :key="p.id" :value="p.id">
+                <option v-for="p in players.filter(p => p.is_active)" :key="p.id" :value="p.id">
                   {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
                 </option>
               </select>
 
-              <!-- Multi-payer list -->
-              <div v-else class="space-y-2">
-                <div v-for="(payer, idx) in form.payers" :key="idx"
-                  class="flex items-center gap-2">
-                  <select v-model="payer.player_id" class="input flex-1 text-xs py-2">
-                    <option value="" disabled>Player…</option>
-                    <option v-for="p in players.filter(p => p.is_active)" :key="p.id" :value="p.id">
-                      {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
-                    </option>
-                  </select>
-                  <div class="relative shrink-0">
-                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">AED</span>
-                    <input v-model="payer.amount" type="number" min="0.01" step="0.01"
-                      class="input text-xs py-2 pl-10 w-28" placeholder="0.00" />
+              <!-- Multi-payer: Splitwise-style — all players listed with amount inputs -->
+              <div v-else>
+                <div class="rounded-2xl overflow-hidden border border-slate-200 mb-2">
+                  <div v-for="p in players.filter(p => p.is_active)" :key="p.id"
+                    class="flex items-center gap-3 px-3 py-2.5 border-b border-slate-100 last:border-0"
+                    :class="(form.payers.find(x => x.player_id === p.id)?.amount || 0) > 0 ? 'bg-cyan-50' : 'bg-white'">
+                    <!-- Avatar -->
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white"
+                      :style="(form.payers.find(x => x.player_id === p.id)?.amount || 0) > 0
+                        ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)'
+                        : 'background:#cbd5e1'">
+                      {{ p.display_name.slice(0,2).toUpperCase() }}
+                    </div>
+                    <!-- Name -->
+                    <span class="flex-1 text-sm font-medium text-slate-700 truncate">
+                      {{ isMe(p.id) ? p.display_name + ' (you)' : p.display_name }}
+                    </span>
+                    <!-- Amount input -->
+                    <div class="flex items-center gap-1 shrink-0">
+                      <span class="text-xs text-slate-400 font-medium">AED</span>
+                      <input
+                        :value="form.payers.find(x => x.player_id === p.id)?.amount || ''"
+                        @input="e => {
+                          const idx = form.payers.findIndex(x => x.player_id === p.id)
+                          const val = e.target.value
+                          if (idx >= 0) { if (!val || parseFloat(val) <= 0) form.payers.splice(idx,1); else form.payers[idx].amount = val }
+                          else if (val && parseFloat(val) > 0) form.payers.push({ player_id: p.id, amount: val })
+                        }"
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        class="w-20 text-right text-sm font-semibold border-0 border-b-2 bg-transparent outline-none py-0.5 transition-colors"
+                        :class="(form.payers.find(x => x.player_id === p.id)?.amount || 0) > 0
+                          ? 'border-cyan-400 text-cyan-700'
+                          : 'border-slate-200 text-slate-400'" />
+                    </div>
                   </div>
-                  <button @click="form.payers.splice(idx, 1)"
-                    class="text-rose-400/70 hover:text-rose-400 text-sm shrink-0 transition">✕</button>
                 </div>
-                <button @click="form.payers.push({ player_id: '', amount: '' })"
-                  class="text-xs text-cyan-600 font-semibold hover:opacity-75 transition">
-                  + Add payer
-                </button>
-                <!-- Running total -->
-                <div v-if="form.payers.length" class="mt-1 px-3 py-2 rounded-lg text-xs"
-                  :style="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01
-                    ? 'background:rgba(16,185,129,.08); color:#059669; border:1px solid rgba(16,185,129,.2)'
-                    : 'background:rgba(239,68,68,.08); color:#dc2626; border:1px solid rgba(239,68,68,.2)'">
-                  <span class="font-bold">
-                    {{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }}
+                <!-- Running total bar -->
+                <div class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold"
+                  :style="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01 && form.payers.length > 0
+                    ? 'background:rgba(16,185,129,.1); color:#059669; border:1px solid rgba(16,185,129,.25)'
+                    : 'background:rgba(239,68,68,.07); color:#dc2626; border:1px solid rgba(239,68,68,.2)'">
+                  <span>{{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} entered</span>
+                  <span v-if="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01 && form.payers.length > 0">✓ matches total</span>
+                  <span v-else-if="form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) < (parseFloat(form.amount)||0)">
+                    {{ aed((parseFloat(form.amount)||0) - form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} remaining
                   </span>
-                  of {{ aed(parseFloat(form.amount) || 0) }}
-                  <span v-if="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) > 0.01">
-                    —
-                    <span v-if="form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) < (parseFloat(form.amount)||0)">
-                      {{ aed((parseFloat(form.amount)||0) - form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} unassigned
-                    </span>
-                    <span v-else>
-                      {{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) }} over
-                    </span>
-                  </span>
-                  <span v-else> ✓ matched</span>
+                  <span v-else>{{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) }} over</span>
                 </div>
               </div>
             </div>
