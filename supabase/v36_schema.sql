@@ -106,7 +106,7 @@ BEGIN
     club_id, title, category, amount,
     paid_player_id, expense_date, notes, paid_from_wallet, created_by
   ) VALUES (
-    p_club_id, p_title, p_category, p_amount,
+    p_club_id, trim(p_title), p_category, p_amount,
     CASE WHEN v_multi THEN NULL
          WHEN p_paid_from_wallet THEN NULL
          WHEN p_payers IS NOT NULL AND jsonb_array_length(p_payers) = 1
@@ -184,7 +184,7 @@ BEGIN
     AND NOT p_paid_from_wallet;
 
   UPDATE paysplit_expenses SET
-    title            = p_title,
+    title            = trim(p_title),
     category         = p_category,
     amount           = p_amount,
     paid_player_id   = CASE WHEN v_multi THEN NULL
@@ -195,7 +195,8 @@ BEGIN
                        END,
     expense_date     = p_expense_date,
     notes            = p_notes,
-    paid_from_wallet = p_paid_from_wallet
+    paid_from_wallet = p_paid_from_wallet,
+    updated_at       = now()
   WHERE id = p_expense_id;
 
   -- Replace participants — column is share_amount (defined in v11_schema.sql)
@@ -386,3 +387,10 @@ $$;
 GRANT EXECUTE ON FUNCTION get_balance_summary(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION add_expense(uuid,text,text,numeric,uuid,date,uuid[],text,boolean,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION update_expense(uuid,text,text,numeric,uuid,date,uuid[],text,boolean,jsonb) TO authenticated;
+
+-- ── 8. Drop the hard-coded category CHECK constraint ─────────────────────────
+-- The app supports custom categories (stored as 'custom_<timestamp>' values in
+-- localStorage). The old CHECK constraint in v11 only allowed the 7 built-in
+-- values and would reject any INSERT/UPDATE with a custom category value.
+-- The RPCs are SECURITY DEFINER so they bypass RLS but NOT CHECK constraints.
+ALTER TABLE paysplit_expenses DROP CONSTRAINT IF EXISTS paysplit_expenses_category_check;
