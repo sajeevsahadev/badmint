@@ -56,8 +56,16 @@ async function load() {
       supabase.rpc('admin_get_player_matches', { p_player_id: playerId, p_limit: matchLimit.value }),
     ])
 
+    if (playerRes.error) {
+      loadError.value = playerRes.error.code === 'PGRST202'
+        ? 'Admin RPCs not deployed — run supabase/v34_schema.sql in Supabase SQL Editor.'
+        : `Admin error: ${playerRes.error.message}`
+      loading.value = false
+      return
+    }
+
     const p = playerRes.data?.[0] ?? null
-    if (!p) { loading.value = false; return }
+    if (!p) { loadError.value = 'Player not found (admin path).'; loading.value = false; return }
 
     player.value   = { id: p.id, display_name: p.display_name, elo: p.elo, club_id: p.club_id, user_id: p.user_id }
     clubName.value = p.club_name ?? ''
