@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS paysplit_expense_payers (
 -- ── 2. RLS for paysplit_expense_payers ────────────────────────────────────────
 ALTER TABLE paysplit_expense_payers ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "pep_select_members" ON paysplit_expense_payers;
+DROP POLICY IF EXISTS "pep_write_creator_or_manager" ON paysplit_expense_payers;
+
 -- Members of the club can SELECT payers for expenses in their club
 CREATE POLICY "pep_select_members" ON paysplit_expense_payers
   FOR SELECT USING (
