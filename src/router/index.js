@@ -52,6 +52,7 @@ router.beforeEach(async (to) => {
       sessionStorage.removeItem(REDIRECT_KEY)
       return next
     }
+    return '/dashboard'
   }
 
   if (!to.meta.public && !loggedIn) {
