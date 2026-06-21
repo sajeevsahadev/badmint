@@ -80,6 +80,9 @@ watch(simplifyOn, v => localStorage.setItem('b360_simplify_debts', v ? '1' : '0'
 // "Plus N more balances" collapse in the top summary card
 const showAllMyBalance = ref(false)
 
+// Opening balances section collapsed by default in Expenses tab
+const showOpeningBalances = ref(false)
+
 // ── Load all data ──────────────────────────────────────────────────────
 async function load() {
   if (!currentClub.value || !user.value) {
@@ -268,12 +271,21 @@ const myWalletPosition = computed(() => {
 function myContrib(exp) {
   const mid = myPlayer.value?.id
   if (!mid) return null
-  const isPayer = !exp.paid_from_wallet && exp.paid_player_id === mid
-  const part    = exp.participants?.find(p => p.player_id === mid)
-  if (!isPayer && !part) return null
+  const part = exp.participants?.find(p => p.player_id === mid)
   if (exp.paid_from_wallet) {
     return part ? { type: 'wallet', net: -Number(part.share) } : null
   }
+  // Multi-payer
+  if ((exp.payers?.length ?? 0) > 1) {
+    const myPayer = exp.payers.find(p => p.player_id === mid)
+    const paidAmt = myPayer ? Number(myPayer.amount) : 0
+    const shareAmt = part ? Number(part.share) : 0
+    if (!myPayer && !part) return null
+    return { type: paidAmt > 0 ? 'paid' : 'split', net: paidAmt - shareAmt }
+  }
+  // Single payer
+  const isPayer = exp.paid_player_id === mid
+  if (!isPayer && !part) return null
   if (isPayer && !part) return { type: 'paid', net: Number(exp.amount) }
   if (isPayer &&  part) return { type: 'paid', net: Number(exp.amount) - Number(part.share) }
   return { type: 'split', net: -Number(part.share) }
@@ -486,6 +498,8 @@ const blankForm = () => ({
   amount:          '',
   paymentSource:   'person',
   paid_player_id:  myPlayer.value?.id ?? '',
+  multiPayer:      false,
+  payers:          [],
   expense_date:    new Date().toISOString().slice(0, 10),
   notes:           '',
   participant_ids: players.value.filter(p => p.is_active).map(p => p.id)
@@ -510,12 +524,17 @@ function openAddForm() {
 
 function openEditForm(exp) {
   editingId.value = exp.id
+  const isMulti = !exp.paid_from_wallet && (exp.payers?.length ?? 0) > 1
   form.value = {
     title:           exp.title,
     category:        exp.category,
     amount:          String(exp.amount),
     paymentSource:   exp.paid_from_wallet ? 'wallet' : 'person',
     paid_player_id:  exp.paid_player_id ?? '',
+    multiPayer:      isMulti,
+    payers:          isMulti
+      ? (exp.payers ?? []).map(p => ({ player_id: p.player_id, amount: String(p.amount) }))
+      : [],
     expense_date:    exp.expense_date,
     notes:           exp.notes ?? '',
     participant_ids: (exp.participants ?? []).map(p => p.player_id)
@@ -535,11 +554,26 @@ async function saveExpense() {
   const amt = parseFloat(form.value.amount)
   if (!form.value.title.trim())          { formError.value = 'Title is required'; return }
   if (!amt || amt <= 0)                  { formError.value = 'Enter a valid amount'; return }
-  if (form.value.paymentSource === 'person' && !form.value.paid_player_id)
-                                         { formError.value = 'Select who paid'; return }
   if (!form.value.participant_ids.length){ formError.value = 'Select at least one participant'; return }
 
   const isWallet = form.value.paymentSource === 'wallet'
+  const isMulti  = !isWallet && form.value.multiPayer
+
+  if (isMulti) {
+    if (!form.value.payers.length) { formError.value = 'Add at least one payer'; return }
+    const payerTotal = form.value.payers.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+    if (Math.abs(payerTotal - amt) > 0.01) {
+      formError.value = `Payer amounts total ${aed(payerTotal)} but expense is ${aed(amt)} — they must match`
+      return
+    }
+    if (form.value.payers.some(p => !p.player_id || !(parseFloat(p.amount) > 0))) {
+      formError.value = 'Each payer must have a player selected and a valid amount'
+      return
+    }
+  } else if (!isWallet && !form.value.paid_player_id) {
+    formError.value = 'Select who paid'
+    return
+  }
 
   if (isWallet) {
     let available = walletBalance.value
@@ -554,16 +588,21 @@ async function saveExpense() {
   }
 
   formSaving.value = true
+  const payersPayload = isMulti
+    ? form.value.payers.map(p => ({ player_id: p.player_id, amount: parseFloat(p.amount) }))
+    : null
+
   const params = {
     p_club_id:          currentClub.value.club_id,
     p_title:            form.value.title.trim(),
     p_category:         form.value.category,
     p_amount:           amt,
-    p_paid_player_id:   isWallet ? null : form.value.paid_player_id,
+    p_paid_player_id:   (isWallet || isMulti) ? null : form.value.paid_player_id,
     p_expense_date:     form.value.expense_date,
     p_participant_ids:  form.value.participant_ids,
     p_notes:            form.value.notes.trim() || null,
-    p_paid_from_wallet: isWallet
+    p_paid_from_wallet: isWallet,
+    p_payers:           payersPayload
   }
 
   const { p_club_id: _cid, ...updateParams } = params
@@ -980,6 +1019,10 @@ const categoryBreakdown = computed(() => {
                   <span v-else class="text-slate-500">common pool</span>
                   <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
                 </template>
+                <template v-else-if="(exp.payers?.length ?? 0) > 1">
+                  <span class="text-slate-400">Multiple payers</span>
+                  <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
+                </template>
                 <template v-else>
                   <span class="text-slate-400">{{ exp.paid_name }}</span>
                   <span> paid {{ aed(exp.amount) }}</span>
@@ -1038,6 +1081,24 @@ const categoryBreakdown = computed(() => {
               </div>
             </div>
 
+            <!-- Multi-payer breakdown -->
+            <div v-if="(exp.payers?.length ?? 0) > 1"
+              class="rounded-xl overflow-hidden mb-3"
+              style="background:rgba(0,180,216,.07); border:1px solid rgba(0,180,216,.2)">
+              <div class="px-3 py-2 flex items-center gap-1.5">
+                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#0099b8">👥 Multiple payers</span>
+              </div>
+              <div v-for="mp in exp.payers" :key="mp.player_id"
+                class="flex items-center justify-between px-3 py-2 border-t"
+                style="border-color:rgba(0,180,216,.12)">
+                <span class="text-xs"
+                  :class="mp.player_id === myPlayer?.id ? 'text-neon font-semibold' : 'text-slate-300'">
+                  {{ mp.player_id === myPlayer?.id ? 'You' : mp.name }}
+                </span>
+                <span class="text-xs font-semibold" style="color:#0099b8">{{ aed(mp.amount) }}</span>
+              </div>
+            </div>
+
             <!-- Split summary -->
             <div class="text-xs text-slate-400 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
@@ -1066,50 +1127,66 @@ const categoryBreakdown = computed(() => {
         </div>
       </template>
 
-      <!-- ── Opening Balances (migration from another app) — shown at bottom ── -->
+      <!-- ── Opening Balances (migration from another app) — collapsible ribbon ── -->
       <div class="card overflow-hidden mt-4">
-        <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)] flex items-center justify-between gap-3">
-          <div class="min-w-0">
+        <!-- Ribbon header — always visible -->
+        <button class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left"
+          @click="showOpeningBalances = !showOpeningBalances">
+          <div class="min-w-0 flex-1">
             <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
-            <div class="text-xs text-slate-500 leading-snug mt-0.5">
-              Starting balances carried over from another app — set once per player by a club admin.
-              <span class="text-emerald-400">Positive = gets back</span> ·
-              <span class="text-rose-400">negative = owes</span>
+            <div class="text-xs text-slate-500 mt-0.5">
+              <template v-if="openingBalances.length">
+                {{ openingBalances.length }} {{ openingBalances.length === 1 ? 'player' : 'players' }} ·
+                net
+                <span :class="Math.abs(openingSum) < 0.01 ? 'text-emerald-400' : 'text-amber-400'">
+                  {{ openingSum >= 0 ? '' : '-' }}{{ aed(Math.abs(openingSum)) }}
+                </span>
+              </template>
+              <template v-else>Starting balances from another app</template>
             </div>
           </div>
-          <button v-if="isManager()" class="btn-primary text-xs px-3 py-1.5 shrink-0"
-            @click="openObAddForm">➕ Set</button>
-        </div>
-
-        <div v-if="!openingBalances.length" class="px-4 py-5 text-center text-sm text-slate-500">
-          No opening balances recorded.
-          <span v-if="isManager()" class="block text-xs text-slate-600 mt-1">
-            Migrating from Splitwise or another app? Tap "Set" to carry over each player's balance.
-          </span>
-        </div>
-
-        <div v-for="ob in openingBalances" :key="ob.player_id"
-          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold"
-              :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
-              {{ isMe(ob.player_id) ? 'You' : ob.player_name }}
-            </div>
-            <div v-if="ob.notes" class="text-xs text-slate-500 truncate">{{ ob.notes }}</div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button v-if="isManager()" class="btn-primary text-xs px-3 py-1.5"
+              @click.stop="openObAddForm">➕ Set</button>
+            <span class="text-slate-400 text-sm transition-transform duration-200"
+              :style="showOpeningBalances ? 'display:inline-block; transform:rotate(180deg)' : ''">▾</span>
           </div>
-          <div class="flex items-center gap-3 shrink-0">
-            <span class="font-bold text-sm"
-              :class="Number(ob.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ Number(ob.amount) >= 0 ? '+' : '' }}{{ aed(ob.amount) }}
+        </button>
+
+        <!-- Expanded rows -->
+        <template v-if="showOpeningBalances">
+          <div class="border-t border-[rgba(15,23,42,0.06)]" />
+
+          <div v-if="!openingBalances.length" class="px-4 py-5 text-center text-sm text-slate-500">
+            No opening balances recorded.
+            <span v-if="isManager()" class="block text-xs text-slate-600 mt-1">
+              Migrating from Splitwise or another app? Tap "Set" to carry over each player's balance.
             </span>
-            <template v-if="isManager()">
-              <button class="text-xs text-slate-500 hover:text-neon transition"
-                @click="openObEditForm(ob)">✏️</button>
-              <button class="text-xs text-rose-500/60 hover:text-rose-400 transition"
-                @click="confirmDelOb = ob.player_id">🗑️</button>
-            </template>
           </div>
-        </div>
+
+          <div v-for="ob in openingBalances" :key="ob.player_id"
+            class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold"
+                :class="isMe(ob.player_id) ? 'text-neon' : 'text-slate-100'">
+                {{ isMe(ob.player_id) ? 'You' : ob.player_name }}
+              </div>
+              <div v-if="ob.notes" class="text-xs text-slate-500 truncate">{{ ob.notes }}</div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="font-bold text-sm"
+                :class="Number(ob.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+                {{ Number(ob.amount) >= 0 ? '+' : '' }}{{ aed(ob.amount) }}
+              </span>
+              <template v-if="isManager()">
+                <button class="text-xs text-slate-500 hover:text-neon transition"
+                  @click="openObEditForm(ob)">✏️</button>
+                <button class="text-xs text-rose-500/60 hover:text-rose-400 transition"
+                  @click="confirmDelOb = ob.player_id">🗑️</button>
+              </template>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -1579,13 +1656,76 @@ const categoryBreakdown = computed(() => {
 
             <!-- Paid by (only for person payment) -->
             <div v-if="form.paymentSource === 'person'">
-              <label class="label">Paid by</label>
-              <select v-model="form.paid_player_id" class="input">
+              <label class="label">Who Paid?</label>
+              <!-- Single / Multiple payer toggle -->
+              <div class="flex gap-2 mb-3">
+                <button
+                  @click="form.multiPayer = false; form.payers = []"
+                  class="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
+                  :class="!form.multiPayer ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="!form.multiPayer ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
+                  👤 One person paid
+                </button>
+                <button
+                  @click="form.multiPayer = true; form.paid_player_id = ''"
+                  class="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
+                  :class="form.multiPayer ? 'text-white' : 'text-slate-500 border border-slate-200'"
+                  :style="form.multiPayer ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
+                  👥 Multiple people paid
+                </button>
+              </div>
+
+              <!-- Single payer select -->
+              <select v-if="!form.multiPayer" v-model="form.paid_player_id" class="input">
                 <option value="" disabled>Who paid?</option>
                 <option v-for="p in players" :key="p.id" :value="p.id">
                   {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
                 </option>
               </select>
+
+              <!-- Multi-payer list -->
+              <div v-else class="space-y-2">
+                <div v-for="(payer, idx) in form.payers" :key="idx"
+                  class="flex items-center gap-2">
+                  <select v-model="payer.player_id" class="input flex-1 text-xs py-2">
+                    <option value="" disabled>Player…</option>
+                    <option v-for="p in players.filter(p => p.is_active)" :key="p.id" :value="p.id">
+                      {{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}
+                    </option>
+                  </select>
+                  <div class="relative shrink-0">
+                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">AED</span>
+                    <input v-model="payer.amount" type="number" min="0.01" step="0.01"
+                      class="input text-xs py-2 pl-10 w-28" placeholder="0.00" />
+                  </div>
+                  <button @click="form.payers.splice(idx, 1)"
+                    class="text-rose-400/70 hover:text-rose-400 text-sm shrink-0 transition">✕</button>
+                </div>
+                <button @click="form.payers.push({ player_id: '', amount: '' })"
+                  class="text-xs text-cyan-600 font-semibold hover:opacity-75 transition">
+                  + Add payer
+                </button>
+                <!-- Running total -->
+                <div v-if="form.payers.length" class="mt-1 px-3 py-2 rounded-lg text-xs"
+                  :style="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01
+                    ? 'background:rgba(16,185,129,.08); color:#059669; border:1px solid rgba(16,185,129,.2)'
+                    : 'background:rgba(239,68,68,.08); color:#dc2626; border:1px solid rgba(239,68,68,.2)'">
+                  <span class="font-bold">
+                    {{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }}
+                  </span>
+                  of {{ aed(parseFloat(form.amount) || 0) }}
+                  <span v-if="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) > 0.01">
+                    —
+                    <span v-if="form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) < (parseFloat(form.amount)||0)">
+                      {{ aed((parseFloat(form.amount)||0) - form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} unassigned
+                    </span>
+                    <span v-else>
+                      {{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) }} over
+                    </span>
+                  </span>
+                  <span v-else> ✓ matched</span>
+                </div>
+              </div>
             </div>
 
             <!-- Participants -->
