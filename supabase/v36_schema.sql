@@ -41,7 +41,24 @@ CREATE POLICY "pep_write_creator_or_manager" ON paysplit_expense_payers
 -- ── 3. Grant to authenticated ─────────────────────────────────────────────────
 GRANT SELECT, INSERT, UPDATE, DELETE ON paysplit_expense_payers TO authenticated;
 
--- ── 4. Drop and recreate add_expense with optional p_payers ──────────────────
+-- ── 3b. Replace the v12 expense_payment_source constraint ────────────────────
+-- The old constraint required paid_player_id IS NOT NULL for non-wallet expenses.
+-- Multi-payer expenses have paid_player_id = NULL + paid_from_wallet = false, so
+-- that constraint must be relaxed. We use a simpler NOT NULL + boolean check here;
+-- the application-level RPC enforces that either a single payer or multi-payer rows
+-- are provided (not neither). A full deferrable FK-based constraint would require
+-- a separate deferred check trigger, which is over-engineered for this threat model.
+ALTER TABLE paysplit_expenses DROP CONSTRAINT IF EXISTS expense_payment_source;
+ALTER TABLE paysplit_expenses ADD CONSTRAINT expense_payment_source
+  CHECK (
+    paid_from_wallet = true
+    OR paid_player_id IS NOT NULL
+    OR EXISTS (
+      SELECT 1 FROM paysplit_expense_payers pep WHERE pep.expense_id = paysplit_expenses.id
+    )
+  );
+
+-- ── 4. Drop and recreate add_expense with optional p_payers ──────────────
 -- First check existing signature to drop correctly
 DROP FUNCTION IF EXISTS add_expense(uuid,text,text,numeric,uuid,date,uuid[],text,boolean);
 DROP FUNCTION IF EXISTS add_expense(uuid,text,text,numeric,uuid,date,uuid[],text,boolean,jsonb);
@@ -69,10 +86,25 @@ DECLARE
   v_pid        uuid;
   v_amt        numeric;
 BEGIN
+  -- Auth check: must be a member of the club (was accidentally dropped from v36 draft)
+  IF NOT EXISTS (
+    SELECT 1 FROM club_members WHERE club_id = p_club_id AND user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Not a member of this club';
+  END IF;
+
   -- Determine whether this is a multi-payer expense
   v_multi := p_payers IS NOT NULL
     AND jsonb_array_length(p_payers) > 1
     AND NOT p_paid_from_wallet;
+
+  -- Validate payment source for non-wallet, non-multi-payer expenses
+  IF NOT p_paid_from_wallet AND NOT v_multi
+     AND p_paid_player_id IS NULL
+     AND (p_payers IS NULL OR jsonb_array_length(p_payers) = 0)
+  THEN
+    RAISE EXCEPTION 'Specify who paid, or select wallet payment';
+  END IF;
 
   INSERT INTO paysplit_expenses (
     club_id, title, category, amount,
@@ -89,11 +121,11 @@ BEGIN
   )
   RETURNING id INTO v_expense_id;
 
-  -- Insert participants
+  -- Insert participants — column is share_amount (defined in v11_schema.sql)
   IF array_length(p_participant_ids, 1) > 0 THEN
-    INSERT INTO paysplit_participants (expense_id, player_id, share)
+    INSERT INTO paysplit_participants (expense_id, player_id, share_amount)
     SELECT v_expense_id, unnest(p_participant_ids),
-           p_amount / array_length(p_participant_ids, 1);
+           ROUND((p_amount / array_length(p_participant_ids, 1))::numeric, 2);
   END IF;
 
   -- Insert multi-payer rows
@@ -170,12 +202,12 @@ BEGIN
     paid_from_wallet = p_paid_from_wallet
   WHERE id = p_expense_id;
 
-  -- Replace participants
+  -- Replace participants — column is share_amount (defined in v11_schema.sql)
   DELETE FROM paysplit_participants WHERE expense_id = p_expense_id;
   IF array_length(p_participant_ids, 1) > 0 THEN
-    INSERT INTO paysplit_participants (expense_id, player_id, share)
+    INSERT INTO paysplit_participants (expense_id, player_id, share_amount)
     SELECT p_expense_id, unnest(p_participant_ids),
-           p_amount / array_length(p_participant_ids, 1);
+           ROUND((p_amount / array_length(p_participant_ids, 1))::numeric, 2);
   END IF;
 
   -- Replace multi-payer rows
@@ -230,7 +262,12 @@ BEGIN
     e.category,
     e.amount,
     e.paid_player_id,
-    pl.display_name                                    AS paid_name,
+    -- For multi-payer, paid_name shows "Multiple payers"; for wallet shows "Wallet"; else payer name
+    CASE
+      WHEN e.paid_from_wallet THEN 'Wallet'
+      WHEN e.paid_player_id IS NULL THEN 'Multiple payers'
+      ELSE COALESCE(up.nickname, pl.display_name)
+    END                                                 AS paid_name,
     e.expense_date,
     e.notes,
     e.paid_from_wallet,
@@ -239,27 +276,30 @@ BEGIN
     COALESCE(
       (SELECT jsonb_agg(jsonb_build_object(
                'player_id', pp.player_id,
-               'name',      pl2.display_name,
-               'share',     pp.share
-             ) ORDER BY pl2.display_name)
+               'name',      COALESCE(up2.nickname, pl2.display_name),
+               'share',     pp.share_amount
+             ) ORDER BY COALESCE(up2.nickname, pl2.display_name))
        FROM paysplit_participants pp
        JOIN players pl2 ON pl2.id = pp.player_id
+       LEFT JOIN user_profiles up2 ON up2.user_id = pl2.user_id
        WHERE pp.expense_id = e.id),
       '[]'::jsonb
-    )                                                  AS participants,
+    )                                                   AS participants,
     COALESCE(
       (SELECT jsonb_agg(jsonb_build_object(
                'player_id', pep.player_id,
-               'name',      pl3.display_name,
+               'name',      COALESCE(up3.nickname, pl3.display_name),
                'amount',    pep.amount
-             ) ORDER BY pl3.display_name)
+             ) ORDER BY COALESCE(up3.nickname, pl3.display_name))
        FROM paysplit_expense_payers pep
        JOIN players pl3 ON pl3.id = pep.player_id
+       LEFT JOIN user_profiles up3 ON up3.user_id = pl3.user_id
        WHERE pep.expense_id = e.id),
       '[]'::jsonb
-    )                                                  AS payers
+    )                                                   AS payers
   FROM paysplit_expenses e
   LEFT JOIN players pl ON pl.id = e.paid_player_id AND pl.club_id = p_club_id
+  LEFT JOIN user_profiles up ON up.user_id = pl.user_id
   WHERE e.club_id = p_club_id
   ORDER BY e.expense_date DESC, e.created_at DESC;
 END;
@@ -296,7 +336,7 @@ BEGIN
     SELECT
       pp.player_id                          AS from_id,
       e.paid_player_id                      AS to_id,
-      pp.share                              AS amount
+      pp.share_amount                       AS amount
     FROM paysplit_expenses e
     JOIN paysplit_participants pp ON pp.expense_id = e.id
     WHERE e.club_id = p_club_id
@@ -309,13 +349,13 @@ BEGIN
 
     UNION ALL
 
-    -- Multi-payer expenses: each participant owes each payer their proportional share
+    -- Multi-payer expenses: each participant owes each payer their proportional share.
     -- Each payer paid (pep.amount / e.amount) fraction of the total.
-    -- Each participant owes that fraction of their own share (pp.share) to that payer.
+    -- Each participant owes that fraction of their own share (pp.share_amount) to that payer.
     SELECT
       pp.player_id                                                    AS from_id,
       pep.player_id                                                   AS to_id,
-      ROUND((pp.share * pep.amount / e.amount)::numeric, 4)          AS amount
+      ROUND((pp.share_amount * pep.amount / e.amount)::numeric, 4)   AS amount
     FROM paysplit_expenses e
     JOIN paysplit_participants pp  ON pp.expense_id = e.id
     JOIN paysplit_expense_payers pep ON pep.expense_id = e.id
@@ -334,13 +374,15 @@ BEGIN
   )
   SELECT
     CASE WHEN p.net > 0 THEN p.a_id ELSE p.b_id END  AS from_player_id,
-    pa.display_name                                     AS from_name,
+    COALESCE(upa.nickname, pa.display_name)             AS from_name,
     CASE WHEN p.net > 0 THEN p.b_id ELSE p.a_id END  AS to_player_id,
-    pb.display_name                                     AS to_name,
+    COALESCE(upb.nickname, pb.display_name)             AS to_name,
     ABS(p.net)                                          AS net_amount
   FROM paired p
   JOIN players pa ON pa.id = (CASE WHEN p.net > 0 THEN p.a_id ELSE p.b_id END)
   JOIN players pb ON pb.id = (CASE WHEN p.net > 0 THEN p.b_id ELSE p.a_id END)
+  LEFT JOIN user_profiles upa ON upa.user_id = pa.user_id
+  LEFT JOIN user_profiles upb ON upb.user_id = pb.user_id
   WHERE ABS(p.net) >= 0.01;
 END;
 $$;

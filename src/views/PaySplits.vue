@@ -616,9 +616,12 @@ async function saveExpense() {
   // Fire-and-forget: notify club members about new expense (new expenses only, not edits)
   if (!editingId.value) {
     const isWallet = form.value.paymentSource === 'wallet'
+    const isMultiPayer = !isWallet && form.value.multiPayer && form.value.payers.length > 1
     const paidByName = isWallet
       ? 'Club Wallet'
-      : players.value.find(p => p.id === form.value.paid_player_id)?.display_name ?? 'Unknown'
+      : isMultiPayer
+        ? form.value.payers.map(p => players.value.find(pl => pl.id === p.player_id)?.display_name ?? '?').join(', ')
+        : players.value.find(p => p.id === form.value.paid_player_id)?.display_name ?? 'Unknown'
     supabase.functions.invoke('send-expense-email', {
       body: {
         club_id:      currentClub.value.club_id,
