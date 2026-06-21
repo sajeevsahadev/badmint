@@ -19,6 +19,7 @@ const TABS = [
   { v: 'facilities',  l: '🏢 Facilities' },
   { v: 'tournaments', l: '🏆 Tournaments' },
   { v: 'roles',       l: '🎖️ Roles' },
+  { v: 'announcements', l: '📢 Announcements' },
 ]
 
 // ── Data ──
@@ -237,6 +238,26 @@ async function confirmDelete() {
   if (type === 'tournament') await Promise.all([loadTournaments(), loadStats()])
 }
 
+
+// ── Announcements ──
+const annSubject  = ref('')
+const annBody     = ref('')
+const annSending  = ref(false)
+const annSuccess  = ref('')   // "Sent to N members"
+const annErr      = ref('')
+
+async function sendAnnouncement() {
+  if (!annSubject.value.trim() || !annBody.value.trim()) return
+  annSending.value = true; annSuccess.value = ''; annErr.value = ''
+  const { data, error } = await supabase.functions.invoke('send-announcement', {
+    body: { subject: annSubject.value.trim(), body: annBody.value.trim() }
+  })
+  annSending.value = false
+  if (error) { annErr.value = error.message || 'Failed to send announcement'; return }
+  annSuccess.value = data?.sent_count != null ? `Sent to ${data.sent_count} members` : 'Announcement sent'
+  annSubject.value = ''
+  annBody.value = ''
+}
 
 const roleChip = r => ({
   app_admin:           'bg-rose-50 text-rose-700 border-rose-200',
@@ -498,6 +519,40 @@ const statItems = computed(() => !stats.value ? [] : [
             </div>
           </div>
           <p v-if="!tournaments.length" class="text-center text-sm text-slate-400 py-6">No tournaments yet.</p>
+        </div>
+      </div>
+
+      <!-- ── ANNOUNCEMENTS ────────────────────────────────────────────── -->
+      <div v-if="tab === 'announcements'" class="space-y-4 fade-up">
+        <div class="card p-4">
+          <h3 class="font-bold text-slate-800 mb-4">Send Announcement</h3>
+          <div v-if="annSuccess" class="rounded-xl px-4 py-3 mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200">✅ {{ annSuccess }}</div>
+          <div v-if="annErr"     class="rounded-xl px-4 py-3 mb-4 text-sm text-rose-600   bg-rose-50   border border-rose-200">⚠️ {{ annErr }}</div>
+          <div class="space-y-3">
+            <div>
+              <label class="label">Subject <span class="text-rose-400">*</span></label>
+              <input v-model="annSubject" class="input" maxlength="150"
+                placeholder="e.g. New tournament this weekend!" />
+            </div>
+            <div>
+              <label class="label">Message <span class="text-rose-400">*</span></label>
+              <textarea v-model="annBody" class="input resize-none" rows="5"
+                placeholder="Write your announcement…" />
+            </div>
+            <p class="text-[11px] text-slate-400">Will be sent to all members with announcements enabled in their email settings.</p>
+          </div>
+          <button class="btn-primary w-full mt-4"
+            :disabled="annSending || !annSubject.trim() || !annBody.trim()"
+            @click="sendAnnouncement">
+            <span v-if="annSending" class="inline-flex items-center gap-2">
+              <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              Sending…
+            </span>
+            <span v-else>📢 Send Announcement</span>
+          </button>
         </div>
       </div>
 
