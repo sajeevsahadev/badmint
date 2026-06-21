@@ -67,6 +67,7 @@ const players         = ref([])
 const notes           = ref([])
 const myPlayer        = ref(null)
 const walletData      = ref({ contributions: [], wallet_expenses: [], player_balances: [] })
+const fifoResult      = ref({ active: [], consumed: [] })
 const openingBalances = ref([])
 const loading         = ref(true)
 const activeTab       = ref('activities')
@@ -92,7 +93,7 @@ async function load() {
   loading.value = true
   const cid = currentClub.value.club_id
   try {
-  const [plRes, expRes, balRes, noteRes, myPlRes, wRes, obRes] = await Promise.all([
+  const [plRes, expRes, balRes, noteRes, myPlRes, wRes, obRes, fifoRes] = await Promise.all([
     supabase.rpc('get_club_players', { p_club_id: cid }),
     supabase.rpc('get_expenses', { p_club_id: cid }),
     supabase.rpc('get_balance_summary', { p_club_id: cid }),
@@ -103,7 +104,8 @@ async function load() {
       .select('id, display_name, user_id')
       .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle(),
     supabase.rpc('get_wallet_data', { p_club_id: cid }),
-    supabase.rpc('get_opening_balances', { p_club_id: cid })
+    supabase.rpc('get_opening_balances', { p_club_id: cid }),
+    supabase.rpc('get_fifo_result', { p_club_id: cid })
   ])
 
   players.value  = plRes.data  ?? []
@@ -129,6 +131,9 @@ async function load() {
   openingBalances.value = obRes.error ? [] : [...(obRes.data ?? [])].sort(
     (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
   )
+
+  // FIFO from server (O(C+W) SQL) — falls back to empty if v36b not yet applied
+  fifoResult.value = fifoRes.data ?? { active: [], consumed: [] }
   loadCats()
   } finally {
     loading.value = false
@@ -320,44 +325,8 @@ const playerBalanceList = computed(() => {
     })
 })
 
-// ── Wallet: FIFO computation (frontend) ───────────────────────────────
-// Oldest contribution depleted first. Returns separate active / consumed lists.
-const fifoResult = computed(() => {
-  const contribs = [...walletData.value.contributions]
-    .sort((a, b) => new Date(a.contributed_at) - new Date(b.contributed_at))
-
-  const wExps = [...walletData.value.wallet_expenses]
-    .sort((a, b) => {
-      const d = (a.expense_date ?? '').localeCompare(b.expense_date ?? '')
-      return d || new Date(a.created_at) - new Date(b.created_at)
-    })
-
-  const remaining  = {}
-  const consumedBy = {}
-  contribs.forEach(c => { remaining[c.id] = Number(c.amount); consumedBy[c.id] = [] })
-
-  wExps.forEach(exp => {
-    let toConsume = Number(exp.amount)
-    for (const c of contribs) {
-      if (remaining[c.id] < 0.005 || toConsume < 0.005) continue
-      const take = Math.min(remaining[c.id], toConsume)
-      remaining[c.id] = Math.round((remaining[c.id] - take) * 100) / 100
-      toConsume       = Math.round((toConsume - take) * 100) / 100
-      consumedBy[c.id].push({ expenseId: exp.id, title: exp.title, amount: take, expense_date: exp.expense_date })
-    }
-  })
-
-  const mapped = contribs.map(c => ({
-    ...c,
-    remaining:  remaining[c.id] ?? 0,
-    consumedBy: consumedBy[c.id] ?? []
-  }))
-
-  return {
-    active:   mapped.filter(c => c.remaining > 0.005),
-    consumed: mapped.filter(c => c.remaining <= 0.005 && c.consumedBy.length > 0)
-  }
-})
+// fifoResult is loaded from the server via get_fifo_result() RPC in load()
+// (replaces the former O(n²) browser loop)
 
 const expandedConsumed = ref(null)
 const expandedExp      = ref(null)
