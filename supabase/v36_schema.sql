@@ -48,15 +48,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON paysplit_expense_payers TO authenticated
 -- the application-level RPC enforces that either a single payer or multi-payer rows
 -- are provided (not neither). A full deferrable FK-based constraint would require
 -- a separate deferred check trigger, which is over-engineered for this threat model.
+-- Note: the old expense_payment_source CHECK constraint blocked multi-payer inserts
+-- (paid_player_id=NULL, paid_from_wallet=false). We drop it here; enforcement is
+-- done inside the add_expense/update_expense RPCs instead (subqueries can't be used
+-- in CHECK constraints in PostgreSQL).
 ALTER TABLE paysplit_expenses DROP CONSTRAINT IF EXISTS expense_payment_source;
-ALTER TABLE paysplit_expenses ADD CONSTRAINT expense_payment_source
-  CHECK (
-    paid_from_wallet = true
-    OR paid_player_id IS NOT NULL
-    OR EXISTS (
-      SELECT 1 FROM paysplit_expense_payers pep WHERE pep.expense_id = paysplit_expenses.id
-    )
-  );
 
 -- ── 4. Drop and recreate add_expense with optional p_payers ──────────────
 -- First check existing signature to drop correctly
