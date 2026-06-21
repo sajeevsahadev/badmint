@@ -138,7 +138,7 @@ function reset() {
 
 async function doSubmit() {
   msg.value = null; saving.value = true
-  const { error } = await supabase.rpc('record_match', {
+  const { data: matchData, error } = await supabase.rpc('record_match', {
     p_club_id:      currentClub.value.club_id,
     p_played_on:    playedOn.value,
     p_side_a:       sideA.value,
@@ -148,6 +148,20 @@ async function doSubmit() {
     p_display_name: matchName.value.trim() || null
   })
   saving.value = false
+  if (!error) {
+    // Fire-and-forget: notify club members via email (non-blocking)
+    supabase.functions.invoke('send-match-email', {
+      body: {
+        club_id:      currentClub.value.club_id,
+        match_name:   matchName.value.trim() || `Match #${matchData?.match_number ?? ''}`,
+        played_on:    playedOn.value,
+        side_a_names: sideA.value.map(id => nameOf(id) ?? id),
+        side_b_names: sideB.value.map(id => nameOf(id) ?? id),
+        score_a:      Number(scoreA.value),
+        score_b:      Number(scoreB.value),
+      }
+    }).catch(() => {})
+  }
   return error
 }
 

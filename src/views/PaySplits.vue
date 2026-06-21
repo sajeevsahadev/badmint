@@ -573,6 +573,24 @@ async function saveExpense() {
 
   formSaving.value = false
   if (error) { formError.value = error.message; return }
+
+  // Fire-and-forget: notify club members about new expense (new expenses only, not edits)
+  if (!editingId.value) {
+    const isWallet = form.value.paymentSource === 'wallet'
+    const paidByName = isWallet
+      ? 'Club Wallet'
+      : players.value.find(p => p.id === form.value.paid_player_id)?.display_name ?? 'Unknown'
+    supabase.functions.invoke('send-expense-email', {
+      body: {
+        club_id:      currentClub.value.club_id,
+        title:        form.value.title.trim(),
+        amount:       parseFloat(form.value.amount),
+        paid_by_name: paidByName,
+        split_count:  form.value.participant_ids.length,
+      }
+    }).catch(() => {})
+  }
+
   showForm.value = false
   await load()
 }
