@@ -15,7 +15,7 @@ export function usePushNotifications() {
     return Notification.permission
   }
 
-  async function subscribe(clubId) {
+  async function subscribe() {
     const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
     if (!vapidKey) throw new Error('VITE_VAPID_PUBLIC_KEY not set — see push notification setup guide.')
 
@@ -33,7 +33,6 @@ export function usePushNotifications() {
 
     const json = sub.toJSON()
     await supabase.rpc('save_push_subscription', {
-      p_club_id:  clubId,
       p_endpoint: json.endpoint,
       p_p256dh:   json.keys.p256dh,
       p_auth:     json.keys.auth

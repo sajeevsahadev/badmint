@@ -33,10 +33,17 @@ serve(async (req) => {
 
   if (!sched) return new Response('Not found', { status: 404 })
 
+  const { data: members } = await supabase
+    .from('club_members')
+    .select('user_id')
+    .eq('club_id', sched.club_id)
+
+  const memberIds = (members ?? []).map((m: { user_id: string }) => m.user_id)
+
   const { data: subs } = await supabase
     .from('push_subscriptions')
     .select('*')
-    .eq('club_id', sched.club_id)
+    .in('user_id', memberIds)
 
   const results = await Promise.allSettled(
     (subs ?? []).map(s =>

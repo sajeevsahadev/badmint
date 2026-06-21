@@ -3,13 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../composables/useAuth'
-import { useClub } from '../../composables/useClub'
 import { usePushNotifications } from '../../composables/usePushNotifications'
 import ToggleSwitch from '../../components/ToggleSwitch.vue'
 
 const router = useRouter()
 const { user } = useAuth()
-const { currentClub } = useClub()
 const { isSupported, subscribe, isSubscribed } = usePushNotifications()
 
 const loading       = ref(true)
@@ -45,11 +43,10 @@ onMounted(async () => {
 })
 
 async function enablePush() {
-  if (!currentClub.value) { subscribeErr.value = 'Select a club first — push is scoped to your active club for now.'; return }
   subscribing.value = true
   subscribeErr.value = ''
   try {
-    await subscribe(currentClub.value.club_id)
+    await subscribe()
     subscribed.value = true
   } catch (e) {
     subscribeErr.value = e.message
@@ -95,7 +92,7 @@ async function save() {
           <div class="min-w-0">
             <div class="text-sm font-semibold text-slate-700">Push notifications on this device</div>
             <div class="text-xs text-slate-400 mt-0.5">
-              {{ subscribed ? `Scoped to ${currentClub?.clubs?.name ?? 'your active club'}` : 'Not enabled yet' }}
+              {{ subscribed ? 'Enabled for all your clubs' : 'Not enabled yet' }}
             </div>
           </div>
           <button v-if="!subscribed" class="btn-primary text-xs px-3 py-1.5 shrink-0" :disabled="subscribing" @click="enablePush">
@@ -105,7 +102,7 @@ async function save() {
         </div>
         <p v-if="subscribeErr" class="text-xs text-rose-500 mt-2">⚠ {{ subscribeErr }}</p>
         <p class="text-[11px] text-slate-400 mt-3 leading-relaxed">
-          Notifications are scoped to one club at a time — multi-club push is on the roadmap.
+          Notifications work across all your clubs on this device.
         </p>
       </div>
 
