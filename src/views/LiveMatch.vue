@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
@@ -166,13 +166,19 @@ async function undoPoint() {
   }
 }
 
+const finishing = ref(false)
+const finishError = ref('')
+
 async function finishMatch() {
   showFinishModal.value = false
-  const { data: matchId } = await supabase.rpc('finish_live_match', {
+  finishing.value = true
+  finishError.value = ''
+  const { data: matchId, error: err } = await supabase.rpc('finish_live_match', {
     p_live_match_id: liveId,
     p_display_name:  null
   })
-  // Update rotation stats (fire-and-forget)
+  finishing.value = false
+  if (err) { finishError.value = err.message; return }
   if (currentClub.value) {
     const playedIds = [...(match.value?.side_a ?? []), ...(match.value?.side_b ?? [])]
     supabase.rpc('update_rotation_stats', {
@@ -184,6 +190,14 @@ async function finishMatch() {
   }
   router.push(matchId ? `/matches?open=${matchId}` : '/matches')
 }
+
+// Auto-navigate when match becomes finished (e.g. via realtime from another device)
+watch(() => match.value?.status, (status) => {
+  if (status === 'finished') {
+    const mid = match.value?.match_id
+    setTimeout(() => router.push(mid ? `/matches?open=${mid}` : '/matches'), 800)
+  }
+})
 
 async function cancelMatch() {
   showCancelModal.value = false
@@ -247,11 +261,14 @@ onUnmounted(() => {
     </div>
 
     <!-- Finished / cancelled banner -->
-    <div v-if="match?.status !== 'active'" class="bg-white px-4 py-3 text-center shrink-0">
+    <div v-if="match?.status !== 'active'" class="bg-white px-4 py-3 text-center shrink-0 space-y-2">
       <p v-if="match?.status === 'finished'" class="text-emerald-600 font-semibold text-sm">
-        Match finished · Scores recorded
+        ✅ Match finished · Scores recorded · Redirecting…
       </p>
       <p v-else class="text-slate-500 text-sm">Match cancelled</p>
+      <button class="btn-primary text-sm px-6 py-2" @click="router.push('/matches')">
+        Go to Matches →
+      </button>
     </div>
 
     <!-- Court area (flex-1) -->
@@ -528,9 +545,12 @@ onUnmounted(() => {
               Final score: Side B {{ currentScoreB }} – {{ currentScoreA }} Side A
             </template>
           </p>
+          <p v-if="finishError" class="text-rose-500 text-xs">{{ finishError }}</p>
           <div class="flex gap-3">
-            <button @click="showFinishModal = false" class="btn-ghost flex-1">Cancel</button>
-            <button @click="finishMatch" class="btn-success flex-1">Yes, Record</button>
+            <button @click="showFinishModal = false" class="btn-ghost flex-1" :disabled="finishing">Cancel</button>
+            <button @click="finishMatch" class="btn-success flex-1" :disabled="finishing">
+              {{ finishing ? 'Saving…' : 'Yes, Record' }}
+            </button>
           </div>
         </div>
       </div>
