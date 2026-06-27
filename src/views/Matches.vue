@@ -18,8 +18,64 @@ const expanded       = ref(null)
 const renaming       = ref(null)
 const renameVal      = ref('')
 const deleting       = ref(null)
-const collapsedDates = ref(new Set())  // dates that are collapsed
+const collapsedDates = ref(new Set())
 const allExpanded    = ref(false)
+
+// ── Lineup suggestion (available to all members) ──
+const lineup         = ref(null)
+const lineupLoading  = ref(false)
+const lineupError    = ref(null)
+const lineupSwapMode = ref(false)
+const swapTarget     = ref(null)
+const showLineup     = ref(false)
+
+const todayStr = new Date().toISOString().slice(0, 10)
+
+async function suggestLineup() {
+  if (!currentClub.value) return
+  lineupLoading.value = true
+  lineupError.value   = null
+  lineup.value        = null
+  lineupSwapMode.value = false
+  const { data, error } = await supabase.rpc('suggest_lineup_by_date', {
+    p_club_id: currentClub.value.club_id,
+    p_date:    todayStr
+  })
+  lineupLoading.value = false
+  if (error || data?.error) { lineupError.value = data?.error ?? error.message; return }
+  lineup.value = data
+}
+
+function startSwap(side, index) {
+  if (!isManager()) return
+  lineupSwapMode.value = true
+  swapTarget.value = { side, index }
+}
+
+function completeSwap(fromSide, fromIndex) {
+  if (!swapTarget.value || !lineup.value) return
+  const { side: toSide, index: toIndex } = swapTarget.value
+  if (toSide === fromSide && toIndex === fromIndex) {
+    lineupSwapMode.value = false; swapTarget.value = null; return
+  }
+  const la = [...lineup.value.side_a]
+  const lb = [...lineup.value.side_b]
+  const bench = [...(lineup.value.bench ?? [])]
+  const get = (s, i) => s === 'a' ? la[i] : s === 'b' ? lb[i] : bench[i]
+  const set = (s, i, p) => { if (s === 'a') la[i] = p; else if (s === 'b') lb[i] = p; else bench[i] = p }
+  const pTo = get(toSide, toIndex); const pFrom = get(fromSide, fromIndex)
+  set(toSide, toIndex, pFrom); set(fromSide, fromIndex, pTo)
+  const eloSum = arr => arr.reduce((s, p) => s + (p?.elo ?? 0), 0)
+  lineup.value = { ...lineup.value, side_a: la, side_b: lb, bench, elo_a: eloSum(la), elo_b: eloSum(lb) }
+  lineupSwapMode.value = false; swapTarget.value = null
+}
+
+function acceptLineup() {
+  if (!lineup.value) return
+  const sideAIds = lineup.value.side_a.map(p => p.id).join(',')
+  const sideBIds = lineup.value.side_b.map(p => p.id).join(',')
+  router.push(`/match?sideA=${sideAIds}&sideB=${sideBIds}&date=${todayStr}`)
+}
 
 async function load() {
   if (!currentClub.value) return
@@ -216,6 +272,125 @@ const canDelete = m =>
       </button>
     </div>
   </div>
+
+  <!-- ── Suggested Next Match card ── -->
+  <div class="card overflow-hidden mb-4 fade-up">
+    <button class="w-full px-4 py-3 flex items-center justify-between" @click="showLineup = !showLineup">
+      <div class="flex items-center gap-2">
+        <span class="text-base">🤖</span>
+        <div class="text-left">
+          <div class="text-sm font-bold text-slate-800">Suggested Next Match</div>
+          <div class="text-[10px] text-slate-500">Balanced teams · today's attendees</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="lineupLoading"
+          @click.stop="suggestLineup(); showLineup = true">
+          {{ lineupLoading ? '…' : lineup ? '🔄' : '✨ Generate' }}
+        </button>
+        <span class="text-slate-400 text-xs transition-transform duration-200"
+          :style="showLineup ? 'transform:rotate(180deg)' : ''">▾</span>
+      </div>
+    </button>
+
+    <div v-if="showLineup" class="border-t border-[rgba(15,23,42,0.06)] px-4 py-3 space-y-3">
+
+      <div v-if="lineupError" class="text-xs text-rose-400">⚠️ {{ lineupError }}</div>
+
+      <div v-if="!lineup && !lineupError" class="text-[11px] text-slate-500 text-center py-2">
+        Tap ✨ Generate to suggest balanced teams from today's attendees.
+      </div>
+
+      <template v-if="lineup">
+        <div v-if="lineup.rotated"
+          class="text-[10px] text-amber-600 rounded-lg px-3 py-1.5"
+          style="background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.2)">
+          🔄 Players from last match rotated to bench
+        </div>
+        <div v-if="lineup.used_schedule"
+          class="text-[10px] text-neon rounded-lg px-3 py-1.5"
+          style="background:rgba(0,180,216,.08); border:1px solid rgba(0,180,216,.2)">
+          📅 Using today's saved attendance list
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-xl p-3" style="background:rgba(0,180,216,.08); border:1px solid rgba(0,180,216,.2)">
+            <div class="text-[10px] font-bold text-neon uppercase tracking-wider mb-2">Side A · {{ lineup.elo_a }}</div>
+            <div v-for="(p, i) in lineup.side_a" :key="p.id"
+              class="flex items-center justify-between py-1 rounded px-1 transition cursor-pointer"
+              :class="lineupSwapMode && swapTarget?.side==='a' && swapTarget?.index===i ? 'bg-cyan-100' : lineupSwapMode ? 'hover:bg-cyan-50' : ''"
+              @click="lineupSwapMode ? completeSwap('a', i) : startSwap('a', i)">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <div class="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[9px] font-bold text-neon shrink-0">{{ p.name?.[0]?.toUpperCase() }}</div>
+                <span class="text-xs text-slate-800 truncate font-medium">{{ p.name }}</span>
+              </div>
+              <span class="text-[10px] text-slate-500 shrink-0">{{ p.elo }}</span>
+            </div>
+          </div>
+
+          <div class="rounded-xl p-3" style="background:rgba(168,85,247,.08); border:1px solid rgba(168,85,247,.2)">
+            <div class="text-[10px] font-bold text-violet uppercase tracking-wider mb-2">Side B · {{ lineup.elo_b }}</div>
+            <div v-for="(p, i) in lineup.side_b" :key="p.id"
+              class="flex items-center justify-between py-1 rounded px-1 transition cursor-pointer"
+              :class="lineupSwapMode && swapTarget?.side==='b' && swapTarget?.index===i ? 'bg-violet-100' : lineupSwapMode ? 'hover:bg-violet-50' : ''"
+              @click="lineupSwapMode ? completeSwap('b', i) : startSwap('b', i)">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <div class="w-5 h-5 rounded-full bg-violet-500/20 flex items-center justify-center text-[9px] font-bold text-violet shrink-0">{{ p.name?.[0]?.toUpperCase() }}</div>
+                <span class="text-xs text-slate-800 truncate font-medium">{{ p.name }}</span>
+              </div>
+              <span class="text-[10px] text-slate-500 shrink-0">{{ p.elo }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elo balance bar -->
+        <div>
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-neon font-semibold">A {{ lineup.elo_a }}</span>
+            <span class="text-slate-400">Δ{{ Math.abs(lineup.elo_a - lineup.elo_b) }} gap</span>
+            <span class="text-violet font-semibold">{{ lineup.elo_b }} B</span>
+          </div>
+          <div class="h-1.5 rounded-full overflow-hidden flex" style="background:rgba(0,0,0,.06)">
+            <div class="h-full bg-cyan-400 rounded-l-full transition-all duration-500"
+              :style="`width:${Math.round(lineup.elo_a/(lineup.elo_a+lineup.elo_b)*100)}%`"/>
+            <div class="h-full bg-violet-400 rounded-r-full flex-1"/>
+          </div>
+        </div>
+
+        <!-- Bench -->
+        <div v-if="lineup.bench?.length">
+          <div class="text-[10px] text-slate-500 mb-1.5 uppercase tracking-wide">Bench</div>
+          <div class="flex flex-wrap gap-1.5">
+            <div v-for="(p, i) in lineup.bench" :key="p.id"
+              class="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-slate-600 transition"
+              style="background:rgba(0,0,0,.05); border:1px solid rgba(0,0,0,.07)"
+              :class="lineupSwapMode ? 'cursor-pointer hover:border-cyan-300' : ''"
+              @click="lineupSwapMode ? completeSwap('bench', i) : null">
+              {{ p.name }} <span class="text-slate-400 text-[10px]">{{ p.elo }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="lineupSwapMode" class="text-[10px] text-amber-600 text-center rounded-lg py-1.5 px-3"
+          style="background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.2)">
+          Tap the player to swap with ·
+          <button class="underline" @click="lineupSwapMode = false; swapTarget = null">Cancel</button>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button class="btn-ghost flex-1 text-xs py-2.5" @click="suggestLineup">🔄 Reshuffle</button>
+          <button v-if="isManager()" class="btn-primary flex-1 text-xs py-2.5" @click="acceptLineup">
+            ✅ Start This Match
+          </button>
+          <div v-else class="flex-1 text-center text-[11px] text-slate-500 py-2.5 rounded-xl"
+            style="background:rgba(0,0,0,.04); border:1px solid rgba(0,0,0,.06)">
+            Ask manager to start
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+  <!-- ── End Suggested Next Match ── -->
 
   <!-- Loading -->
   <div v-if="loading" class="space-y-2">
