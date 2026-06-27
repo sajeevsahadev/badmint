@@ -15,7 +15,6 @@ const scoreA       = ref(21)
 const scoreB       = ref(0)
 const playedOn     = ref(new Date().toISOString().slice(0, 10))
 const matchName    = ref('')
-const matchNameEdited = ref(false)
 const nextMatchNum = ref(null)
 const msg          = ref(null)
 const saving       = ref(false)
@@ -127,18 +126,6 @@ const avgElo = arr => arr.length
   ? Math.round(arr.reduce((s, id) => s + (eloOf(id) ?? 1000), 0) / arr.length)
   : null
 
-const autoMatchName = computed(() => {
-  if (sideA.value.length < 2 || sideB.value.length < 2) return ''
-  const abbrev = id => (nameOf(id) ?? '').slice(0, 2).toUpperCase()
-  const a   = sideA.value.map(abbrev).join('-')
-  const b   = sideB.value.map(abbrev).join('-')
-  const num = nextMatchNum.value ? `#${nextMatchNum.value} ` : ''
-  return `${num}${a} VS ${b}`
-})
-
-watch(autoMatchName, newName => {
-  if (!matchNameEdited.value) matchName.value = newName
-})
 
 async function startLiveScoring() {
   if (!ready.value) return
@@ -157,7 +144,7 @@ async function startLiveScoring() {
 function reset() {
   sideA.value = []; sideB.value = []
   scoreA.value = 21; scoreB.value = 0
-  matchName.value = ''; matchNameEdited.value = false; msg.value = null
+  matchName.value = ''; msg.value = null
   pickingFor.value = 'A'
 }
 
@@ -239,7 +226,7 @@ async function submitAndStay() {
       <div>
         <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
         <input v-model="matchName" class="input" placeholder="Auto-generated"
-          maxlength="40" @input="matchNameEdited = true" />
+          maxlength="40" />
       </div>
     </div>
 
