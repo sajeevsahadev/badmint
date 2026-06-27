@@ -127,14 +127,13 @@ const lineupSwapMode = ref(false)  // true when user is swapping a player
 const swapTarget     = ref(null)   // { side: 'a'|'b'|'bench', index }
 
 async function suggestLineup() {
-  if (!selectedSchedule.value || !selectedDate.value) return
+  if (!selectedSchedule.value) return
   lineupLoading.value = true
   lineupError.value   = null
   lineup.value        = null
   lineupSwapMode.value = false
   const { data, error } = await supabase.rpc('suggest_lineup', {
-    p_club_id: currentClub.value.club_id,
-    p_date:    selectedDate.value
+    p_schedule_id: selectedSchedule.value.id
   })
   lineupLoading.value = false
   if (error || data?.error) {
@@ -704,16 +703,16 @@ watch(currentClub, async () => {
                     <div class="text-[10px] text-slate-500 mt-0.5">Balanced teams from today's attendees</div>
                   </div>
                   <button class="btn-ghost text-xs px-3 py-1.5"
-                    :disabled="lineupLoading || attendeeIds.size < 4"
+                    :disabled="lineupLoading || !selectedSchedule"
                     @click="suggestLineup">
                     {{ lineupLoading ? '…' : lineup ? '🔄 Reshuffle' : '✨ Generate' }}
                   </button>
                 </div>
 
-                <!-- Not enough players -->
-                <div v-if="attendeeIds.size < 4 && !lineup"
+                <!-- Hint when no lineup yet and no error -->
+                <div v-if="!lineup && !lineupError && !lineupLoading"
                   class="px-4 pb-4 text-[11px] text-slate-500 text-center">
-                  Mark at least 4 players as attending and save to generate a lineup.
+                  Save your Actual Attendees above (min 4), then tap Generate.
                 </div>
 
                 <!-- Error -->
