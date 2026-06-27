@@ -14,6 +14,7 @@ const { user } = useAuth()
 
 const matches        = ref([])
 const loading        = ref(true)
+const activeLive     = ref(null)
 const expanded       = ref(null)
 const renaming       = ref(null)
 const renameVal      = ref('')
@@ -146,8 +147,21 @@ async function load() {
   allExpanded.value = false
   loading.value = false
 }
+async function checkActiveLive() {
+  if (!currentClub.value) return
+  const { data } = await supabase
+    .from('live_matches')
+    .select('id, score_a, score_b')
+    .eq('club_id', currentClub.value.club_id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  activeLive.value = data ?? null
+}
+
 onMounted(async () => {
-  await load()
+  await Promise.all([load(), checkActiveLive()])
   const openId = route.query.open
   if (openId) {
     // Deep-link: expand the date group containing the target match
@@ -272,6 +286,20 @@ const canDelete = m =>
       </button>
     </div>
   </div>
+
+  <!-- ── Active live match banner ── -->
+  <RouterLink v-if="activeLive" :to="`/live/${activeLive.id}`"
+    class="card mb-4 flex items-center gap-3 px-4 py-3 fade-up no-underline hover:opacity-90 transition">
+    <span class="relative flex h-3 w-3 shrink-0">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+    </span>
+    <div class="flex-1 min-w-0">
+      <span class="text-sm font-bold text-rose-600">Live Match in Progress</span>
+      <span class="ml-2 text-sm text-slate-500">{{ activeLive.score_a }} – {{ activeLive.score_b }}</span>
+    </div>
+    <span class="text-xs text-neon font-semibold shrink-0">Open →</span>
+  </RouterLink>
 
   <!-- ── Suggested Next Match card ── -->
   <div class="card overflow-hidden mb-4 fade-up">

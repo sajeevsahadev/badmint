@@ -33,6 +33,7 @@ const routes = [
   { path: '/book',                  component: () => import('../views/BookCourt.vue') },
   { path: '/admin',                 component: () => import('../views/AdminPanel.vue') },
   { path: '/create-club',           component: () => import('../views/CreateClub.vue') },
+  { path: '/live/:id',             component: () => import('../views/LiveMatch.vue') },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

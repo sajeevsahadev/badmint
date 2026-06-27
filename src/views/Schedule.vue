@@ -181,6 +181,22 @@ function acceptLineup() {
   router.push(`/match?sideA=${sideAIds}&sideB=${sideBIds}&date=${selectedDate.value}`)
 }
 
+// ── Rotation fairness ──
+const rotationSummary      = ref([])
+const rotationLoading      = ref(false)
+const showRotation         = ref(false)
+
+async function loadRotationSummary(date) {
+  if (!currentClub.value) return
+  rotationLoading.value = true
+  const { data } = await supabase.rpc('get_rotation_summary', {
+    p_club_id:      currentClub.value.club_id,
+    p_session_date: date
+  })
+  rotationSummary.value = data ?? []
+  rotationLoading.value = false
+}
+
 // ── Errors ──
 const scheduleError = ref(null)
 
@@ -251,17 +267,22 @@ async function selectDate(dateStr) {
   showInvitePanel.value = false
   votes.value = []
   attendeeIds.value = new Set()
+  rotationSummary.value = []
+  showRotation.value = false
   if (scheduleMap.value[dateStr]) {
     await loadVotesAndAttendees(scheduleMap.value[dateStr].id)
   }
+  await loadRotationSummary(dateStr)
 }
 
 function closeDateModal() {
-  showDateModal.value  = false
-  selectedDate.value   = null
-  lineup.value         = null
-  lineupError.value    = null
-  lineupSwapMode.value = false
+  showDateModal.value    = false
+  selectedDate.value     = null
+  lineup.value           = null
+  lineupError.value      = null
+  lineupSwapMode.value   = false
+  rotationSummary.value  = []
+  showRotation.value     = false
 }
 
 // ── Create / update schedule (direct table ops — no RPC) ──
@@ -829,6 +850,41 @@ watch(currentClub, async () => {
                     </div>
                   </div>
 
+                </div>
+              </div>
+              <!-- ── Rotation Fairness panel ── -->
+              <div v-if="rotationSummary.length > 0" class="px-4 pb-4">
+                <button class="w-full flex items-center justify-between py-2.5 rounded-xl px-3 text-left"
+                  style="background:rgba(251,191,36,.06); border:1px solid rgba(251,191,36,.2)"
+                  @click="showRotation = !showRotation">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm">⚖️</span>
+                    <span class="text-sm font-semibold text-amber-700">Rotation Fairness</span>
+                  </div>
+                  <span class="text-xs text-slate-500">{{ showRotation ? '▲ Hide' : '▼ Show' }}</span>
+                </button>
+
+                <div v-if="showRotation" class="mt-2 space-y-1.5">
+                  <div v-for="r in rotationSummary" :key="r.player_id"
+                    class="flex items-center justify-between px-3 py-2 rounded-xl"
+                    style="background:rgba(0,0,0,.03); border:1px solid rgba(0,0,0,.06)">
+                    <span class="text-sm text-slate-700 font-medium truncate">{{ r.name }}</span>
+                    <div class="flex items-center gap-2 shrink-0 ml-2">
+                      <span class="text-[11px] text-slate-400">{{ r.matches_played }}m</span>
+                      <div class="flex gap-0.5">
+                        <span v-for="n in r.consecutive_matches" :key="n"
+                          class="w-2.5 h-2.5 rounded-full"
+                          :class="r.consecutive_matches >= 3 ? 'bg-rose-400' : r.consecutive_matches === 2 ? 'bg-amber-400' : 'bg-emerald-400'">
+                        </span>
+                        <span v-if="r.consecutive_matches === 0"
+                          class="w-2.5 h-2.5 rounded-full bg-slate-200">
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-slate-400 px-1">
+                    Dots = consecutive matches · 🔴 3+ = overdue to sit out
+                  </p>
                 </div>
               </div>
               <!-- ── End Suggested Next Match ── -->
