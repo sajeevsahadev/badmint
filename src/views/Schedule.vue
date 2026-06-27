@@ -882,8 +882,12 @@ watch(currentClub, async () => {
                       </div>
                     </div>
                   </div>
-                  <p class="text-[10px] text-slate-400 px-1">
-                    Dots = consecutive matches · 🔴 3+ = overdue to sit out
+                  <p class="text-[10px] text-slate-400 px-1 leading-relaxed">
+                    Each dot = 1 consecutive match this session ·
+                    <span class="text-emerald-500">●</span> 1
+                    <span class="text-amber-400">●</span> 2
+                    <span class="text-rose-400">●</span> 3+ (overdue to sit out) ·
+                    <span class="text-slate-300">●</span> resting
                   </p>
                 </div>
               </div>

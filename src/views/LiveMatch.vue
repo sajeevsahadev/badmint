@@ -143,7 +143,7 @@ async function finishMatch() {
     }).catch(() => null)
   }
 
-  router.push('/matches')
+  router.push(matchId ? `/matches?open=${matchId}` : '/matches')
 }
 
 async function cancelMatch() {
