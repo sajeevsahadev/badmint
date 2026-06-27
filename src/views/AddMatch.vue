@@ -1,11 +1,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 
 const router = useRouter()
+const route  = useRoute()
 const { currentClub } = useClub()
 const players      = ref([])
 const sideA        = ref([])
@@ -76,11 +77,20 @@ async function loadNextMatchNum() {
   nextMatchNum.value = (data?.match_number ?? 0) + 1
 }
 
-onMounted(() => Promise.all([
-  loadPlayers(),
-  loadNextMatchNum(),
-  checkScheduleAttendees(playedOn.value),
-]))
+onMounted(async () => {
+  await Promise.all([
+    loadPlayers(),
+    loadNextMatchNum(),
+    checkScheduleAttendees(playedOn.value),
+  ])
+  // Pre-fill from lineup suggestion (?sideA=id1,id2&sideB=id3,id4&date=YYYY-MM-DD)
+  if (route.query.sideA && route.query.sideB) {
+    sideA.value = route.query.sideA.split(',').filter(Boolean)
+    sideB.value = route.query.sideB.split(',').filter(Boolean)
+    if (route.query.date) playedOn.value = route.query.date
+    pickingFor.value = sideA.value.length < 2 ? 'A' : sideB.value.length < 2 ? 'B' : 'A'
+  }
+})
 watch(currentClub, () => { reset(); loadPlayers(); loadNextMatchNum() })
 watch(playedOn, (date) => checkScheduleAttendees(date))
 
@@ -208,6 +218,14 @@ async function submitAndStay() {
         <input v-model="matchName" class="input" placeholder="Auto-generated"
           maxlength="40" @input="matchNameEdited = true" />
       </div>
+    </div>
+
+    <!-- Suggested lineup banner -->
+    <div v-if="route.query.sideA"
+      class="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2 text-xs"
+      style="background:rgba(168,85,247,.08); border:1px solid rgba(168,85,247,.25)">
+      <span class="shrink-0">🤖</span>
+      <span class="flex-1 text-slate-300">Teams pre-filled from <strong class="text-violet">Suggested Next Match</strong> — adjust freely</span>
     </div>
 
     <!-- Schedule attendees banner -->
