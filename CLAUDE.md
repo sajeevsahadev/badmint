@@ -1,12 +1,14 @@
 # CLAUDE.md — Badminton 360 Complete Project Context
 
 > **Single source of truth.** Read this file at the start of every Claude Code session.
-> Last updated: June 2026 — reflects all migrations v1–v33, the Badminton 360 rebrand (commit bfbb092),
-> the Profile settings expansion (gender, email/push prefs, biometric app-lock, appearance, privacy policy),
-> and the `user_profiles` RLS lockdown (v33 — phone/gender/full_name were publicly SELECT-able; fixed).
-> Note: this file previously under-documented v18–v31 and described a dark "neo/cyberpunk" design system
-> that no longer matched the deployed app (it has been light-themed since some point before v19). Both gaps
-> are corrected as of this update — treat anything below as reflecting the actual current codebase.
+> Last updated: June 2026 — reflects all migrations v1–v37, including:
+> - v34: admin RPCs for player profile bypass (admin_get_player, admin_get_player_matches)
+> - v35: push_subscriptions.club_id made nullable (global push, not per-club)
+> - v36/v36b: multi-payer PaySplits (paysplit_expense_payers table) + FIFO SQL RPC (get_fifo_result)
+> - v37: pg_cron weekly digest schedule
+> - New app icon (neon shuttlecock PNG), login→dashboard redirect, zoom disabled
+> - Email sending live: match-recorded, expense-added, weekly-digest (auto Monday 8am UTC), announcements (admin-triggered)
+> - Admin Panel expanded to 7 tabs (added Announcements)
 
 ---
 
@@ -202,7 +204,12 @@ All four `/settings/*` routes (plus `/profile`) are listed in App.vue's `clubFre
 31. `supabase/v30_schema.sql` — `facilities.courts_count` column; dropped the UAE-only `emirate` CHECK constraint (globalization)
 32. `supabase/v31_schema.sql` — GDPR account deletion: `created_by`/`registered_by` FKs made nullable; `check_can_delete_account()` + `delete_account_data()` RPCs (blocks on club ownership, match history, wallet/PaySplit balance); paired with the `delete-account` Edge Function
 33. `supabase/v32_schema.sql` — Profile settings expansion: `user_profiles` gains `gender`, `theme_pref`, `email_prefs` jsonb, `push_prefs` jsonb; **consolidates `upsert_profile` into a single 7-param function** (drops the old v2 3-param + v3 6-param overloads); adds `update_theme_pref()`, `update_notification_prefs()`; adds `webauthn_credentials` table for the biometric app-lock
-34. `supabase/v33_schema.sql` — **Security fix**: tightens `user_profiles` RLS from `up_read using (true)` (anyone could SELECT phone/gender/full_name) to owner-only; adds `resolve_public_nickname()`, `get_public_profiles()`, `get_member_profile_names()` RPCs; redefines `v_leaderboard`/`v_best_pairs`/`v_top_scorers` to resolve nicknames via the new SECURITY DEFINER function instead of a raw join to `user_profiles`
+34. `supabase/v33_schema.sql` — **Security fix**: tightens `user_profiles` RLS
+35. `supabase/v34_schema.sql` — Admin bypass RPCs: `admin_get_player(p_player_id)` + `admin_get_player_matches(p_player_id, p_limit)` — SECURITY DEFINER, verify app_admin role, bypass RLS for full player data; fixes "column reference user_id is ambiguous" by qualifying all joins with table aliases
+36. `supabase/v35_schema.sql` — `push_subscriptions.club_id` made nullable; new 3-param `save_push_subscription(p_endpoint, p_p256dh, p_auth)` (global push — no club scope); backward-compat 4-param overload kept
+37. `supabase/v36_schema.sql` — Multi-payer PaySplits: new `paysplit_expense_payers(id, expense_id, player_id, amount)` table; updated `add_expense`/`update_expense` with optional `p_payers jsonb`; updated `get_expenses` returns `payers` array; updated `get_balance_summary` uses proportional debt edges for multi-payer; dropped old `expense_payment_source` CHECK + category CHECK constraints
+38. `supabase/v36b_schema.sql` — `get_fifo_result(p_club_id uuid)` SECURITY DEFINER RPC: SQL window-function O(C+W) FIFO allocation replacing O(n²) JS computation; index on `paysplit_participants(expense_id)`
+39. `supabase/v37_schema.sql` — `cron.schedule('weekly-ranking-digest', '0 8 * * 1', ...)` via pg_net → `send-weekly-digest` Edge Function; requires pg_cron + pg_net extensions enabled; fill in YOUR_PROJECT_REF + YOUR_SERVICE_ROLE_KEY before running from `up_read using (true)` (anyone could SELECT phone/gender/full_name) to owner-only; adds `resolve_public_nickname()`, `get_public_profiles()`, `get_member_profile_names()` RPCs; redefines `v_leaderboard`/`v_best_pairs`/`v_top_scorers` to resolve nicknames via the new SECURITY DEFINER function instead of a raw join to `user_profiles`
 
 ---
 
@@ -482,6 +489,10 @@ elo_score, part_score, composite, club_rank
 | `admin_delete_club(p_club_id)` | App Admin | Force-deletes any club via CASCADE, skipping the match-count guard `delete_club` enforces for owners (v29) |
 | `check_can_delete_account()` | Own user | GDPR pre-check — returns `{can_delete, reason, details}`; blocks on club ownership, match history, or non-zero wallet/PaySplit balance (v31) |
 | `delete_account_data()` | Own user | GDPR deletion — anonymises `created_by`/`registered_by` FKs to NULL, deletes own PaySplit expenses/profile/sessions; called by the `delete-account` Edge Function right before `auth.admin.deleteUser()` (v31) |
+| `admin_get_player(p_player_id)` | App Admin | (v34) Full player row + club info bypassing RLS — used by PlayerProfile.vue `?admin=1` path |
+| `admin_get_player_matches(p_player_id, p_limit)` | App Admin | (v34) Full match history for any player bypassing RLS |
+| `save_push_subscription(p_endpoint, p_p256dh, p_auth)` | Any auth | (v35) Global push subscribe — no club_id; overwrites existing subscription for this device |
+| `get_fifo_result(p_club_id)` | Member | (v36b) O(C+W) SQL FIFO wallet allocation — returns `{active:[...], consumed:[...]}` jsonb; replaces O(n²) JS computation |
 
 ---
 
@@ -609,7 +620,7 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 14. **Facility bookings auto-create** when a match is recorded for a club with `facility_id` set.
 15. **Leave Club blocks**: owners must transfer ownership first; players with match history must be deactivated instead. The `leave_club` RPC enforces both and also deletes the `join_requests` row.
 16. **Biometric app-lock is "app-lock only" — never a login replacement (v32, deliberate security decision).** It can only re-reveal a session that's *already* signed in on that device, gated by `navigator.credentials.get()` succeeding (no server-side signature verification — that's an accepted trade-off given the data behind it is club rankings/expenses among friends, not financial accounts). A real Sign Out (`Profile.vue` or the lock screen's "Sign out" fallback) always requires Google sign-in again; biometric can never substitute for it, even for the same device/user. Don't build a "biometric restores a signed-out session" flow without re-opening this decision explicitly.
-17. **Push subscriptions are one-per-(user, device), not one-per-club.** `push_subscriptions` is keyed `UNIQUE(user_id, endpoint)`, and a device only ever has one push `endpoint`. Calling `subscribe(clubId)` again for a different club on the same device **overwrites** which club that device is subscribed to — it does not add a second subscription. `PushSettings.vue` is scoped to `currentClub` for this reason; don't assume multi-club push fan-out works today.
+17. **Push subscriptions are global as of v35 — no club scope.** `push_subscriptions.club_id` is now nullable; `save_push_subscription` takes no club_id. The send-push Edge Function fans out to all of a user's devices via their club memberships. `PushSettings.vue` no longer requires a current club. The old "single-club-scoped per device" limitation is removed.
 18. **Settings sub-pages (`/settings/*`) must stay in `App.vue`'s `clubFreeRoutes`.** Same reasoning as `/profile` — these are account-level, not club-level, and must render for users with zero clubs.
 19. **Never read another user's `user_profiles` row via a raw `LEFT JOIN`/`.from('user_profiles')` — always go through `get_public_profiles()`, `get_member_profile_names()`, or `resolve_public_nickname()` (v33).** RLS now restricts `user_profiles` SELECT to the owner's own row. Whether a plain SQL `VIEW` bypasses RLS via its owner's privileges depends on Postgres/Supabase specifics this codebase has clearly been burned by before (see `get_club_leaderboard`'s comment about bypassing "v_leaderboard / players RLS") — don't re-introduce a raw cross-user join into a view and assume it'll keep working; wrap it in a SECURITY DEFINER function call instead, which bypasses RLS unambiguously regardless of view semantics.
 
@@ -658,10 +669,10 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 - My Club Rankings: Leave button per row (hidden if owner or games > 0)
 - Footer (v32): tagline, `/privacy` link, version number from `package.json` — renders last, below Danger Zone (GDPR delete account, v31)
 
-### settings/EmailSettings.vue, PushSettings.vue (v32)
+### settings/EmailSettings.vue, PushSettings.vue (v32/v35)
 - Both load/save a jsonb prefs blob (`email_prefs` / `push_prefs`) via `update_notification_prefs()`, with an explicit "Save Changes" button (not auto-save per toggle)
-- **Be honest about what's real**: most categories are saved-but-not-yet-wired-to-actual-sending. `EmailSettings.vue` shows a banner saying so; club invite emails always send today regardless of the `invites` toggle (the invite RPC doesn't check it). Don't remove these disclosures without actually building the corresponding senders.
-- `PushSettings.vue` subscribes via `usePushNotifications().subscribe(currentClub.value.club_id)` — see Design Rule 17 for why this is single-club-scoped. Shows a "still being wired up" notice when `VITE_VAPID_PUBLIC_KEY` is unset.
+- **What actually sends email today**: club invites (always), match recorded (`send-match-email`), expense added (`send-expense-email`), weekly digest (auto Monday 8am via pg_cron → `send-weekly-digest`), announcements (admin-triggered via `send-announcement`). Payment reminders are still saved-but-not-sent.
+- `PushSettings.vue` subscribes via `usePushNotifications().subscribe()` — no club_id since v35 (global scope). Shows a "still being wired up" notice when `VITE_VAPID_PUBLIC_KEY` is unset.
 
 ### settings/SecuritySettings.vue (v32)
 - Toggle calls `useBiometricLock().register()` (WebAuthn ceremony) or `.disable()`
@@ -681,16 +692,21 @@ K=24 lock ensures Elo accumulates at the same rate across all clubs, making glob
 
 | File | Size | Purpose |
 |---|---|---|
-| `public/icon.svg` | Source | Shuttlecock brand icon (dark navy bg, cyan shuttle, "BADMINT" text) |
-| `public/favicon.svg` | Browser tab | Same as icon.svg |
-| `public/icon-192.png` | 19 KB | Android home screen, PWA install icon |
-| `public/icon-512.png` | 60 KB | Splash screen, maskable icon |
+| `public/icon.png` | Source | Neon shuttlecock brand icon (dark navy bg, green feathers, cyan arc) — PNG source |
+| `public/favicon.png` | 64×64 | Browser tab favicon |
+| `public/icon-192.png` | ~38 KB | Android home screen, PWA install icon |
+| `public/icon-512.png` | ~277 KB | Splash screen, maskable icon |
 
-**To regenerate icons** (after editing `icon.svg`):
-```bash
-npm run generate:icons
+**Icon was updated in this session** to a new neon shuttlecock design (PNG source, not SVG). The old `icon.svg` / `favicon.svg` files remain in the repo but are no longer used. `index.html` now points to `favicon.png`.
+
+**To regenerate icons** from the PNG source:
+```js
+// Run in node (sharp is a devDependency)
+const sharp = require('sharp');
+sharp('public/icon.png').resize(192,192).png().toFile('public/icon-192.png', cb);
+sharp('public/icon.png').resize(512,512).png().toFile('public/icon-512.png', cb);
+sharp('public/icon.png').resize(64,64).png().toFile('public/favicon.png', cb);
 ```
-Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 
 **Manifest entries** (`vite.config.js`):
 ```js
@@ -744,15 +760,23 @@ Uses `sharp` (devDependency) to convert SVG → PNG at both sizes.
 - **Onboarding wizard re-trigger** — accessible any time from the hamburger menu's "Club Setup Wizard" action, not just on first login
 - **Profile settings expansion** (v32) — Gender field (incl. "Rather not to say"); Email Settings + Push Settings preference pages (saved now, most categories not wired to real sending yet — see notes under those views); Security page with a real WebAuthn biometric app-lock (register/verify/Trusted Devices/timeout, app-lock-only — never replaces Google sign-in); Appearance picker (Light fully live, Dark/System save the preference but show "Soon" since no dark palette exists); Sign Out moved from the hamburger to Profile; Privacy Policy page (`/privacy`)
 - **`user_profiles` RLS lockdown** (v33) — fixed a real gap where `phone`/`gender`/`full_name` were SELECT-able by any authenticated client via the REST API; RLS is now owner-row-only, with `get_public_profiles()`/`get_member_profile_names()`/`resolve_public_nickname()` SECURITY DEFINER RPCs covering every legitimate cross-user read that used to rely on the open policy
+- **Admin player profile** (v34) — `admin_get_player` + `admin_get_player_matches` RPCs; `PlayerProfile.vue ?admin=1` shows full player data + match history for app_admin; "column reference user_id is ambiguous" fixed by qualifying all joins
+- **Multi-payer PaySplits** (v36) — `paysplit_expense_payers` table; add/edit expense supports multiple payers with individual amounts; balance summary uses proportional debt edges; opening balances shown as collapsible ribbon in Expenses tab; Splitwise-style inline amount inputs per payer
+- **FIFO performance fix** (v36b) — `get_fifo_result` SECURITY DEFINER RPC replaces O(n²) JS FIFO with O(C+W) SQL window functions; `PaySplits.vue` loads result via RPC instead of computing in browser
+- **Global push notifications** (v35) — `push_subscriptions.club_id` nullable; subscribe no longer requires a club; `PushSettings.vue` works for users with zero clubs
+- **Login → dashboard redirect** — `router/index.js` redirects logged-in users hitting `/` to `/dashboard` instead of showing the public landing page again
+- **Zoom disabled** — `index.html` viewport meta has `user-scalable=no, maximum-scale=1.0` so the app feels native
+- **New app icon** — neon shuttlecock PNG (`public/icon.png`); regenerated `icon-192.png`, `icon-512.png`, `favicon.png`; `index.html` now uses `favicon.png`
+- **Email sending wired up** — `send-match-email` (after match recorded), `send-expense-email` (after expense added), `send-weekly-digest` (auto Monday 8am UTC via pg_cron), `send-announcement` (admin-triggered from Admin Panel → Announcements tab)
+- **Admin Panel Announcements tab** (7th tab) — app_admin can write subject + body, send to all users with `email_prefs.news = true`; calls `send-announcement` Edge Function
 
 ### ❌ Not Yet Implemented
 - **Photo upload** — requires Supabase Storage bucket; currently `image_url` is paste-any-URL
-- **Admin dashboard UI** — Full CRUD on all entities now implemented (v22)
 - **Facility admin role** — creator is currently the de-facto owner; formal role pending
 - **Online court booking** — schedule visible but can't reserve online
-- **Push notifications** — Web Push infrastructure wired up (DB tables + SW handler + composable + per-club subscribe UI in `/settings/notifications`); requires VAPID key setup and a Supabase Edge Function to send. Also currently single-club-scoped per device (Design Rule 17) — multi-club fan-out needs a schema change.
+- **Push notification sending** — Web Push infrastructure wired up (DB tables + SW handler + composable + global subscribe); requires VAPID key and a `send-push` Edge Function to fan out messages
 - **Real Dark theme** — `useTheme.js` + `darkMode:'class'` + the Appearance picker are wired, but no dark CSS palette has been written; selecting Dark just saves the preference for later. Converting `style.css` + every view to theme-aware CSS variables is its own pass (~20 files).
-- **Email notification sending** — `EmailSettings.vue` preferences are saved and ready, but only club invite emails actually send today; match-recorded/weekly-digest/payment-reminder/news sender jobs don't exist yet
+- **Payment reminder emails** — preference saved in `email_prefs.payment_reminders` but no sender job built yet
 - **Season reset** — snapshot Elo, reset to 1000 for new season
 - **Form guide** — last 5 match results per player (W/L dots)
 - **Most improved** — Elo delta over last 30 days
@@ -777,15 +801,33 @@ git push origin main   # Vercel auto-deploys in ~30 seconds
 
 ### Supabase setup (one-time)
 1. Create project (region: Singapore — best latency for UAE)
-2. SQL Editor → run all migration files in order (see section 5, v1–v7)
+2. SQL Editor → run all migration files in order (see section 5, v1–v37)
 3. Auth → Providers → Google → enable → paste Client ID + Secret
 4. Auth → URL Configuration → add `https://badmint.vercel.app/**` + localhost
 5. Google Cloud Console → OAuth Client → add Vercel URL as authorised origin
+6. Enable **pg_cron** + **pg_net** extensions (Database → Extensions) then run v37_schema.sql with real PROJECT_REF + SERVICE_ROLE_KEY filled in
+
+### Edge Functions (deploy after any change)
+```bash
+npx supabase functions deploy send-match-email
+npx supabase functions deploy send-expense-email
+npx supabase functions deploy send-weekly-digest
+npx supabase functions deploy send-announcement
+npx supabase functions deploy delete-account
+```
+Supabase project ref: `bdmiirppiyopmdfrztoz`
+
+### Supabase secrets required
+```
+RESEND_API_KEY          = re_...   (Resend dashboard)
+SUPABASE_SERVICE_ROLE_KEY = ...    (Project Settings → API → service_role)
+```
 
 ### Environment variables (Vercel dashboard)
 ```
-VITE_SUPABASE_URL       = https://YOUR-PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY  = your-anon-key
+VITE_SUPABASE_URL         = https://bdmiirppiyopmdfrztoz.supabase.co
+VITE_SUPABASE_ANON_KEY    = your-anon-key
+VITE_VAPID_PUBLIC_KEY     = your-vapid-public-key
 ```
 
 ---
