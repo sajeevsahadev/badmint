@@ -22,7 +22,7 @@ const saved    = ref(false)
 const error    = ref(null)
 
 // Edit form
-const form = ref({ nickname: '', phone: '', bio: '', gender: '' })
+const form = ref({ nickname: '', phone: '', bio: '', gender: '', avatar_url: '' })
 let _savedTimer = null
 onUnmounted(() => clearTimeout(_savedTimer))
 
@@ -56,10 +56,11 @@ async function load() {
   }
 
   // Pre-fill form
-  form.value.nickname = prof?.nickname ?? user.value.user_metadata?.full_name ?? ''
-  form.value.phone    = prof?.phone ?? ''
-  form.value.bio      = prof?.bio ?? ''
-  form.value.gender   = prof?.gender ?? ''
+  form.value.nickname    = prof?.nickname   ?? user.value.user_metadata?.full_name ?? ''
+  form.value.phone       = prof?.phone      ?? ''
+  form.value.bio         = prof?.bio        ?? ''
+  form.value.gender      = prof?.gender     ?? ''
+  form.value.avatar_url  = prof?.avatar_url ?? ''
   loading.value = false
 }
 
@@ -77,16 +78,22 @@ async function save() {
     p_country:   profile.value?.country  ?? null,
     p_gender:    form.value.gender || null,
   })
+  if (err) { saving.value = false; error.value = err.message; return }
+
+  // avatar_url is not a param of upsert_profile — update directly on own row
+  const avatarVal = form.value.avatar_url.trim() || null
+  await supabase.from('user_profiles')
+    .update({ avatar_url: avatarVal })
+    .eq('user_id', user.value.id)
+
   saving.value = false
-  if (err) { error.value = err.message }
-  else {
-    saved.value = true
-    if (!profile.value) profile.value = {}
-    profile.value.nickname = form.value.nickname.trim()
-    profile.value.gender   = form.value.gender || null
-    clearTimeout(_savedTimer)
-    _savedTimer = setTimeout(() => { saved.value = false }, 3000)
-  }
+  saved.value = true
+  if (!profile.value) profile.value = {}
+  profile.value.nickname   = form.value.nickname.trim()
+  profile.value.gender     = form.value.gender || null
+  profile.value.avatar_url = avatarVal
+  clearTimeout(_savedTimer)
+  _savedTimer = setTimeout(() => { saved.value = false }, 3000)
 }
 
 const initials = computed(() => {
@@ -181,9 +188,13 @@ async function confirmDelete() {
   <template v-else>
     <!-- Avatar + header -->
     <div class="flex items-center gap-4 mb-6 fade-up">
-      <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black text-slate-950 shrink-0"
+      <div class="w-16 h-16 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center text-xl font-black text-slate-950"
         style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-        {{ initials }}
+        <img v-if="profile?.avatar_url"
+             :src="profile.avatar_url"
+             class="w-full h-full object-cover"
+             alt="Profile photo" />
+        <span v-else>{{ initials }}</span>
       </div>
       <div>
         <h2 class="font-display text-xl font-bold gradient-text leading-tight">
@@ -203,6 +214,19 @@ async function confirmDelete() {
           <label class="label">Nickname / Public Name <span class="text-rose-400">*</span></label>
           <input v-model="form.nickname" class="input" placeholder="How others see you (e.g. Flash)" maxlength="30" />
           <p class="text-[10px] text-slate-500 mt-1">This name appears publicly on leaderboards and explore page.</p>
+        </div>
+        <div>
+          <label class="label">Profile Photo URL <span class="text-slate-600">(optional)</span></label>
+          <input v-model="form.avatar_url" class="input" type="url"
+            placeholder="Paste any image URL (JPG, PNG, WebP)" />
+          <p class="text-[10px] text-slate-500 mt-1">Your photo appears in live match scoring and your public profile.</p>
+          <div v-if="form.avatar_url && form.avatar_url.startsWith('http')" class="mt-2 flex items-center gap-3">
+            <img :src="form.avatar_url" alt="Preview"
+                 class="w-12 h-12 rounded-full object-cover border border-slate-200"
+                 @error="e => e.target.style.display='none'"
+                 @load="e => e.target.style.display=''" />
+            <span class="text-[10px] text-slate-400">Preview</span>
+          </div>
         </div>
         <div>
           <label class="label">Phone Number <span class="text-slate-600">(optional)</span></label>
