@@ -282,16 +282,11 @@ BEGIN
     -- Derive from v_last: pre-point score was (v_last minus this point).
     v_restore_a       := v_last.score_a_after - CASE WHEN v_last.side = 'A' THEN 1 ELSE 0 END;
     v_restore_b       := v_last.score_b_after - CASE WHEN v_last.side = 'B' THEN 1 ELSE 0 END;
-    IF v_prev.id IS NOT NULL THEN
-      -- Previous point existed but was from prior game: serving was whatever it was at
-      -- start of this game (loser of prior game serves, set during game-won logic)
-      v_restore_serving := v_match.serving_side;
-      v_restore_server  := v_match.serving_player;
-    ELSE
-      -- No previous point at all: restore initial serve from match row
-      v_restore_serving := v_match.serving_side;
-      v_restore_server  := v_match.serving_player;
-    END IF;
+    -- Use the serve recorded ON v_last (the serve active before that point was played).
+    -- Do NOT use v_match.serving_side here — after a game win it was reset to the loser's
+    -- side for the new game, which is the wrong serve to restore to.
+    v_restore_serving := v_last.server_side;
+    v_restore_server  := v_last.server_player;
   END IF;
   v_restore_game := v_last.game_number;  -- stays in same game (overridden below for game-won undo)
 

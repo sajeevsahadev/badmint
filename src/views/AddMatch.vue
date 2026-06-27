@@ -129,7 +129,7 @@ const avgElo = arr => arr.length
 
 
 function startLiveScoring() {
-  if (!ready.value) return
+  if (sideA.value.length !== 2 || sideB.value.length !== 2) return
   showServePickerModal.value = true
 }
 

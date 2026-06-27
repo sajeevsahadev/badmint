@@ -3,12 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
-import { useAuth } from '../composables/useAuth'
 
 const route  = useRoute()
 const router = useRouter()
 const { currentClub, isManager } = useClub()
-const { user } = useAuth()
 
 const liveId  = route.params.id
 const match   = ref(null)
@@ -20,6 +18,7 @@ const showFinishModal = ref(false)
 const showCancelModal = ref(false)
 const loading = ref(true)
 const error   = ref('')
+const undoError = ref('')
 
 let channel = null
 
@@ -91,8 +90,12 @@ function handleNewPoint(point) {
   const a = point.score_a_after
   const b = point.score_b_after
   let msg = point.side === 'A' ? 'Point — Side A' : 'Point — Side B'
+  // Deuce: both sides ≥20 and level (can happen at 20-20, 21-21, etc. up to 29-29)
   if (a >= 20 && b >= 20 && a === b) msg = 'DEUCE!'
-  else if ((a === 20 && b < 20) || (b === 20 && a < 20)) msg = 'MATCH POINT!'
+  // Match point: one side needs exactly one more to win
+  // Normal win: score ≥20 with a 1-point lead (next point gives the 2-point margin)
+  // Cap win: one side is at 29 (next point = 30 = cap win)
+  else if ((a >= 20 && a === b + 1) || (b >= 20 && b === a + 1) || a === 29 || b === 29) msg = 'MATCH POINT!'
   flashAnnouncement(msg)
 }
 
@@ -119,10 +122,16 @@ function scoreBySide(side) {
 }
 
 async function undoPoint() {
+  undoError.value = ''
   const { data, error: err } = await supabase.rpc('undo_live_point_v2', {
     p_live_match_id: liveId
   })
-  if (!err && data) {
+  if (err) {
+    undoError.value = err.message || 'Nothing to undo'
+    setTimeout(() => { undoError.value = '' }, 2000)
+    return
+  }
+  if (data) {
     match.value = { ...match.value, ...data }
     flashAnnouncement('Undone')
   }
@@ -351,10 +360,13 @@ onUnmounted(() => {
 
     <!-- Action bar -->
     <div class="flex items-center gap-3 px-4 py-3 bg-white border-t border-slate-200 shrink-0">
-      <button v-if="isManager()" @click="undoPoint"
-              class="btn-ghost flex items-center gap-1.5 text-sm">
-        ↩ Undo
-      </button>
+      <div v-if="isManager()" class="flex flex-col items-start">
+        <button @click="undoPoint"
+                class="btn-ghost flex items-center gap-1.5 text-sm">
+          ↩ Undo
+        </button>
+        <span v-if="undoError" class="text-rose-500 text-[10px] mt-0.5">{{ undoError }}</span>
+      </div>
       <div class="flex-1"></div>
       <button v-if="isManager() && match?.status === 'active'"
               @click="showFinishModal = true"
@@ -374,8 +386,15 @@ onUnmounted(() => {
         <div class="card w-full max-w-sm p-6">
           <h3 class="font-semibold text-lg mb-2">Finish &amp; Record Match?</h3>
           <p class="text-slate-500 text-sm mb-4">
-            Final score: Side B {{ currentScoreB }} – {{ currentScoreA }} Side A
-            <span v-if="gameScores.length"> ({{ gameScores.length + 1 }} games)</span>
+            <template v-if="gamesA > 0 || gamesB > 0">
+              Games won: Side A <strong>{{ gamesA }}</strong> – <strong>{{ gamesB }}</strong> Side B
+              <span v-if="currentScoreA > 0 || currentScoreB > 0">
+                · Current game {{ currentScoreA }}–{{ currentScoreB }}
+              </span>
+            </template>
+            <template v-else>
+              Final score: Side B {{ currentScoreB }} – {{ currentScoreA }} Side A
+            </template>
           </p>
           <div class="flex gap-3">
             <button @click="showFinishModal = false" class="btn-ghost flex-1">Cancel</button>
