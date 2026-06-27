@@ -17,8 +17,9 @@ const playedOn     = ref(new Date().toISOString().slice(0, 10))
 const matchName    = ref('')
 const nextMatchNum = ref(null)
 const msg          = ref(null)
-const saving       = ref(false)
-const startingLive = ref(false)
+const saving            = ref(false)
+const startingLive      = ref(false)
+const showServePickerModal = ref(false)
 
 // Guided picking: 'A' = filling Side A, 'B' = filling Side B
 const pickingFor = ref('A')
@@ -127,14 +128,25 @@ const avgElo = arr => arr.length
   : null
 
 
-async function startLiveScoring() {
+function startLiveScoring() {
   if (!ready.value) return
+  showServePickerModal.value = true
+}
+
+const servePickerPlayers = computed(() => [
+  ...sideA.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), side: 'Side A' })),
+  ...sideB.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), side: 'Side B' })),
+])
+
+async function startWithServer(servingPlayerId) {
+  showServePickerModal.value = false
   startingLive.value = true
-  const { data: liveId, error } = await supabase.rpc('start_live_match', {
-    p_club_id:   currentClub.value.club_id,
-    p_side_a:    sideA.value,
-    p_side_b:    sideB.value,
-    p_played_on: playedOn.value,
+  const { data: liveId, error } = await supabase.rpc('start_live_match_v2', {
+    p_club_id:        currentClub.value.club_id,
+    p_side_a:         sideA.value,
+    p_side_b:         sideB.value,
+    p_played_on:      playedOn.value,
+    p_serving_player: servingPlayerId,
   })
   startingLive.value = false
   if (error) { msg.value = { ok: false, t: error.message }; return }
@@ -416,5 +428,27 @@ async function submitAndStay() {
       :class="msg.ok ? 'bg-teal-500/15 text-teal-300' : 'bg-rose-500/15 text-rose-300'">
       {{ msg.t }}
     </p>
+
+    <!-- Serve picker modal -->
+    <Teleport to="body">
+      <div v-if="showServePickerModal" class="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
+        <div class="card w-full max-w-sm rounded-b-none rounded-t-2xl p-6">
+          <h3 class="font-semibold text-lg mb-1">Who serves first?</h3>
+          <p class="text-slate-500 text-sm mb-4">Tap the player who will serve at the start of the match.</p>
+          <div class="flex flex-col gap-2">
+            <button v-for="player in servePickerPlayers" :key="player.id"
+                    @click="startWithServer(player.id)"
+                    class="btn-ghost text-left flex items-center gap-3 py-3">
+              <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 text-sm shrink-0">
+                {{ player.name[0]?.toUpperCase() }}
+              </div>
+              <span>{{ player.name }}</span>
+              <span class="ml-auto text-xs text-slate-400">{{ player.side }}</span>
+            </button>
+          </div>
+          <button @click="showServePickerModal = false" class="btn-ghost w-full mt-3 text-slate-500">Cancel</button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
