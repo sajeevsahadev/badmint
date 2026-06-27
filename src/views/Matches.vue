@@ -12,12 +12,14 @@ const route  = useRoute()
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 
-const matches   = ref([])
-const loading   = ref(true)
-const expanded  = ref(null)
-const renaming  = ref(null)
-const renameVal = ref('')
-const deleting  = ref(null)   // match id currently being deleted
+const matches        = ref([])
+const loading        = ref(true)
+const expanded       = ref(null)
+const renaming       = ref(null)
+const renameVal      = ref('')
+const deleting       = ref(null)
+const collapsedDates = ref(new Set())  // dates that are collapsed
+const allExpanded    = ref(false)
 
 async function load() {
   if (!currentClub.value) return
@@ -82,20 +84,49 @@ async function load() {
     sideA: { ...m.sideA, players: m.sideA.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) },
     sideB: { ...m.sideB, players: m.sideB.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) }
   }))
+  // Collapse all dates by default — most recent date stays open
+  const dates = [...new Set(matches.value.map(m => m.played_on))]
+  collapsedDates.value = new Set(dates.slice(1))  // keep newest date open
+  allExpanded.value = false
   loading.value = false
 }
 onMounted(async () => {
   await load()
-  // Auto-expand match if arriving from a profile/deep-link
   const openId = route.query.open
   if (openId) {
+    // Deep-link: expand the date group containing the target match
+    const targetDate = matches.value.find(m => m.id === openId)?.played_on
+    if (targetDate) collapsedDates.value.delete(targetDate)
     expanded.value = openId
     await nextTick()
     document.getElementById('match-' + openId)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 })
-watch(currentClub, load)
+watch(currentClub, async () => {
+  await load()
+  // Re-collapse all dates when club changes
+  collapsedDates.value = new Set(groupedMatches.value.map(g => g.date))
+  allExpanded.value = false
+})
+
+function toggleDate(date) {
+  const s = new Set(collapsedDates.value)
+  if (s.has(date)) s.delete(date)
+  else s.add(date)
+  collapsedDates.value = s
+  allExpanded.value = s.size === 0
+}
+
+function toggleExpandAll() {
+  if (allExpanded.value) {
+    collapsedDates.value = new Set(groupedMatches.value.map(g => g.date))
+    allExpanded.value = false
+  } else {
+    collapsedDates.value = new Set()
+    allExpanded.value = true
+  }
+}
 
 function toggle(id) {
   expanded.value = expanded.value === id ? null : id
@@ -168,16 +199,22 @@ const canDelete = m =>
     ← Back to Profile
   </button>
 
-  <!-- Add match button (managers) -->
+  <!-- Header row -->
   <div class="flex items-center justify-between mb-4 fade-up">
     <div>
       <h2 class="font-display text-xl font-bold gradient-text">Match History</h2>
-      <p class="text-xs text-slate-400 mt-0.5">All matches · newest first</p>
+      <p class="text-xs text-slate-400 mt-0.5">Grouped by date · newest first</p>
     </div>
-    <button v-if="isManager()" class="btn-primary px-4 py-2 text-sm"
-      @click="router.push('/match')">
-      ➕ Add Match
-    </button>
+    <div class="flex items-center gap-2">
+      <button v-if="matches.length" class="btn-ghost px-3 py-1.5 text-xs font-semibold"
+        @click="toggleExpandAll">
+        {{ allExpanded ? '⊟ Collapse All' : '⊞ Expand All' }}
+      </button>
+      <button v-if="isManager()" class="btn-primary px-4 py-2 text-sm"
+        @click="router.push('/match')">
+        ➕ Add Match
+      </button>
+    </div>
   </div>
 
   <!-- Loading -->
@@ -197,20 +234,24 @@ const canDelete = m =>
 
   <!-- Match list grouped by date -->
   <div v-else class="fade-up">
-    <div v-for="group in groupedMatches" :key="group.date" class="mb-5">
+    <div v-for="group in groupedMatches" :key="group.date" class="mb-4">
 
-      <!-- Date header -->
-      <div class="flex items-center gap-2 mb-2">
-        <span class="text-xs font-bold text-slate-300">{{ fmt(group.date) }}</span>
+      <!-- Date header — clickable to collapse/expand -->
+      <button class="w-full flex items-center gap-2 mb-2 group" @click="toggleDate(group.date)">
+        <span class="text-xs font-bold text-slate-300 group-hover:text-neon transition-colors">
+          {{ fmt(group.date) }}
+        </span>
         <span class="text-xs px-2 py-0.5 rounded-full text-slate-500 font-medium"
           style="background:rgba(255,255,255,.06)">
           {{ group.matches.length }} {{ group.matches.length === 1 ? 'match' : 'matches' }}
         </span>
         <div class="flex-1 h-px" style="background:rgba(255,255,255,.06)"></div>
-      </div>
+        <span class="text-slate-500 text-xs transition-transform duration-200 group-hover:text-neon"
+          :style="collapsedDates.has(group.date) ? '' : 'transform:rotate(180deg)'">▾</span>
+      </button>
 
-      <!-- Matches for this date -->
-      <div class="space-y-2">
+      <!-- Matches for this date (hidden when collapsed) -->
+      <div v-if="!collapsedDates.has(group.date)" class="space-y-2">
       <div v-for="m in group.matches" :key="m.id"
         :id="'match-' + m.id"
         class="card overflow-hidden transition-all duration-200"
