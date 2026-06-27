@@ -11,6 +11,7 @@ const { currentClub, isManager } = useClub()
 const liveId  = route.params.id
 const match   = ref(null)
 const playerNames = ref({})
+const avatarMap   = ref({})
 const announcement = ref('')
 const announcementTimer = ref(null)
 const tapping = ref(null)
@@ -24,10 +25,18 @@ let channel = null
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const sideAPlayers = computed(() =>
-  (match.value?.side_a || []).map(id => ({ id, name: playerNames.value[id] || id.slice(0, 6) }))
+  (match.value?.side_a || []).map(id => ({
+    id,
+    name: playerNames.value[id] || id.slice(0, 6),
+    avatar: avatarMap.value[id] || null
+  }))
 )
 const sideBPlayers = computed(() =>
-  (match.value?.side_b || []).map(id => ({ id, name: playerNames.value[id] || id.slice(0, 6) }))
+  (match.value?.side_b || []).map(id => ({
+    id,
+    name: playerNames.value[id] || id.slice(0, 6),
+    avatar: avatarMap.value[id] || null
+  }))
 )
 const servingPlayerId = computed(() => match.value?.serving_player)
 const currentScoreA  = computed(() => match.value?.score_a ?? 0)
@@ -50,12 +59,32 @@ async function loadMatch() {
   if (allIds.length) {
     const { data: players } = await supabase
       .from('players')
-      .select('id, display_name')
+      .select('id, display_name, user_id')
       .in('id', allIds)
     if (players) {
-      const map = {}
-      players.forEach(p => { map[p.id] = p.display_name })
-      playerNames.value = map
+      const nameMap = {}
+      const userIdToPlayerId = {}
+      players.forEach(p => {
+        nameMap[p.id] = p.display_name
+        if (p.user_id) userIdToPlayerId[p.user_id] = p.id
+      })
+      playerNames.value = nameMap
+
+      // Fetch avatars for linked users via get_public_profiles RPC
+      const linkedUserIds = players.filter(p => p.user_id).map(p => p.user_id)
+      if (linkedUserIds.length) {
+        const { data: profiles } = await supabase.rpc('get_public_profiles', {
+          p_user_ids: linkedUserIds
+        })
+        if (profiles) {
+          const aMap = {}
+          profiles.forEach(prof => {
+            const playerId = userIdToPlayerId[prof.user_id]
+            if (playerId && prof.avatar_url) aMap[playerId] = prof.avatar_url
+          })
+          avatarMap.value = aMap
+        }
+      }
     }
   }
   loading.value = false
@@ -162,6 +191,12 @@ async function cancelMatch() {
   router.push('/matches')
 }
 
+// ── SVG court helpers ─────────────────────────────────────────────────────────
+// Get first letter of player name for avatar fallback
+function initial(name) {
+  return (name || '?')[0].toUpperCase()
+}
+
 onMounted(async () => {
   await loadMatch()
   subscribeRealtime()
@@ -230,111 +265,208 @@ onUnmounted(() => {
         <span class="text-violet-400 text-2xl font-bold">{{ currentScoreB }}</span>
       </button>
 
-      <!-- Court -->
-      <div class="flex-1 relative rounded-2xl overflow-hidden"
-           style="background: linear-gradient(160deg, #1a4a1a 0%, #0d2e0d 50%, #0f3510 100%)">
+      <!-- SVG Court -->
+      <div class="flex-1 relative rounded-2xl overflow-hidden">
+        <svg
+          viewBox="0 0 61 134"
+          class="w-full h-full"
+          preserveAspectRatio="xMidYMid meet"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <!-- Court gradient -->
+            <linearGradient id="courtGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1e6b1e"/>
+              <stop offset="100%" stop-color="#165016"/>
+            </linearGradient>
 
-        <!-- Court lines: outer border -->
-        <div class="absolute inset-3 border-2 border-white/40 rounded pointer-events-none"></div>
+            <!-- Avatar clip paths -->
+            <clipPath id="clipB0"><circle cx="15" cy="35" r="6"/></clipPath>
+            <clipPath id="clipB1"><circle cx="46" cy="35" r="6"/></clipPath>
+            <clipPath id="clipA0"><circle cx="46" cy="99" r="6"/></clipPath>
+            <clipPath id="clipA1"><circle cx="15" cy="99" r="6"/></clipPath>
+          </defs>
 
-        <!-- Net (horizontal middle) -->
-        <div class="absolute left-0 right-0 top-1/2 -translate-y-px h-0.5 bg-white/60 pointer-events-none"></div>
-        <!-- Net posts -->
-        <div class="absolute left-3 top-1/2 -translate-y-1 w-0.5 h-2 bg-white/40 pointer-events-none"></div>
-        <div class="absolute right-3 top-1/2 -translate-y-1 w-0.5 h-2 bg-white/40 pointer-events-none"></div>
+          <!-- Court surface -->
+          <rect x="0" y="0" width="61" height="134" fill="url(#courtGrad)"/>
 
-        <!-- Service centre lines -->
-        <div class="absolute top-3 bottom-1/2 left-1/2 -translate-x-px w-px bg-white/25 pointer-events-none"></div>
-        <div class="absolute top-1/2 bottom-3 left-1/2 -translate-x-px w-px bg-white/25 pointer-events-none"></div>
-        <!-- Short service lines -->
-        <div class="absolute left-3 right-3 pointer-events-none" style="top: calc(50% - 22%)">
-          <div class="border-t border-dashed border-white/20"></div>
-        </div>
-        <div class="absolute left-3 right-3 pointer-events-none" style="bottom: calc(50% - 22%)">
-          <div class="border-t border-dashed border-white/20"></div>
-        </div>
+          <!-- ── Court lines ── -->
+          <!-- Outer doubles boundary -->
+          <rect x="0.6" y="0.6" width="59.8" height="132.8"
+                fill="none" stroke="white" stroke-width="1.2" stroke-opacity="0.75"/>
 
-        <!-- 4 player zones: 2×2 grid -->
-        <div class="absolute inset-0 grid grid-cols-2 grid-rows-2">
+          <!-- Singles sidelines (inset 4.6 units each side) -->
+          <line x1="4.6" y1="0.6" x2="4.6" y2="133.4" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
+          <line x1="56.4" y1="0.6" x2="56.4" y2="133.4" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
 
-          <!-- Top-left: Side B player 0 -->
-          <button @click="scoreByPlayer(sideBPlayers[0]?.id)"
-                  :disabled="!isManager() || match?.status !== 'active' || !sideBPlayers[0]"
-                  class="relative flex flex-col items-center justify-center transition-all duration-150"
-                  :class="[
-                    tapping === sideBPlayers[0]?.id ? 'bg-violet-500/30 scale-95' : 'hover:bg-white/5 active:bg-violet-500/20',
-                    (!isManager() || match?.status !== 'active') ? 'cursor-default' : 'cursor-pointer'
-                  ]">
-            <div class="w-9 h-9 rounded-full bg-violet-600/80 flex items-center justify-center text-white font-bold text-sm mb-1">
-              {{ (sideBPlayers[0]?.name || '?')[0].toUpperCase() }}
-            </div>
-            <span class="text-white/80 text-xs font-medium text-center leading-tight px-1 truncate max-w-full">
-              {{ sideBPlayers[0]?.name || '—' }}
-            </span>
-            <div v-if="servingPlayerId === sideBPlayers[0]?.id"
-                 class="absolute top-2 right-2 w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse">
-            </div>
-          </button>
+          <!-- Net line at y=67 (center) — thicker and brighter -->
+          <line x1="0.6" y1="67" x2="60.4" y2="67" stroke="white" stroke-width="1.4" stroke-opacity="0.9"/>
+          <!-- Net shadow below -->
+          <line x1="0.6" y1="67.7" x2="60.4" y2="67.7" stroke="white" stroke-width="0.4" stroke-opacity="0.3"/>
 
-          <!-- Top-right: Side A player 1 -->
-          <button @click="scoreByPlayer(sideAPlayers[1]?.id)"
-                  :disabled="!isManager() || match?.status !== 'active' || !sideAPlayers[1]"
-                  class="relative flex flex-col items-center justify-center transition-all duration-150"
-                  :class="[
-                    tapping === sideAPlayers[1]?.id ? 'bg-cyan-500/30 scale-95' : 'hover:bg-white/5 active:bg-cyan-500/20',
-                    (!isManager() || match?.status !== 'active') ? 'cursor-default' : 'cursor-pointer'
-                  ]">
-            <div class="w-9 h-9 rounded-full bg-cyan-600/80 flex items-center justify-center text-white font-bold text-sm mb-1">
-              {{ (sideAPlayers[1]?.name || '?')[0].toUpperCase() }}
-            </div>
-            <span class="text-white/80 text-xs font-medium text-center leading-tight px-1 truncate max-w-full">
-              {{ sideAPlayers[1]?.name || '—' }}
-            </span>
-            <div v-if="servingPlayerId === sideAPlayers[1]?.id"
-                 class="absolute top-2 left-2 w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse">
-            </div>
-          </button>
+          <!-- Short service lines (19.8 units from net = y=47.2 and y=86.8) -->
+          <line x1="0.6" y1="47.2" x2="60.4" y2="47.2" stroke="white" stroke-width="0.6" stroke-opacity="0.6"/>
+          <line x1="0.6" y1="86.8" x2="60.4" y2="86.8" stroke="white" stroke-width="0.6" stroke-opacity="0.6"/>
 
-          <!-- Bottom-left: Side B player 1 -->
-          <button @click="scoreByPlayer(sideBPlayers[1]?.id)"
-                  :disabled="!isManager() || match?.status !== 'active' || !sideBPlayers[1]"
-                  class="relative flex flex-col items-center justify-center transition-all duration-150"
-                  :class="[
-                    tapping === sideBPlayers[1]?.id ? 'bg-violet-500/30 scale-95' : 'hover:bg-white/5 active:bg-violet-500/20',
-                    (!isManager() || match?.status !== 'active') ? 'cursor-default' : 'cursor-pointer'
-                  ]">
-            <div class="w-9 h-9 rounded-full bg-violet-600/80 flex items-center justify-center text-white font-bold text-sm mb-1">
-              {{ (sideBPlayers[1]?.name || '?')[0].toUpperCase() }}
-            </div>
-            <span class="text-white/80 text-xs font-medium text-center leading-tight px-1 truncate max-w-full">
-              {{ sideBPlayers[1]?.name || '—' }}
-            </span>
-            <div v-if="servingPlayerId === sideBPlayers[1]?.id"
-                 class="absolute bottom-2 right-2 w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse">
-            </div>
-          </button>
+          <!-- Long service lines for doubles (7.6 from baselines) -->
+          <line x1="0.6" y1="7.6" x2="60.4" y2="7.6" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
+          <line x1="0.6" y1="126.4" x2="60.4" y2="126.4" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
 
-          <!-- Bottom-right: Side A player 0 -->
-          <button @click="scoreByPlayer(sideAPlayers[0]?.id)"
-                  :disabled="!isManager() || match?.status !== 'active' || !sideAPlayers[0]"
-                  class="relative flex flex-col items-center justify-center transition-all duration-150"
-                  :class="[
-                    tapping === sideAPlayers[0]?.id ? 'bg-cyan-500/30 scale-95' : 'hover:bg-white/5 active:bg-cyan-500/20',
-                    (!isManager() || match?.status !== 'active') ? 'cursor-default' : 'cursor-pointer'
-                  ]">
-            <div class="w-9 h-9 rounded-full bg-cyan-600/80 flex items-center justify-center text-white font-bold text-sm mb-1">
-              {{ (sideAPlayers[0]?.name || '?')[0].toUpperCase() }}
-            </div>
-            <span class="text-white/80 text-xs font-medium text-center leading-tight px-1 truncate max-w-full">
-              {{ sideAPlayers[0]?.name || '—' }}
-            </span>
-            <div v-if="servingPlayerId === sideAPlayers[0]?.id"
-                 class="absolute bottom-2 left-2 w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse">
-            </div>
-          </button>
-        </div>
+          <!-- Center service lines (x=30.5, between short service lines and net only) -->
+          <line x1="30.5" y1="47.2" x2="30.5" y2="67" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
+          <line x1="30.5" y1="67" x2="30.5" y2="86.8" stroke="white" stroke-width="0.6" stroke-opacity="0.55"/>
 
-        <!-- Announcement overlay -->
+          <!-- Net post indicators at the outer sideline -->
+          <rect x="0" y="65.5" width="1.2" height="3" fill="white" fill-opacity="0.7" rx="0.3"/>
+          <rect x="59.8" y="65.5" width="1.2" height="3" fill="white" fill-opacity="0.7" rx="0.3"/>
+
+          <!-- ── Side B players (top half, y≈35) ── -->
+
+          <!-- B0: top-left service box (cx=15, cy=35) -->
+          <g @click="scoreByPlayer(sideBPlayers[0]?.id)"
+             :style="isManager() && match?.status === 'active' && sideBPlayers[0] ? 'cursor:pointer' : 'cursor:default'"
+             style="transition: opacity 0.15s">
+            <!-- tap flash zone -->
+            <rect x="0" y="0" width="30.5" height="67" fill="transparent"
+                  :fill-opacity="tapping === sideBPlayers[0]?.id ? 0.18 : 0"
+                  style="fill: #a855f7"/>
+
+            <!-- avatar circle bg (violet) -->
+            <circle cx="15" cy="35" r="6" fill="#7c3aed" fill-opacity="0.9"/>
+            <!-- avatar photo (if available) -->
+            <image v-if="sideBPlayers[0]?.avatar"
+                   :href="sideBPlayers[0].avatar"
+                   x="9" y="29" width="12" height="12"
+                   clip-path="url(#clipB0)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            <!-- initial fallback -->
+            <text v-else x="15" y="38" text-anchor="middle"
+                  fill="white" font-size="5.5" font-weight="bold" font-family="sans-serif">
+              {{ initial(sideBPlayers[0]?.name) }}
+            </text>
+
+            <!-- player name -->
+            <text x="15" y="44.5" text-anchor="middle"
+                  fill="white" fill-opacity="0.9" font-size="3.2" font-family="sans-serif">
+              {{ (sideBPlayers[0]?.name || '—').slice(0, 10) }}
+            </text>
+
+            <!-- serve indicator -->
+            <g v-if="servingPlayerId === sideBPlayers[0]?.id">
+              <circle cx="22" cy="28" r="1.8" fill="#22d3ee">
+                <animate attributeName="r" values="1.8;2.6;1.8" dur="1.2s" repeatCount="indefinite"/>
+                <animate attributeName="fill-opacity" values="1;0.5;1" dur="1.2s" repeatCount="indefinite"/>
+              </circle>
+            </g>
+          </g>
+
+          <!-- B1: top-right service box (cx=46, cy=35) -->
+          <g @click="scoreByPlayer(sideBPlayers[1]?.id)"
+             :style="isManager() && match?.status === 'active' && sideBPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
+            <rect x="30.5" y="0" width="30.5" height="67" fill="transparent"
+                  :fill-opacity="tapping === sideBPlayers[1]?.id ? 0.18 : 0"
+                  style="fill: #a855f7"/>
+
+            <circle cx="46" cy="35" r="6" fill="#7c3aed" fill-opacity="0.9"/>
+            <image v-if="sideBPlayers[1]?.avatar"
+                   :href="sideBPlayers[1].avatar"
+                   x="40" y="29" width="12" height="12"
+                   clip-path="url(#clipB1)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            <text v-else x="46" y="38" text-anchor="middle"
+                  fill="white" font-size="5.5" font-weight="bold" font-family="sans-serif">
+              {{ initial(sideBPlayers[1]?.name) }}
+            </text>
+
+            <text x="46" y="44.5" text-anchor="middle"
+                  fill="white" fill-opacity="0.9" font-size="3.2" font-family="sans-serif">
+              {{ (sideBPlayers[1]?.name || '—').slice(0, 10) }}
+            </text>
+
+            <g v-if="servingPlayerId === sideBPlayers[1]?.id">
+              <circle cx="39" cy="28" r="1.8" fill="#22d3ee">
+                <animate attributeName="r" values="1.8;2.6;1.8" dur="1.2s" repeatCount="indefinite"/>
+                <animate attributeName="fill-opacity" values="1;0.5;1" dur="1.2s" repeatCount="indefinite"/>
+              </circle>
+            </g>
+          </g>
+
+          <!-- ── Side A players (bottom half, y≈99) ── -->
+
+          <!-- A0: bottom-right service box (cx=46, cy=99) -->
+          <g @click="scoreByPlayer(sideAPlayers[0]?.id)"
+             :style="isManager() && match?.status === 'active' && sideAPlayers[0] ? 'cursor:pointer' : 'cursor:default'">
+            <rect x="30.5" y="67" width="30.5" height="67" fill="transparent"
+                  :fill-opacity="tapping === sideAPlayers[0]?.id ? 0.18 : 0"
+                  style="fill: #0891b2"/>
+
+            <circle cx="46" cy="99" r="6" fill="#0e7490" fill-opacity="0.9"/>
+            <image v-if="sideAPlayers[0]?.avatar"
+                   :href="sideAPlayers[0].avatar"
+                   x="40" y="93" width="12" height="12"
+                   clip-path="url(#clipA0)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            <text v-else x="46" y="102" text-anchor="middle"
+                  fill="white" font-size="5.5" font-weight="bold" font-family="sans-serif">
+              {{ initial(sideAPlayers[0]?.name) }}
+            </text>
+
+            <text x="46" y="108.5" text-anchor="middle"
+                  fill="white" fill-opacity="0.9" font-size="3.2" font-family="sans-serif">
+              {{ (sideAPlayers[0]?.name || '—').slice(0, 10) }}
+            </text>
+
+            <g v-if="servingPlayerId === sideAPlayers[0]?.id">
+              <circle cx="39" cy="92" r="1.8" fill="#22d3ee">
+                <animate attributeName="r" values="1.8;2.6;1.8" dur="1.2s" repeatCount="indefinite"/>
+                <animate attributeName="fill-opacity" values="1;0.5;1" dur="1.2s" repeatCount="indefinite"/>
+              </circle>
+            </g>
+          </g>
+
+          <!-- A1: bottom-left service box (cx=15, cy=99) -->
+          <g @click="scoreByPlayer(sideAPlayers[1]?.id)"
+             :style="isManager() && match?.status === 'active' && sideAPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
+            <rect x="0" y="67" width="30.5" height="67" fill="transparent"
+                  :fill-opacity="tapping === sideAPlayers[1]?.id ? 0.18 : 0"
+                  style="fill: #0891b2"/>
+
+            <circle cx="15" cy="99" r="6" fill="#0e7490" fill-opacity="0.9"/>
+            <image v-if="sideAPlayers[1]?.avatar"
+                   :href="sideAPlayers[1].avatar"
+                   x="9" y="93" width="12" height="12"
+                   clip-path="url(#clipA1)"
+                   preserveAspectRatio="xMidYMid slice"/>
+            <text v-else x="15" y="102" text-anchor="middle"
+                  fill="white" font-size="5.5" font-weight="bold" font-family="sans-serif">
+              {{ initial(sideAPlayers[1]?.name) }}
+            </text>
+
+            <text x="15" y="108.5" text-anchor="middle"
+                  fill="white" fill-opacity="0.9" font-size="3.2" font-family="sans-serif">
+              {{ (sideAPlayers[1]?.name || '—').slice(0, 10) }}
+            </text>
+
+            <g v-if="servingPlayerId === sideAPlayers[1]?.id">
+              <circle cx="22" cy="92" r="1.8" fill="#22d3ee">
+                <animate attributeName="r" values="1.8;2.6;1.8" dur="1.2s" repeatCount="indefinite"/>
+                <animate attributeName="fill-opacity" values="1;0.5;1" dur="1.2s" repeatCount="indefinite"/>
+              </circle>
+            </g>
+          </g>
+
+          <!-- Side labels -->
+          <text x="30.5" y="18" text-anchor="middle"
+                fill="white" fill-opacity="0.45" font-size="3" font-family="sans-serif" letter-spacing="0.5">
+            SIDE B
+          </text>
+          <text x="30.5" y="120" text-anchor="middle"
+                fill="white" fill-opacity="0.45" font-size="3" font-family="sans-serif" letter-spacing="0.5">
+            SIDE A
+          </text>
+        </svg>
+
+        <!-- Announcement overlay (absolute over the SVG container) -->
         <Transition name="announcement">
           <div v-if="announcement"
                class="absolute top-3 left-1/2 -translate-x-1/2 bg-black/70 text-white text-sm font-semibold px-4 py-1.5 rounded-full backdrop-blur-sm whitespace-nowrap z-10">
