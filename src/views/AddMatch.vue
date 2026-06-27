@@ -19,6 +19,7 @@ const matchNameEdited = ref(false)
 const nextMatchNum = ref(null)
 const msg          = ref(null)
 const saving       = ref(false)
+const startingLive = ref(false)
 
 // Guided picking: 'A' = filling Side A, 'B' = filling Side B
 const pickingFor = ref('A')
@@ -139,6 +140,20 @@ watch(autoMatchName, newName => {
   if (!matchNameEdited.value) matchName.value = newName
 })
 
+async function startLiveScoring() {
+  if (!ready.value) return
+  startingLive.value = true
+  const { data: liveId, error } = await supabase.rpc('start_live_match', {
+    p_club_id:   currentClub.value.club_id,
+    p_side_a:    sideA.value,
+    p_side_b:    sideB.value,
+    p_played_on: playedOn.value,
+  })
+  startingLive.value = false
+  if (error) { msg.value = { ok: false, t: error.message }; return }
+  router.push(`/live/${liveId}`)
+}
+
 function reset() {
   sideA.value = []; sideB.value = []
   scoreA.value = 21; scoreB.value = 0
@@ -159,6 +174,14 @@ async function doSubmit() {
   })
   saving.value = false
   if (!error) {
+    // Update rotation stats for the 4 players who just played (fire-and-forget)
+    supabase.rpc('update_rotation_stats', {
+      p_club_id:      currentClub.value.club_id,
+      p_session_date: playedOn.value,
+      p_played_ids:   [...sideA.value, ...sideB.value],
+      p_bench_ids:    []
+    }).catch(() => null)
+
     // Fire-and-forget: notify club members via email (non-blocking)
     supabase.functions.invoke('send-match-email', {
       body: {
@@ -373,12 +396,12 @@ async function submitAndStay() {
     <!-- Submit buttons -->
     <div class="grid grid-cols-2 gap-2">
       <button class="btn-ghost py-3 text-sm font-semibold"
-        :disabled="!ready || saving"
+        :disabled="!ready || saving || startingLive"
         @click="submitAndGo">
         {{ saving ? 'Saving…' : '🏸 Record Match' }}
       </button>
       <button class="btn-primary py-3 text-sm font-semibold"
-        :disabled="!ready || saving"
+        :disabled="!ready || saving || startingLive"
         @click="submitAndStay">
         {{ saving ? 'Saving…' : '➕ Record &amp; Add New' }}
       </button>
@@ -386,6 +409,21 @@ async function submitAndStay() {
     <p class="text-center text-xs text-slate-600 mt-1.5">
       Record Match → goes to match list &nbsp;·&nbsp; Record &amp; Add New → stays here
     </p>
+
+    <!-- Live scoring alternative -->
+    <div v-if="sideA.length === 2 && sideB.length === 2"
+      class="mt-3 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+      style="background:rgba(168,85,247,.06); border:1px solid rgba(168,85,247,.2)">
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-violet">🔴 Live Scoring</p>
+        <p class="text-[11px] text-slate-500 mt-0.5">Track point-by-point on court, record at the end</p>
+      </div>
+      <button class="btn-violet px-4 py-2 text-sm font-semibold shrink-0"
+        :disabled="startingLive || saving"
+        @click="startLiveScoring">
+        {{ startingLive ? '…' : 'Start' }}
+      </button>
+    </div>
 
     <p v-if="msg" class="mt-3 rounded-xl px-4 py-3 text-sm"
       :class="msg.ok ? 'bg-teal-500/15 text-teal-300' : 'bg-rose-500/15 text-rose-300'">
