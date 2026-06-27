@@ -245,14 +245,16 @@ async function cancelMatch() {
         <!-- +1 buttons -->
         <div class="grid grid-cols-2 gap-3 mb-3">
           <button
-            class="py-6 rounded-2xl text-2xl font-black text-white active:scale-95 transition-transform"
+            class="py-6 rounded-2xl text-2xl font-black text-white active:scale-95 transition-transform disabled:opacity-40"
             style="background:#00b4d8; min-height:80px"
+            :disabled="scoreA >= 30"
             @click="addPoint('A')">
             +1 Side A
           </button>
           <button
-            class="py-6 rounded-2xl text-2xl font-black text-white active:scale-95 transition-transform"
+            class="py-6 rounded-2xl text-2xl font-black text-white active:scale-95 transition-transform disabled:opacity-40"
             style="background:#a855f7; min-height:80px"
+            :disabled="scoreB >= 30"
             @click="addPoint('B')">
             +1 Side B
           </button>

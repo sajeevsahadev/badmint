@@ -97,6 +97,11 @@ BEGIN
   ELSE RAISE EXCEPTION 'side must be A or B';
   END IF;
 
+  -- Enforce badminton max: 30-29 cap (neither side can exceed 30)
+  IF v_new_a > 30 OR v_new_b > 30 THEN
+    RAISE EXCEPTION 'Score cannot exceed 30 (badminton deuce cap is 30–29)';
+  END IF;
+
   -- Switch serve to the scoring side
   UPDATE live_matches
   SET score_a = v_new_a, score_b = v_new_b, serving_side = p_side
