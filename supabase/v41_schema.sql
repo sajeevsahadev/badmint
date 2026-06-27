@@ -107,6 +107,9 @@ DECLARE
   v_new_games_b    int;
   v_new_game_num   int;
   v_new_game_scores jsonb;
+  -- Scores to log in point history (winning scores before reset, not 0)
+  v_log_score_a    int;
+  v_log_score_b    int;
 BEGIN
   SELECT * INTO v_match FROM live_matches WHERE id = p_live_match_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Match not found'; END IF;
@@ -165,6 +168,12 @@ BEGIN
   v_new_game_num   := v_match.current_game;
   v_new_game_scores := v_match.game_scores;
 
+  -- Capture the actual winning scores BEFORE resetting to 0 for the next game.
+  -- The point log must record the score that was on the board when the point was scored,
+  -- not the post-reset 0-0. Undo relies on these to restore the board correctly.
+  v_log_score_a := v_new_score_a;
+  v_log_score_b := v_new_score_b;
+
   IF v_game_won THEN
     v_new_game_scores := v_match.game_scores || jsonb_build_object('a', v_new_score_a, 'b', v_new_score_b);
     IF v_winner_side = 'A' THEN
@@ -188,7 +197,7 @@ BEGIN
   ) VALUES (
     p_live_match_id, v_match.current_game, p_scored_by_player, v_side,
     v_match.serving_player, v_match.serving_side,
-    v_new_score_a, v_new_score_b
+    v_log_score_a, v_log_score_b  -- winning scores, not post-reset 0
   );
 
   UPDATE live_matches SET
@@ -258,19 +267,33 @@ BEGIN
 
   DELETE FROM live_match_points WHERE id = v_last.id;
 
-  IF FOUND THEN
+  -- Restore pre-point state. Default: use the last point's logged scores minus the
+  -- point that was scored. If v_prev exists AND is from the same game, use its
+  -- score_a_after/score_b_after (which already has the correct pre-last-point values).
+  -- If v_prev is from a different game (i.e. v_last was the first point of a new game),
+  -- we must derive the score from v_last instead (0-0 at start of new game).
+  IF v_prev.id IS NOT NULL AND v_prev.game_number = v_last.game_number THEN
     v_restore_a       := v_prev.score_a_after;
     v_restore_b       := v_prev.score_b_after;
     v_restore_serving := v_prev.server_side;
     v_restore_server  := v_prev.server_player;
-    v_restore_game    := v_prev.game_number;
   ELSE
-    v_restore_a       := 0;
-    v_restore_b       := 0;
-    v_restore_serving := v_match.serving_side;
-    v_restore_server  := v_match.serving_player;
-    v_restore_game    := 1;
+    -- Either no previous point at all, or previous point was from a prior game.
+    -- Derive from v_last: pre-point score was (v_last minus this point).
+    v_restore_a       := v_last.score_a_after - CASE WHEN v_last.side = 'A' THEN 1 ELSE 0 END;
+    v_restore_b       := v_last.score_b_after - CASE WHEN v_last.side = 'B' THEN 1 ELSE 0 END;
+    IF v_prev.id IS NOT NULL THEN
+      -- Previous point existed but was from prior game: serving was whatever it was at
+      -- start of this game (loser of prior game serves, set during game-won logic)
+      v_restore_serving := v_match.serving_side;
+      v_restore_server  := v_match.serving_player;
+    ELSE
+      -- No previous point at all: restore initial serve from match row
+      v_restore_serving := v_match.serving_side;
+      v_restore_server  := v_match.serving_player;
+    END IF;
   END IF;
+  v_restore_game := v_last.game_number;  -- stays in same game (overridden below for game-won undo)
 
   -- If we're undoing a game-winning point, restore game state
   IF v_last.game_number < v_match.current_game THEN
@@ -288,13 +311,11 @@ BEGIN
     v_restore_games_a := v_match.games_a - CASE WHEN v_last.side = 'A' THEN 1 ELSE 0 END;
     v_restore_games_b := v_match.games_b - CASE WHEN v_last.side = 'B' THEN 1 ELSE 0 END;
   ELSE
+    -- Normal undo (not undoing a game-winning point): game_scores and games counts unchanged
     v_restore_scores  := v_match.game_scores;
     v_restore_games_a := v_match.games_a;
     v_restore_games_b := v_match.games_b;
-    v_restore_a       := v_last.score_a_after - CASE WHEN v_last.side = 'A' THEN 1 ELSE 0 END;
-    v_restore_b       := v_last.score_b_after - CASE WHEN v_last.side = 'B' THEN 1 ELSE 0 END;
-    v_restore_serving := v_last.server_side;
-    v_restore_server  := v_last.server_player;
+    -- v_restore_a/b/serving/server/game already set correctly in the block above
   END IF;
 
   UPDATE live_matches SET
@@ -324,3 +345,76 @@ $$;
 GRANT EXECUTE ON FUNCTION start_live_match_v2(uuid, uuid[], uuid[], date, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION add_live_point_v2(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION undo_live_point_v2(uuid) TO authenticated;
+
+-- fix finish_live_match for multi-game matches:
+-- After a game resets scores to 0-0, the old v39 function reads score_a/score_b
+-- (which are 0) and raises "Scores cannot be equal". For multi-game matches,
+-- determine the final score from the last completed game in game_scores, and
+-- determine the winner from games_a vs games_b.
+CREATE OR REPLACE FUNCTION finish_live_match(
+  p_live_match_id uuid,
+  p_display_name  text DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_row        live_matches%ROWTYPE;
+  v_role       text;
+  v_match_id   uuid;
+  v_final_a    int;
+  v_final_b    int;
+  v_last_game  jsonb;
+BEGIN
+  SELECT * INTO v_row FROM live_matches WHERE id = p_live_match_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Live match not found'; END IF;
+  IF v_row.status <> 'active' THEN RAISE EXCEPTION 'Match already finished or cancelled'; END IF;
+
+  SELECT role INTO v_role FROM club_members
+  WHERE club_id = v_row.club_id AND user_id = auth.uid();
+  IF v_role NOT IN ('owner','manager') THEN
+    RAISE EXCEPTION 'Only managers can finish a match';
+  END IF;
+
+  -- For multi-game matches where scores have reset to 0-0, derive final score
+  -- from games_a vs games_b (number of games each side won).
+  -- For single-game or in-progress game, use current score_a/score_b.
+  IF v_row.games_a = 0 AND v_row.games_b = 0 THEN
+    -- Single-game match still in progress; use live scores
+    v_final_a := v_row.score_a;
+    v_final_b := v_row.score_b;
+  ELSIF v_row.score_a > 0 OR v_row.score_b > 0 THEN
+    -- Mid-game after some completed games: use live scores of current game as tiebreaker
+    -- BUT record_match uses a simple score comparison; pass games count as scores
+    -- when the current game is 0-0 (between games)
+    v_final_a := v_row.score_a;
+    v_final_b := v_row.score_b;
+  ELSE
+    -- Scores are 0-0 meaning last game just finished and next game hasn't started.
+    -- Use games_a and games_b as the match score (e.g. 2-1 in games).
+    v_final_a := v_row.games_a;
+    v_final_b := v_row.games_b;
+  END IF;
+
+  IF v_final_a = v_final_b THEN
+    RAISE EXCEPTION 'Cannot finish: match is tied (games % - %)', v_final_a, v_final_b;
+  END IF;
+
+  SELECT record_match(
+    v_row.club_id,
+    v_row.played_on,
+    v_row.side_a,
+    v_row.side_b,
+    v_final_a,
+    v_final_b,
+    p_display_name
+  ) INTO v_match_id;
+
+  UPDATE live_matches
+  SET status = 'finished', finished_at = now(), match_id = v_match_id
+  WHERE id = p_live_match_id;
+
+  RETURN v_match_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION finish_live_match(uuid, text) TO authenticated;
