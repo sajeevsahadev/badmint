@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
@@ -20,6 +20,8 @@ const msg          = ref(null)
 const saving            = ref(false)
 const startingLive      = ref(false)
 const showServePickerModal = ref(false)
+const savedToast        = ref(false)
+const savedToastTimer   = ref(null)
 
 // Guided picking: 'A' = filling Side A, 'B' = filling Side B
 const pickingFor = ref('A')
@@ -206,13 +208,27 @@ async function submitAndGo() {
 async function submitAndStay() {
   const error = await doSubmit()
   if (error) { msg.value = { ok: false, t: error.message }; return }
-  msg.value = { ok: true, t: '✅ Match saved! Elo updated for all 4 players.' }
+  msg.value = null
+  if (savedToastTimer.value) clearTimeout(savedToastTimer.value)
+  savedToast.value = true
+  savedToastTimer.value = setTimeout(() => { savedToast.value = false }, 2500)
   reset(); loadPlayers(); loadNextMatchNum()
 }
+
+onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.value) })
 </script>
 
 <template>
   <div>
+
+    <!-- Success toast for Record & Add New -->
+    <Transition name="toast-slide">
+      <div v-if="savedToast"
+           class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white"
+           style="background:#059669; min-width:220px; text-align:center">
+        ✅ Match saved!
+      </div>
+    </Transition>
 
     <!-- Back link -->
     <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4 fade-up"
@@ -452,3 +468,8 @@ async function submitAndStay() {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.3s ease; }
+.toast-slide-enter-from, .toast-slide-leave-to { opacity: 0; transform: translate(-50%, -16px); }
+</style>
