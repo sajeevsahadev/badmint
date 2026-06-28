@@ -16,7 +16,18 @@ const adminView  = ref(false)
 const player      = ref(null)
 const profile     = ref(null)
 const stats       = ref(null)
+const displayRank = ref(null)   // position within games>0 board — matches /scoreboard
 const matches     = ref([])
+
+// Rank consistent with the leaderboard: position among players with games>0,
+// ordered by club_rank — NOT the raw v_leaderboard.club_rank (which counts
+// zero-game active players too and disagrees with what the user sees elsewhere).
+function rankFromBoard(board, pid) {
+  const ranked = (board ?? []).filter(r => (r.games ?? 0) > 0)
+    .sort((a, b) => (a.club_rank ?? 0) - (b.club_rank ?? 0))
+  const i = ranked.findIndex(r => r.id === pid)
+  return i >= 0 ? i + 1 : null
+}
 const clubName    = ref('')
 const emirates    = ref('')
 const loading     = ref(true)
@@ -79,6 +90,7 @@ async function load() {
     // Stats from get_club_leaderboard (already SECURITY DEFINER)
     const { data: lb } = await supabase.rpc('get_club_leaderboard', { p_club_id: p.club_id })
     stats.value = (lb ?? []).find(r => r.id === playerId) ?? null
+    displayRank.value = rankFromBoard(lb, playerId)
 
     // Map matches from admin RPC shape → same shape used by template
     const rawMatches = matchRes.data ?? []
@@ -154,6 +166,10 @@ async function load() {
   stats.value    = statsRes.data
   clubName.value = clubRes.data?.name ?? ''
   emirates.value = profRes.data?.emirate ?? clubRes.data?.emirates ?? ''
+
+  // Positional rank consistent with /scoreboard (public SECURITY DEFINER board)
+  supabase.rpc('get_club_leaderboard', { p_club_id: p.club_id })
+    .then(({ data }) => { displayRank.value = rankFromBoard(data, playerId) }, () => {})
 
   const allParticipantIds = [...new Set(
     (matchRes.data ?? []).flatMap(m =>
@@ -316,7 +332,7 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
     <div v-if="stats" class="grid grid-cols-4 gap-2 mb-4 fade-up">
       <div class="card p-3 text-center">
         <div class="text-lg font-extrabold" :class="stats.games > 0 ? 'text-gold' : 'text-slate-600'">
-          {{ stats.games > 0 ? '#' + stats.club_rank : '—' }}
+          {{ stats.games > 0 ? '#' + (displayRank ?? stats.club_rank) : '—' }}
         </div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Rank</div>
       </div>
