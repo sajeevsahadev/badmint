@@ -322,12 +322,6 @@ async function confirmDelete() {
     <p v-if="leaveNote" class="text-xs text-emerald-400 mb-3 px-1">✅ {{ leaveNote }}</p>
     <p v-if="leaveError" class="text-xs text-rose-400 mb-3 px-1">{{ leaveError }}</p>
 
-    <!-- No stats yet -->
-    <div v-else class="card p-6 text-center text-slate-400 text-sm fade-up">
-      <div class="text-2xl mb-2">🎯</div>
-      <p>No match stats yet. Ask your manager to link your account to a player.</p>
-    </div>
-
     <!-- ── Danger Zone ──────────────────────────────────────────────────── -->
     <div class="mt-6 mb-2 fade-up">
       <div class="rounded-2xl border border-rose-200/60 overflow-hidden" style="background:#fff9f9;">
