@@ -182,13 +182,14 @@ async function doSubmit() {
       p_display_name: matchName.value.trim() || autoMatchName.value || null
     })
     if (!error) {
-      // Update rotation stats for the 4 players who just played (fire-and-forget)
+      // Update rotation stats for the 4 players who just played (fire-and-forget).
+      // supabase.rpc() returns a thenable query builder with no .catch — use .then(ok, err).
       supabase.rpc('update_rotation_stats', {
         p_club_id:      currentClub.value.club_id,
         p_session_date: playedOn.value,
         p_played_ids:   [...sideA.value, ...sideB.value],
         p_bench_ids:    []
-      }).catch(() => null)
+      }).then(undefined, () => {})
 
       // Fire-and-forget: notify club members via email (non-blocking)
       supabase.functions.invoke('send-match-email', {

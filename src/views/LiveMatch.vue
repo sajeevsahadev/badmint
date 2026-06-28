@@ -203,12 +203,13 @@ async function finishMatch() {
   showFinishModal.value = false
   if (currentClub.value) {
     const playedIds = [...(match.value?.side_a ?? []), ...(match.value?.side_b ?? [])]
+    // supabase.rpc() is a thenable query builder with no .catch — use .then(ok, err)
     supabase.rpc('update_rotation_stats', {
       p_club_id:      currentClub.value.club_id,
       p_session_date: match.value?.played_on ?? new Date().toISOString().slice(0, 10),
       p_played_ids:   playedIds,
       p_bench_ids:    []
-    }).catch(() => null)
+    }).then(undefined, () => {})
   }
   router.push(matchId ? `/matches?open=${matchId}` : '/matches')
 }
