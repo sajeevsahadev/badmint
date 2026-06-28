@@ -19,9 +19,7 @@ const matches     = ref([])
 const clubName    = ref('')
 const emirates    = ref('')
 const loading     = ref(true)
-const matchLimit    = ref(10)
-const loadingMore   = ref(false)
-const hasMoreMatches = ref(false)
+const visibleDateCount = ref(5)
 const loadError     = ref(null)
 
 const isOwnProfile = computed(() =>
@@ -53,7 +51,7 @@ async function load() {
     // ── Admin path: use SECURITY DEFINER RPCs that bypass RLS ──────────
     const [playerRes, matchRes] = await Promise.all([
       supabase.rpc('admin_get_player', { p_player_id: playerId }),
-      supabase.rpc('admin_get_player_matches', { p_player_id: playerId, p_limit: matchLimit.value }),
+      supabase.rpc('admin_get_player_matches', { p_player_id: playerId, p_limit: 300 }),
     ])
 
     if (playerRes.error) {
@@ -83,7 +81,6 @@ async function load() {
 
     // Map matches from admin RPC shape → same shape used by template
     const rawMatches = matchRes.data ?? []
-    hasMoreMatches.value = rawMatches.length >= matchLimit.value
     matches.value = rawMatches.map(m => {
       const sideA = m.side_a
       const sideB = m.side_b
@@ -149,7 +146,7 @@ async function load() {
       `)
       .eq('club_id', p.club_id)
       .order('created_at', { ascending: false })
-      .limit(matchLimit.value)
+      .limit(300)
   ])
 
   profile.value  = profRes.data
@@ -171,7 +168,6 @@ async function load() {
     .filter(m => m.match_sides?.some(s =>
       s.match_participants?.some(mp => mp.players?.id === playerId)
     ))
-  hasMoreMatches.value = rawMatches.length >= matchLimit.value
   matches.value = filtered.map(m => {
     const sideA = m.match_sides?.find(s => s.side === 'A')
     const sideB = m.match_sides?.find(s => s.side === 'B')
@@ -203,12 +199,7 @@ async function load() {
 
 onMounted(load)
 
-async function loadMore() {
-  loadingMore.value = true
-  matchLimit.value += 20
-  await load()
-  loadingMore.value = false
-}
+function loadMoreDates() { visibleDateCount.value += 10 }
 
 const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short' })
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
@@ -247,6 +238,9 @@ const groupedMatches = computed(() => {
       wins: items.filter(m => m.won).length
     }))
 })
+
+const visibleGroups = computed(() => groupedMatches.value.slice(0, visibleDateCount.value))
+const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.value.length)
 </script>
 
 <template>
@@ -353,7 +347,7 @@ const groupedMatches = computed(() => {
         No matches recorded yet.
       </div>
 
-      <template v-for="group in groupedMatches" :key="group.date">
+      <template v-for="group in visibleGroups" :key="group.date">
         <!-- Date header row — tap to expand/collapse -->
         <button class="w-full px-4 py-2.5 flex items-center justify-between bg-slate-50 border-b border-[rgba(15,23,42,0.06)] hover:bg-slate-100 transition-colors"
                 @click="toggleDate(group.date)">
@@ -395,10 +389,10 @@ const groupedMatches = computed(() => {
           </button>
         </template>
       </template>
-      <!-- Load more -->
-      <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-[rgba(15,23,42,0.05)]">
-        <button class="btn-ghost w-full text-sm" :disabled="loadingMore" @click="loadMore">
-          {{ loadingMore ? 'Loading…' : 'Load More Matches' }}
+      <!-- Load more dates -->
+      <div v-if="hasMoreDates" class="px-4 py-3 border-t border-[rgba(15,23,42,0.05)]">
+        <button class="btn-ghost w-full text-sm" @click="loadMoreDates">
+          Load More Dates ({{ groupedMatches.length - visibleDateCount }} more days)
         </button>
       </div>
     </div>
