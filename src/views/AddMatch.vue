@@ -217,7 +217,7 @@ async function submitAndStay() {
   msg.value = null
   if (savedToastTimer.value) clearTimeout(savedToastTimer.value)
   savedToast.value = true
-  savedToastTimer.value = setTimeout(() => { savedToast.value = false }, 2500)
+  savedToastTimer.value = setTimeout(() => { savedToast.value = false }, 3500)
   reset(); loadPlayers(); loadNextMatchNum()
 }
 
@@ -230,9 +230,13 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
     <!-- Success toast for Record & Add New -->
     <Transition name="toast-slide">
       <div v-if="savedToast"
-           class="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white"
-           style="background:#059669; min-width:220px; text-align:center">
-        ✅ Match saved!
+           class="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl shadow-2xl text-base font-bold text-white flex items-center gap-3"
+           style="background:#059669; min-width:260px; text-align:center; box-shadow:0 8px 32px rgba(5,150,105,0.45)">
+        <span class="text-2xl">✅</span>
+        <div>
+          <div>Match saved!</div>
+          <div class="text-xs font-normal opacity-80 mt-0.5">Elo updated for all 4 players</div>
+        </div>
       </div>
     </Transition>
 
@@ -476,6 +480,6 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
 </template>
 
 <style scoped>
-.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.3s ease; }
-.toast-slide-enter-from, .toast-slide-leave-to { opacity: 0; transform: translate(-50%, -16px); }
+.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+.toast-slide-enter-from, .toast-slide-leave-to { opacity: 0; transform: translate(-50%, 24px); }
 </style>
