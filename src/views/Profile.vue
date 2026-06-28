@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import { useSession } from '../composables/useSession'
+import { compressImageToDataUrl } from '../lib/imageCompress'
+import Avatar from '../components/Avatar.vue'
 import pkg from '../../package.json'
 
 const router = useRouter()
@@ -23,6 +25,25 @@ const error    = ref(null)
 
 // Edit form
 const form = ref({ nickname: '', phone: '', bio: '', gender: '', avatar_url: '' })
+const avatarBusy = ref(false)
+const avatarError = ref('')
+
+async function onAvatarFile(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  avatarError.value = ''
+  avatarBusy.value = true
+  try {
+    form.value.avatar_url = await compressImageToDataUrl(file)
+  } catch (err) {
+    avatarError.value = err.message || 'Could not process image.'
+  } finally {
+    avatarBusy.value = false
+    e.target.value = ''  // allow re-selecting same file
+  }
+}
+function removeAvatar() { form.value.avatar_url = '' }
+
 let _savedTimer = null
 onUnmounted(() => clearTimeout(_savedTimer))
 
@@ -188,14 +209,7 @@ async function confirmDelete() {
   <template v-else>
     <!-- Avatar + header -->
     <div class="flex items-center gap-4 mb-6 fade-up">
-      <div class="w-16 h-16 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center text-xl font-black text-slate-950"
-        style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-        <img v-if="profile?.avatar_url"
-             :src="profile.avatar_url"
-             class="w-full h-full object-cover"
-             alt="Profile photo" />
-        <span v-else>{{ initials }}</span>
-      </div>
+      <Avatar :name="form.nickname" :src="profile?.avatar_url" :size="56" />
       <div>
         <h2 class="font-display text-xl font-bold gradient-text leading-tight">
           {{ profile?.nickname || 'Set your nickname' }}
@@ -216,17 +230,22 @@ async function confirmDelete() {
           <p class="text-[10px] text-slate-500 mt-1">This name appears publicly on leaderboards and explore page.</p>
         </div>
         <div>
-          <label class="label">Profile Photo URL <span class="text-slate-600">(optional)</span></label>
-          <input v-model="form.avatar_url" class="input" type="url"
-            placeholder="Paste any image URL (JPG, PNG, WebP)" />
-          <p class="text-[10px] text-slate-500 mt-1">Your photo appears in live match scoring and your public profile.</p>
-          <div v-if="form.avatar_url && form.avatar_url.startsWith('http')" class="mt-2 flex items-center gap-3">
-            <img :src="form.avatar_url" alt="Preview"
-                 class="w-12 h-12 rounded-full object-cover border border-slate-200"
-                 @error="e => e.target.style.display='none'"
-                 @load="e => e.target.style.display=''" />
-            <span class="text-[10px] text-slate-400">Preview</span>
+          <label class="label">Profile Photo <span class="text-slate-600">(optional)</span></label>
+          <div class="mt-1 flex items-center gap-4">
+            <Avatar :name="form.nickname" :src="form.avatar_url" :size="72" />
+            <div class="flex flex-col gap-2">
+              <label class="btn-ghost cursor-pointer inline-flex items-center gap-1 text-sm">
+                📷 Upload Photo
+                <input type="file" accept="image/*" class="hidden" @change="onAvatarFile" />
+              </label>
+              <button v-if="form.avatar_url" type="button" class="text-[11px] text-rose-500 text-left" @click="removeAvatar">
+                Remove
+              </button>
+            </div>
           </div>
+          <p v-if="avatarBusy" class="text-[10px] text-neon mt-2">Compressing…</p>
+          <p v-if="avatarError" class="text-[10px] text-rose-500 mt-2">{{ avatarError }}</p>
+          <p class="text-[10px] text-slate-500 mt-1">Stored compressed in your profile · appears as your avatar across the app.</p>
         </div>
         <div>
           <label class="label">Phone Number <span class="text-slate-600">(optional)</span></label>
