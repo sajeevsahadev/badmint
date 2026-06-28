@@ -46,8 +46,10 @@ bounds AS (
     MIN(days_played) dmin, MAX(days_played) dmax
   FROM stats GROUP BY club_id
 )
+-- NOTE: CREATE OR REPLACE VIEW can only APPEND columns — existing columns must
+-- keep their original position/name. So user_id is added as the LAST column.
 SELECT
-  s.id, s.club_id, s.user_id, s.display_name,
+  s.id, s.club_id, s.display_name,
   ROUND(s.elo)::int                                          AS elo,
   s.days_played, s.games, s.wins,
   CASE WHEN s.games > 0 THEN ROUND(100.0 * s.wins / s.games) ELSE 0 END AS win_pct,
@@ -67,7 +69,8 @@ SELECT
       s.ew * CASE WHEN b.emax = b.emin THEN 0.5 ELSE (s.elo - b.emin) / (b.emax - b.emin) END
     + s.pw * CASE WHEN b.dmax = b.dmin THEN 0.5 ELSE (s.days_played - b.dmin)::numeric / (b.dmax - b.dmin) END
     ) DESC
-  )                                                          AS club_rank
+  )                                                          AS club_rank,
+  s.user_id
 FROM stats s JOIN bounds b ON b.club_id = s.club_id;
 
 -- ── v_best_pairs: add p1_user_id / p2_user_id (from v33) ─────────────
@@ -88,15 +91,16 @@ pairs AS (
   FROM pair_games a
   JOIN pair_games b ON a.side_id = b.side_id AND a.player_id < b.player_id
 )
+-- user_id columns appended LAST so existing column positions are unchanged.
 SELECT
   pr.club_id, pr.p1, pr.p2,
-  n1.user_id                                                         AS p1_user_id,
-  n2.user_id                                                         AS p2_user_id,
   COALESCE(resolve_public_nickname(n1.user_id), n1.display_name) AS p1_name,
   COALESCE(resolve_public_nickname(n2.user_id), n2.display_name) AS p2_name,
   COUNT(*)                                                            AS games,
   SUM(CASE WHEN pr.is_winner THEN 1 ELSE 0 END)                      AS wins,
-  ROUND(100.0 * SUM(CASE WHEN pr.is_winner THEN 1 ELSE 0 END) / COUNT(*), 1) AS win_pct
+  ROUND(100.0 * SUM(CASE WHEN pr.is_winner THEN 1 ELSE 0 END) / COUNT(*), 1) AS win_pct,
+  n1.user_id                                                         AS p1_user_id,
+  n2.user_id                                                         AS p2_user_id
 FROM pairs pr
 JOIN players n1 ON n1.id = pr.p1
 JOIN players n2 ON n2.id = pr.p2
@@ -109,10 +113,10 @@ ORDER BY win_pct DESC, games DESC;
 
 -- ── v_top_scorers: add p.user_id (from v33) ──────────────────────────
 CREATE OR REPLACE VIEW v_top_scorers AS
+-- user_id appended LAST so existing column positions are unchanged.
 SELECT
   p.id                                                  AS player_id,
   p.club_id,
-  p.user_id,
   c.name                                                AS club_name,
   c.emirates,
   COALESCE(resolve_public_nickname(p.user_id), p.display_name) AS public_name,
@@ -121,7 +125,8 @@ SELECT
   COALESCE(vl.wins, 0)                                  AS wins,
   COALESCE(vl.win_pct, 0)                               AS win_pct,
   COALESCE(vl.days_played, 0)                           AS days_played,
-  RANK() OVER (ORDER BY p.elo DESC)                     AS global_rank
+  RANK() OVER (ORDER BY p.elo DESC)                     AS global_rank,
+  p.user_id
 FROM players p
 JOIN clubs c ON c.id = p.club_id
 LEFT JOIN v_leaderboard vl ON vl.id = p.id
