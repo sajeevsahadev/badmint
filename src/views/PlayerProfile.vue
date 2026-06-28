@@ -211,8 +211,25 @@ async function loadMore() {
 }
 
 const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short' })
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
 const deltaText  = d => d > 0 ? `+${d}` : `${d}`
+
+const groupedMatches = computed(() => {
+  const groups = {}
+  for (const m of matches.value) {
+    if (!groups[m.date]) groups[m.date] = []
+    groups[m.date].push(m)
+  }
+  return Object.entries(groups)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, items]) => ({
+      date,
+      items,
+      total: items.length,
+      wins: items.filter(m => m.won).length
+    }))
+})
 </script>
 
 <template>
@@ -313,30 +330,40 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
         No matches recorded yet.
       </div>
 
-      <button v-for="m in matches" :key="m.id"
-        class="w-full text-left px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0
-               hover:bg-[rgba(15,23,42,0.03)] transition-colors duration-150 group"
-        @click="router.push('/matches?open=' + m.id)">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-xs text-slate-500">{{ fmt(m.date) }} · {{ m.name }}</span>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-bold"
-              :class="m.won ? 'text-neon' : 'text-rose-400'">
-              {{ m.won ? '🏆 Won' : 'Lost' }}
-            </span>
-            <span v-if="m.eloDelta != null" class="text-[11px] font-semibold"
-              :class="deltaColor(m.eloDelta)">
-              {{ deltaText(m.eloDelta) }}
-            </span>
-            <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
+      <template v-for="group in groupedMatches" :key="group.date">
+        <!-- Date header -->
+        <div class="px-4 py-2 flex items-center justify-between bg-slate-50 border-b border-[rgba(15,23,42,0.06)]">
+          <span class="text-xs font-semibold text-slate-500">{{ fmtDate(group.date) }}</span>
+          <span class="text-[11px] text-slate-400">
+            {{ group.total }} {{ group.total === 1 ? 'game' : 'games' }} · {{ group.wins }} won
+          </span>
+        </div>
+        <!-- Match rows -->
+        <button v-for="m in group.items" :key="m.id"
+          class="w-full text-left px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0
+                 hover:bg-[rgba(15,23,42,0.03)] transition-colors duration-150 group"
+          @click="router.push('/matches?open=' + m.id)">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs text-slate-500">{{ m.name }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold"
+                :class="m.won ? 'text-neon' : 'text-rose-400'">
+                {{ m.won ? '🏆 Won' : 'Lost' }}
+              </span>
+              <span v-if="m.eloDelta != null" class="text-[11px] font-semibold"
+                :class="deltaColor(m.eloDelta)">
+                {{ deltaText(m.eloDelta) }}
+              </span>
+              <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
+            </div>
           </div>
-        </div>
-        <div class="text-xs text-slate-400">
-          <span class="text-slate-200 font-medium">{{ m.myTeam.join(' + ') }}</span>
-          <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
-          <span>{{ m.oppTeam.join(' + ') }}</span>
-        </div>
-      </button>
+          <div class="text-xs text-slate-400">
+            <span class="text-slate-200 font-medium">{{ m.myTeam.join(' + ') }}</span>
+            <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
+            <span>{{ m.oppTeam.join(' + ') }}</span>
+          </div>
+        </button>
+      </template>
       <!-- Load more -->
       <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-[rgba(15,23,42,0.05)]">
         <button class="btn-ghost w-full text-sm" :disabled="loadingMore" @click="loadMore">
