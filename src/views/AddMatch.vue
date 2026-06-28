@@ -170,39 +170,44 @@ function reset() {
 
 async function doSubmit() {
   msg.value = null; saving.value = true
-  const { data: matchData, error } = await supabase.rpc('record_match', {
-    p_club_id:      currentClub.value.club_id,
-    p_played_on:    playedOn.value,
-    p_side_a:       sideA.value,
-    p_side_b:       sideB.value,
-    p_score_a:      Number(scoreA.value),
-    p_score_b:      Number(scoreB.value),
-    p_display_name: matchName.value.trim() || autoMatchName.value || null
-  })
-  saving.value = false
-  if (!error) {
-    // Update rotation stats for the 4 players who just played (fire-and-forget)
-    supabase.rpc('update_rotation_stats', {
+  try {
+    const { data: matchData, error } = await supabase.rpc('record_match', {
       p_club_id:      currentClub.value.club_id,
-      p_session_date: playedOn.value,
-      p_played_ids:   [...sideA.value, ...sideB.value],
-      p_bench_ids:    []
-    }).catch(() => null)
+      p_played_on:    playedOn.value,
+      p_side_a:       sideA.value,
+      p_side_b:       sideB.value,
+      p_score_a:      Number(scoreA.value),
+      p_score_b:      Number(scoreB.value),
+      p_display_name: matchName.value.trim() || autoMatchName.value || null
+    })
+    if (!error) {
+      // Update rotation stats for the 4 players who just played (fire-and-forget)
+      supabase.rpc('update_rotation_stats', {
+        p_club_id:      currentClub.value.club_id,
+        p_session_date: playedOn.value,
+        p_played_ids:   [...sideA.value, ...sideB.value],
+        p_bench_ids:    []
+      }).catch(() => null)
 
-    // Fire-and-forget: notify club members via email (non-blocking)
-    supabase.functions.invoke('send-match-email', {
-      body: {
-        club_id:      currentClub.value.club_id,
-        match_name:   matchName.value.trim() || autoMatchName.value || `Match #${matchData?.match_number ?? ''}`,
-        played_on:    playedOn.value,
-        side_a_names: sideA.value.map(id => nameOf(id) ?? id),
-        side_b_names: sideB.value.map(id => nameOf(id) ?? id),
-        score_a:      Number(scoreA.value),
-        score_b:      Number(scoreB.value),
-      }
-    }).catch(() => {})
+      // Fire-and-forget: notify club members via email (non-blocking)
+      supabase.functions.invoke('send-match-email', {
+        body: {
+          club_id:      currentClub.value.club_id,
+          match_name:   matchName.value.trim() || autoMatchName.value || `Match #${matchData?.match_number ?? ''}`,
+          played_on:    playedOn.value,
+          side_a_names: sideA.value.map(id => nameOf(id) ?? id),
+          side_b_names: sideB.value.map(id => nameOf(id) ?? id),
+          score_a:      Number(scoreA.value),
+          score_b:      Number(scoreB.value),
+        }
+      }).catch(() => {})
+    }
+    return error
+  } catch (e) {
+    return { message: e.message || 'Unexpected error. Please try again.' }
+  } finally {
+    saving.value = false
   }
-  return error
 }
 
 async function submitAndGo() {
@@ -229,9 +234,9 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
 
     <!-- Success toast for Record & Add New -->
     <Transition name="toast-slide">
-      <div v-if="savedToast"
+      <div v-if="savedToast" key="toast"
            class="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 px-6 py-4 rounded-2xl shadow-2xl text-base font-bold text-white flex items-center gap-3"
-           style="background:#059669; min-width:260px; text-align:center; box-shadow:0 8px 32px rgba(5,150,105,0.45)">
+           style="background:#059669; min-width:260px; text-align:center; box-shadow:0 8px 32px rgba(5,150,105,0.45); pointer-events:none">
         <span class="text-2xl">✅</span>
         <div>
           <div>Match saved!</div>
@@ -450,8 +455,8 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
       </button>
     </div>
 
-    <p v-if="msg" class="mt-3 rounded-xl px-4 py-3 text-sm"
-      :class="msg.ok ? 'bg-teal-500/15 text-teal-300' : 'bg-rose-500/15 text-rose-300'">
+    <p v-if="msg" class="mt-3 rounded-xl px-4 py-3 text-sm font-medium"
+      :class="msg.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'">
       {{ msg.t }}
     </p>
 
