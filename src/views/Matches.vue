@@ -2,10 +2,11 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
-import { buildNameMap } from '../lib/playerNames'
+import { buildProfileMap } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -89,7 +90,7 @@ async function load() {
         id, side, score, is_winner,
         match_participants(
           elo_before, elo_after,
-          players(id, display_name)
+          players(id, display_name, user_id)
         )
       )
     `)
@@ -113,6 +114,8 @@ async function load() {
         players: (sA?.match_participants ?? []).map(mp => ({
           id: mp.players?.id,
           name: mp.players?.display_name,
+          user_id: mp.players?.user_id ?? null,
+          avatar: null,
           delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
           elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
         }))
@@ -123,6 +126,8 @@ async function load() {
         players: (sB?.match_participants ?? []).map(mp => ({
           id: mp.players?.id,
           name: mp.players?.display_name,
+          user_id: mp.players?.user_id ?? null,
+          avatar: null,
           delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
           elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
         }))
@@ -135,11 +140,16 @@ async function load() {
     ...m.sideA.players.map(p => p.id),
     ...m.sideB.players.map(p => p.id)
   ]).filter(Boolean))]
-  const nameMap = await buildNameMap(allIds)
+  const profileMap = await buildProfileMap(allIds)
+  const enrich = p => ({
+    ...p,
+    name: profileMap[p.id]?.name ?? p.name,
+    avatar: profileMap[p.id]?.avatar ?? null
+  })
   matches.value = rawMatches.map(m => ({
     ...m,
-    sideA: { ...m.sideA, players: m.sideA.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) },
-    sideB: { ...m.sideB, players: m.sideB.players.map(p => ({ ...p, name: nameMap[p.id] ?? p.name })) }
+    sideA: { ...m.sideA, players: m.sideA.players.map(enrich) },
+    sideB: { ...m.sideB, players: m.sideB.players.map(enrich) }
   }))
   // Collapse all dates by default — most recent date stays open
   const dates = [...new Set(matches.value.map(m => m.played_on))]
@@ -509,9 +519,12 @@ const canDelete = m =>
               {{ m.sideA.score }}
             </div>
             <div v-for="p in m.sideA.players" :key="p.id ?? p.name" class="flex justify-between items-center py-1">
-              <RouterLink v-if="p.id" :to="'/player/' + p.id"
-                class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
-              <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <Avatar :name="p.name" :src="p.avatar" :size="24" />
+                <RouterLink v-if="p.id" :to="'/player/' + p.id"
+                  class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
+                <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+              </div>
               <span v-if="p.delta != null" class="text-xs font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}
@@ -530,9 +543,12 @@ const canDelete = m =>
               {{ m.sideB.score }}
             </div>
             <div v-for="p in m.sideB.players" :key="p.id ?? p.name" class="flex justify-between items-center py-1">
-              <RouterLink v-if="p.id" :to="'/player/' + p.id"
-                class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
-              <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <Avatar :name="p.name" :src="p.avatar" :size="24" />
+                <RouterLink v-if="p.id" :to="'/player/' + p.id"
+                  class="text-xs text-slate-200 truncate hover:text-neon transition-colors">{{ p.name }}</RouterLink>
+                <span v-else class="text-xs text-slate-200 truncate">{{ p.name }}</span>
+              </div>
               <span v-if="p.delta != null" class="text-xs font-semibold ml-2 shrink-0"
                 :class="deltaColor(p.delta)">
                 {{ deltaText(p.delta) }}

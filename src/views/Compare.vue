@@ -4,8 +4,11 @@ import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const { currentClub } = useClub()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 const players = ref([])
 const a = ref('')
 const b = ref('')
@@ -24,6 +27,7 @@ async function load() {
   players.value = await withNicknames(pl ?? [])
   ranks.value = Object.fromEntries((lb ?? []).map(r => [r.id, r]))
   pairs.value = bp ?? []
+  loadAvatars(pairs.value.flatMap(p => [p.p1_user_id, p.p2_user_id]))
 }
 onMounted(load)
 watch(currentClub, load)
@@ -45,6 +49,7 @@ async function compare() {
 watch([a, b], compare)
 
 const nameOf = id => players.value.find(p => p.id === id)?.display_name
+const avatarOf = id => players.value.find(p => p.id === id)?.avatar_url
 const rA = computed(() => ranks.value[a.value])
 const rB = computed(() => ranks.value[b.value])
 
@@ -99,9 +104,15 @@ const better = (row, side) => {
   <!-- Comparison table -->
   <div v-if="rA && rB" class="card overflow-hidden mb-4">
     <div class="grid grid-cols-3 border-b border-[rgba(15,23,42,0.10)] py-3 px-3 text-center">
-      <div class="font-semibold text-teal-400">{{ nameOf(a) }}</div>
+      <div class="flex flex-col items-center gap-1.5">
+        <Avatar :name="nameOf(a)" :src="avatarOf(a)" :size="40" />
+        <span class="font-semibold text-teal-400">{{ nameOf(a) }}</span>
+      </div>
       <div class="text-xs text-slate-500 self-center">vs</div>
-      <div class="font-semibold text-amber-400">{{ nameOf(b) }}</div>
+      <div class="flex flex-col items-center gap-1.5">
+        <Avatar :name="nameOf(b)" :src="avatarOf(b)" :size="40" />
+        <span class="font-semibold text-amber-400">{{ nameOf(b) }}</span>
+      </div>
     </div>
     <div v-for="row in statRows" :key="row.label"
       class="grid grid-cols-3 px-3 py-2 border-b border-[rgba(15,23,42,0.04)] last:border-0 text-center text-sm">
@@ -138,9 +149,15 @@ const better = (row, side) => {
     </div>
     <div v-for="p in pairs" :key="p.p1 + p.p2"
       class="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0">
-      <div>
-        <div class="text-sm font-medium">{{ p.p1_name }} + {{ p.p2_name }}</div>
-        <div class="text-xs text-slate-500">{{ p.games }} games together</div>
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="flex -space-x-2 shrink-0">
+          <Avatar :name="p.p1_name" :src="avatarMap[p.p1_user_id]" :size="26" class="ring-2 ring-white" />
+          <Avatar :name="p.p2_name" :src="avatarMap[p.p2_user_id]" :size="26" class="ring-2 ring-white" />
+        </div>
+        <div class="min-w-0">
+          <div class="text-sm font-medium truncate">{{ p.p1_name }} + {{ p.p2_name }}</div>
+          <div class="text-xs text-slate-500">{{ p.games }} games together</div>
+        </div>
       </div>
       <div class="text-right">
         <div class="font-bold text-teal-400">{{ p.win_pct }}%</div>

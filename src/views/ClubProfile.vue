@@ -4,7 +4,10 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
@@ -66,11 +69,13 @@ async function load() {
   }
 
   leaderboard.value = (lbRes.data ?? []).filter(p => p.games > 0)
+  loadAvatars(leaderboard.value.map(p => p.user_id))
 
   if (isMyClub.value || adminView.value) {
     // Member or admin — fetch full player list
     const memberRes = await supabase.rpc('get_club_players', { p_club_id: clubId })
     members.value = memberRes.data ?? []
+    loadAvatars(members.value.map(m => m.user_id))
   } else {
     // Not a member — show limited view + join prompt
     notMember.value = true
@@ -297,10 +302,13 @@ async function saveRename() {
                 <span class="text-sm">{{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}</span>
               </td>
               <td class="pl-2 pr-2 py-3">
-                <RouterLink :to="'/player/' + p.id + (adminView ? '?admin=1' : '')"
-                  class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate block min-w-0">
-                  {{ p.display_name }}
-                </RouterLink>
+                <div class="flex items-center gap-2 min-w-0">
+                  <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" />
+                  <RouterLink :to="'/player/' + p.id + (adminView ? '?admin=1' : '')"
+                    class="font-semibold text-slate-100 hover:text-neon transition-colors text-sm truncate min-w-0">
+                    {{ p.display_name }}
+                  </RouterLink>
+                </div>
               </td>
               <td class="px-2 py-3 text-right text-xs font-bold text-neon">{{ p.elo }}</td>
               <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
@@ -319,10 +327,7 @@ async function saveRename() {
           class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.04)] last:border-0
                  hover:bg-[rgba(15,23,42,0.02)] transition-colors">
           <div class="relative shrink-0">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black"
-              style="background:rgba(15,23,42,0.06); color:#64748b">
-              {{ initials(m.display_name) }}
-            </div>
+            <Avatar :name="m.display_name" :src="avatarMap[m.user_id]" :size="28" />
             <span v-if="m.user_id" class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-slate-900"
               :style="'background:' + onlineColor(m.online_status)" />
           </div>

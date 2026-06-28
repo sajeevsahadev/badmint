@@ -5,8 +5,11 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import InfoTip from '../components/InfoTip.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const router = useRouter()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
 
@@ -65,6 +68,7 @@ async function loadClubData() {
   ])
   board.value     = lb ?? []
   bestPairs.value = bp ?? []
+  loadAvatars(board.value.map(p => p.user_id))
 
   // v_leaderboard already contains every active player for this club —
   // no second query needed. Inactive players are excluded from the view, so
@@ -249,6 +253,7 @@ const fmtDate = d => d
             <span class="w-7 text-center text-base shrink-0">
               {{ p._gap ? `#${p.club_rank}` : (medals[i] ?? `#${i+1}`) }}
             </span>
+            <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="32" />
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold truncate"
                 :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">

@@ -4,8 +4,11 @@ import { RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const { currentClub, isManager } = useClub()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 const players  = ref([])
 const newName  = ref('')
 const newEmail = ref('')
@@ -21,6 +24,7 @@ async function load() {
     p_club_id: currentClub.value.club_id
   })
   players.value = data ?? []
+  loadAvatars(players.value.map(p => p.user_id))
 }
 onMounted(load)
 watch(currentClub, load)
@@ -175,6 +179,7 @@ const eloLabel = elo => elo >= 1100 ? '🔥 Strong' : elo >= 1000 ? 'Average' : 
               : 'background:rgba(255,255,255,0.08); color:#94a3b8'">
           {{ p.is_active ? (i + 1) : '—' }}
         </div>
+        <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="32" />
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <span class="font-semibold text-sm truncate hover:text-neon transition-colors"

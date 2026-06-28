@@ -6,9 +6,12 @@ import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import InfoTip from '../components/InfoTip.vue'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const { user } = useAuth()
 const { currentClub } = useClub()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 
 const board     = ref([])
 const bestPairs = ref([])
@@ -40,6 +43,10 @@ async function load() {
   board.value     = lb ?? []
   bestPairs.value = bp ?? []
   loading.value   = false
+  loadAvatars([
+    ...board.value.map(p => p.user_id),
+    ...bestPairs.value.flatMap(p => [p.p1_user_id, p.p2_user_id])
+  ])
 }
 
 onMounted(load)
@@ -98,6 +105,9 @@ const rest     = computed(() => board.value.slice(3))
             </div>
           </div>
 
+          <!-- Avatar -->
+          <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="44" class="mb-1.5" />
+
           <!-- Name -->
           <RouterLink :to="'/player/' + p.id"
             class="text-xs font-bold leading-tight mb-1.5 hover:text-neon transition-colors line-clamp-2"
@@ -138,12 +148,15 @@ const rest     = computed(() => board.value.slice(3))
                 :class="isMe(p) ? 'bg-cyan-50/70' : i === 0 ? 'bg-amber-50/40' : 'hover:bg-slate-50'">
                 <td class="pl-4 pr-2 py-3 text-base leading-none">{{ medals[i] }}</td>
                 <td class="pl-2 pr-3 py-3">
-                  <RouterLink :to="'/player/' + p.id"
-                    class="font-semibold hover:text-neon transition-colors"
-                    :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
-                    {{ p.display_name }}
-                    <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
-                  </RouterLink>
+                  <div class="flex items-center gap-2">
+                    <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" />
+                    <RouterLink :to="'/player/' + p.id"
+                      class="font-semibold hover:text-neon transition-colors"
+                      :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
+                      {{ p.display_name }}
+                      <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
+                    </RouterLink>
+                  </div>
                 </td>
                 <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
                 <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
@@ -157,12 +170,15 @@ const rest     = computed(() => board.value.slice(3))
                   :class="isMe(p) ? 'bg-cyan-50/70' : 'hover:bg-slate-50'">
                   <td class="pl-4 pr-2 py-3 text-xs font-bold text-slate-400">{{ i + 4 }}</td>
                   <td class="pl-2 pr-3 py-3">
-                    <RouterLink :to="'/player/' + p.id"
-                      class="font-semibold hover:text-neon transition-colors"
-                      :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
-                      {{ p.display_name }}
-                      <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
-                    </RouterLink>
+                    <div class="flex items-center gap-2">
+                      <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" />
+                      <RouterLink :to="'/player/' + p.id"
+                        class="font-semibold hover:text-neon transition-colors"
+                        :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
+                        {{ p.display_name }}
+                        <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
+                      </RouterLink>
+                    </div>
                   </td>
                   <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
                   <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
@@ -192,6 +208,10 @@ const rest     = computed(() => board.value.slice(3))
         <div v-for="(pair, i) in bestPairs" :key="pair.p1 + pair.p2"
           class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0">
           <span class="text-lg shrink-0 w-6 text-center">{{ medals[i] }}</span>
+          <div class="flex -space-x-2 shrink-0">
+            <Avatar :name="pair.p1_name" :src="avatarMap[pair.p1_user_id]" :size="28" class="ring-2 ring-white" />
+            <Avatar :name="pair.p2_name" :src="avatarMap[pair.p2_user_id]" :size="28" class="ring-2 ring-white" />
+          </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-bold text-slate-700 truncate">{{ pair.p1_name }} + {{ pair.p2_name }}</p>
             <p class="text-xs text-slate-400 mt-0.5">

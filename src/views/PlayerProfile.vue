@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
-import { buildNameMap } from '../lib/playerNames'
+import { buildProfileMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
+import Avatar from '../components/Avatar.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -95,8 +96,8 @@ async function load() {
         won: mySide?.is_winner ?? false,
         myScore:  mySide?.score  ?? 0,
         oppScore: oppSide?.score ?? 0,
-        myTeam:  (mySide?.participants  ?? []).map(mp => mp.display_name).filter(Boolean),
-        oppTeam: (oppSide?.participants ?? []).map(mp => mp.display_name).filter(Boolean),
+        myTeam:  (mySide?.participants  ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
+        oppTeam: (oppSide?.participants ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
         eloDelta: myMp?.elo_after != null ? Math.round(myMp.elo_after - myMp.elo_before) : null,
       }
     })
@@ -140,7 +141,7 @@ async function load() {
           side, score, is_winner,
           match_participants(
             elo_before, elo_after,
-            players(id, display_name)
+            players(id, display_name, user_id)
           )
         )
       `)
@@ -161,7 +162,7 @@ async function load() {
       )
     ).filter(Boolean)
   )]
-  const nameMap = await buildNameMap(allParticipantIds)
+  const profileMap = await buildProfileMap(allParticipantIds)
 
   const rawMatches = matchRes.data ?? []
   const filtered = rawMatches
@@ -181,8 +182,14 @@ async function load() {
       won: mySide?.is_winner ?? false,
       myScore:  mySide?.score  ?? 0,
       oppScore: oppSide?.score ?? 0,
-      myTeam:  (mySide?.match_participants  ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
-      oppTeam: (oppSide?.match_participants ?? []).map(mp => nameMap[mp.players?.id] || mp.players?.display_name).filter(Boolean),
+      myTeam:  (mySide?.match_participants  ?? []).map(mp => ({
+        name: profileMap[mp.players?.id]?.name || mp.players?.display_name,
+        avatar: profileMap[mp.players?.id]?.avatar ?? null
+      })).filter(t => t.name),
+      oppTeam: (oppSide?.match_participants ?? []).map(mp => ({
+        name: profileMap[mp.players?.id]?.name || mp.players?.display_name,
+        avatar: profileMap[mp.players?.id]?.avatar ?? null
+      })).filter(t => t.name),
       eloDelta: (() => {
         const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
         return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
@@ -282,10 +289,7 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
     <div class="card-neon p-5 mb-4 fade-up">
       <div class="flex items-center gap-4">
         <!-- Avatar -->
-        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black text-slate-950 shrink-0"
-          style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-          {{ initials }}
-        </div>
+        <Avatar :name="publicName" :src="profile?.avatar_url" :size="64" class="rounded-2xl" />
 
         <div class="flex-1 min-w-0">
           <h2 class="font-display text-xl font-extrabold gradient-text leading-tight truncate">
@@ -381,10 +385,22 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
                 <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
               </div>
             </div>
-            <div class="text-xs text-slate-400">
-              <span class="text-slate-200 font-medium">{{ m.myTeam.join(' + ') }}</span>
-              <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
-              <span>{{ m.oppTeam.join(' + ') }}</span>
+            <div class="flex items-center gap-1.5 text-xs text-slate-400 flex-wrap">
+              <span class="flex items-center gap-1 text-slate-200 font-medium">
+                <template v-for="(t, ti) in m.myTeam" :key="'my' + ti">
+                  <Avatar :name="t.name" :src="t.avatar" :size="20" />
+                  <span>{{ t.name }}</span>
+                  <span v-if="ti < m.myTeam.length - 1" class="text-slate-500">+</span>
+                </template>
+              </span>
+              <span class="mx-0.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
+              <span class="flex items-center gap-1">
+                <template v-for="(t, ti) in m.oppTeam" :key="'opp' + ti">
+                  <Avatar :name="t.name" :src="t.avatar" :size="20" />
+                  <span>{{ t.name }}</span>
+                  <span v-if="ti < m.oppTeam.length - 1" class="text-slate-500">+</span>
+                </template>
+              </span>
             </div>
           </button>
         </template>

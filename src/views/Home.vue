@@ -6,7 +6,10 @@ import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import { useInstall } from '../composables/useInstall'
 import { useGeo } from '../composables/useGeo'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
@@ -83,6 +86,7 @@ async function load() {
   ])
   topClubs.value   = clubsRes.data   ?? []
   topPlayers.value = playersRes.data ?? []
+  loadAvatars(topPlayers.value.map(p => p.user_id))
   loading.value    = false
 }
 
@@ -335,7 +339,8 @@ onMounted(() => { load(); detectCountry() })
                 :class="i < 3 ? 'text-gold' : 'text-slate-600'">
                 {{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}
               </span>
-              <div class="flex-1 min-w-0 ml-2">
+              <Avatar :name="p.public_name" :src="avatarMap[p.user_id]" :size="32" />
+              <div class="flex-1 min-w-0 ml-1">
                 <div class="text-sm font-semibold text-slate-100 truncate">{{ p.public_name }}</div>
                 <div class="text-[10px] text-slate-500 truncate">{{ p.club_name }}{{ p.emirates ? ' · ' + p.emirates : '' }}</div>
               </div>

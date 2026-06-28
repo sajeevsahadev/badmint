@@ -320,6 +320,7 @@ async function confirmDelete() {
       </div>
       <div v-for="s in myStats" :key="s.id"
         class="flex items-center justify-between px-4 py-3 border-b last:border-0 gap-2" style="border-color:rgba(15,23,42,.04)">
+        <Avatar :name="s.display_name" :src="profile?.avatar_url" :size="32" class="shrink-0" />
         <div class="flex-1 min-w-0">
           <div class="text-sm font-semibold text-slate-700">{{ clubName(s.club_id) }}</div>
           <div class="text-[11px] text-slate-500">{{ s.display_name }}</div>
