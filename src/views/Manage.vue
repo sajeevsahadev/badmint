@@ -4,8 +4,11 @@ import { RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const { clubs, currentClub, loadClubs, isManager } = useClub()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 
 const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
@@ -76,6 +79,9 @@ async function load() {
       '—',
   }))
   guestPlayers.value = guests ?? []
+
+  // Avatars for linked members
+  await loadAvatars(memberIds)
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
@@ -518,7 +524,8 @@ async function leaveClub(clubId) {
 
     <div v-for="m in members" :key="m.user_id"
       class="flex items-center justify-between py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0 gap-2">
-      <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" />
         <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
       </div>
       <select
@@ -539,7 +546,10 @@ async function leaveClub(clubId) {
 
       <div v-for="gp in guestPlayers" :key="gp.id" class="mb-1">
         <div class="flex items-center justify-between py-2 gap-2">
-          <div class="text-sm text-slate-300 flex-1 truncate">{{ gp.display_name }}</div>
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <Avatar :name="gp.display_name" :src="''" :size="32" />
+            <div class="text-sm text-slate-300 truncate">{{ gp.display_name }}</div>
+          </div>
           <button
             class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
             style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"

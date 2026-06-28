@@ -3,10 +3,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
 
 const schedule = ref(null)
 const loading  = ref(true)
@@ -75,6 +78,7 @@ async function loadVotes() {
     p_schedule_id: schedule.value.id
   })
   votes.value = data ?? []
+  await loadAvatars(votes.value.map(v => v.user_id))
   votesLoading.value = false
   showVotes.value = true
 }
@@ -202,10 +206,7 @@ onMounted(loadSchedule)
           <div v-if="votes.length === 0" class="text-sm text-slate-500 text-center py-3">No votes yet.</div>
           <div v-for="v in votes" :key="v.user_id"
             class="flex items-center gap-3 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0">
-            <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-slate-950"
-              style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-              {{ (v.display_name || '?')[0].toUpperCase() }}
-            </div>
+            <Avatar :name="v.display_name || '?'" :src="avatarMap[v.user_id]" :size="32" />
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium text-slate-100 truncate">{{ v.display_name || 'Unknown' }}</div>
               <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>

@@ -7,11 +7,23 @@ import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import { usePushNotifications } from '../composables/usePushNotifications'
 import PageHeader from '../components/PageHeader.vue'
+import Avatar from '../components/Avatar.vue'
+import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const router = useRouter()
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 const { isSupported: pushSupported, subscribe: subscribePush, isSubscribed, getPermission } = usePushNotifications()
+const { avatarMap, loadAvatars } = usePlayerAvatars()
+
+// Avatar URL by players.id — built from allPlayers (which carries user_id + avatar_url
+// via withNicknames). Lets the lineup panel (whose player objects lack avatar_url) show avatars.
+const playerAvatarById = computed(() => {
+  const m = {}
+  for (const p of allPlayers.value) m[p.id] = p.avatar_url || ''
+  return m
+})
+const lineupAvatar = id => playerAvatarById.value[id] || ''
 
 // ── Calendar state ──
 const today    = new Date()
@@ -245,6 +257,7 @@ async function loadVotes(scheduleId) {
   const { data, error } = await supabase.rpc('get_schedule_votes', { p_schedule_id: scheduleId })
   if (error) { /* votes are non-critical; silently continue */ }
   votes.value = data ?? []
+  await loadAvatars(votes.value.map(v => v.user_id))
   votesLoading.value = false
 }
 
@@ -720,6 +733,7 @@ watch(currentClub, async () => {
                       @click="toggleAttendee(p.id)">
                       <span v-if="attendeeIds.has(p.id)" class="text-[10px] text-white font-bold">✓</span>
                     </div>
+                    <Avatar :name="p.display_name" :src="p.avatar_url" :size="28" @click="toggleAttendee(p.id)" />
                     <span class="text-sm flex-1" :class="attendeeIds.has(p.id) ? 'text-slate-900 font-semibold' : 'text-slate-500'"
                       @click="toggleAttendee(p.id)">
                       {{ p.display_name }}
@@ -786,9 +800,7 @@ watch(currentClub, async () => {
                           : lineupSwapMode ? 'cursor-pointer hover:bg-cyan-50 active:opacity-70' : ''">
                         <div class="flex items-center gap-2 min-w-0"
                           @click="lineupSwapMode ? completeSwap('a', i) : (isManager() && startSwap('a', i))">
-                          <div class="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px] font-bold text-neon shrink-0">
-                            {{ p.name?.[0]?.toUpperCase() }}
-                          </div>
+                          <Avatar :name="p.name" :src="lineupAvatar(p.id)" :size="24" />
                           <span class="text-xs font-medium text-slate-800 truncate">{{ p.name }}</span>
                         </div>
                         <span class="text-[10px] text-slate-500 shrink-0 ml-1">{{ p.elo }}</span>
@@ -807,9 +819,7 @@ watch(currentClub, async () => {
                           : lineupSwapMode ? 'cursor-pointer hover:bg-violet-50 active:opacity-70' : ''">
                         <div class="flex items-center gap-2 min-w-0"
                           @click="lineupSwapMode ? completeSwap('b', i) : (isManager() && startSwap('b', i))">
-                          <div class="w-6 h-6 rounded-full bg-violet-500/20 flex items-center justify-center text-[10px] font-bold text-violet shrink-0">
-                            {{ p.name?.[0]?.toUpperCase() }}
-                          </div>
+                          <Avatar :name="p.name" :src="lineupAvatar(p.id)" :size="24" />
                           <span class="text-xs font-medium text-slate-800 truncate">{{ p.name }}</span>
                         </div>
                         <span class="text-[10px] text-slate-500 shrink-0 ml-1">{{ p.elo }}</span>
@@ -1037,10 +1047,7 @@ watch(currentClub, async () => {
               </div>
               <div v-for="v in filteredVotes" :key="v.user_id"
                 class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
-              <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-slate-950"
-                style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-                {{ (v.display_name || '?')[0].toUpperCase() }}
-              </div>
+              <Avatar :name="v.display_name || '?'" :src="avatarMap[v.user_id]" :size="32" />
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium text-white truncate">{{ v.display_name || 'Unknown' }}</div>
                 <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>

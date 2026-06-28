@@ -4,6 +4,7 @@ import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
+import Avatar from '../components/Avatar.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -124,6 +125,7 @@ const ready = computed(() =>
   Number(scoreA.value) !== Number(scoreB.value))
 
 const nameOf = id => players.value.find(p => p.id === id)?.display_name
+const avatarOf = id => players.value.find(p => p.id === id)?.avatar_url || ''
 
 const autoMatchName = computed(() => {
   if (sideA.value.length !== 2 || sideB.value.length !== 2) return ''
@@ -143,8 +145,8 @@ function startLiveScoring() {
 }
 
 const servePickerPlayers = computed(() => [
-  ...sideA.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), side: 'Side A' })),
-  ...sideB.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), side: 'Side B' })),
+  ...sideA.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), avatar: avatarOf(id), side: 'Side A' })),
+  ...sideB.value.map(id => ({ id, name: nameOf(id) || id.slice(0, 6), avatar: avatarOf(id), side: 'Side B' })),
 ])
 
 async function startWithServer(servingPlayerId) {
@@ -315,7 +317,10 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
         </div>
         <div v-if="sideA.length" class="space-y-1 mb-2">
           <div v-for="id in sideA" :key="id"
-            class="text-xs font-medium text-slate-200 truncate">{{ nameOf(id) }}</div>
+            class="flex items-center gap-2 text-xs font-medium text-slate-200 truncate">
+            <Avatar :name="nameOf(id)" :src="avatarOf(id)" :size="20" />
+            <span class="truncate">{{ nameOf(id) }}</span>
+          </div>
         </div>
         <div v-else class="text-xs text-slate-600 italic mb-2">Tap players below</div>
         <div v-if="avgElo(sideA)" class="text-[10px] text-slate-500">Avg Elo {{ avgElo(sideA) }}</div>
@@ -342,7 +347,10 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
         </div>
         <div v-if="sideB.length" class="space-y-1 mb-2">
           <div v-for="id in sideB" :key="id"
-            class="text-xs font-medium text-slate-200 truncate">{{ nameOf(id) }}</div>
+            class="flex items-center gap-2 text-xs font-medium text-slate-200 truncate">
+            <Avatar :name="nameOf(id)" :src="avatarOf(id)" :size="20" />
+            <span class="truncate">{{ nameOf(id) }}</span>
+          </div>
         </div>
         <div v-else class="text-xs text-slate-600 italic mb-2">Tap players below</div>
         <div v-if="avgElo(sideB)" class="text-[10px] text-slate-500">Avg Elo {{ avgElo(sideB) }}</div>
@@ -392,6 +400,8 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
           <span v-else
             class="w-6 h-6 rounded-lg shrink-0 border flex items-center justify-center text-slate-600"
             style="border-color:rgba(15,23,42,.1); background:rgba(15,23,42,.04)">+</span>
+
+          <Avatar :name="p.display_name" :src="p.avatar_url" :size="32" />
 
           <div class="min-w-0">
             <span class="text-sm font-medium truncate block"
@@ -472,9 +482,7 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
             <button v-for="player in servePickerPlayers" :key="player.id"
                     @click="startWithServer(player.id)"
                     class="btn-ghost text-left flex items-center gap-3 py-3">
-              <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 text-sm shrink-0">
-                {{ player.name[0]?.toUpperCase() }}
-              </div>
+              <Avatar :name="player.name" :src="player.avatar" :size="32" />
               <span>{{ player.name }}</span>
               <span class="ml-auto text-xs text-slate-400">{{ player.side }}</span>
             </button>
