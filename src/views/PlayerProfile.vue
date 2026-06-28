@@ -215,6 +215,23 @@ const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { wee
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
 const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
+const expandedDates = ref(new Set())
+const allExpanded   = computed(() => groupedMatches.value.length > 0 && expandedDates.value.size === groupedMatches.value.length)
+
+function toggleDate(date) {
+  const s = new Set(expandedDates.value)
+  s.has(date) ? s.delete(date) : s.add(date)
+  expandedDates.value = s
+}
+
+function toggleAll() {
+  if (allExpanded.value) {
+    expandedDates.value = new Set()
+  } else {
+    expandedDates.value = new Set(groupedMatches.value.map(g => g.date))
+  }
+}
+
 const groupedMatches = computed(() => {
   const groups = {}
   for (const m of matches.value) {
@@ -321,9 +338,15 @@ const groupedMatches = computed(() => {
 
     <!-- Match history -->
     <div class="card overflow-hidden fade-up">
-      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
-        <span class="text-xs font-bold text-slate-200">Recent Matches</span>
-        <span class="text-[10px] text-slate-600 ml-2">(last {{ matches.length }})</span>
+      <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)] flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-200">Recent Matches</span>
+          <span class="text-[10px] text-slate-600 ml-2">(last {{ matches.length }})</span>
+        </div>
+        <button v-if="groupedMatches.length" @click="toggleAll"
+                class="text-[11px] font-semibold text-neon hover:underline transition">
+          {{ allExpanded ? 'Collapse All' : 'Expand All' }}
+        </button>
       </div>
 
       <div v-if="!matches.length" class="px-4 py-6 text-center text-sm text-slate-500">
@@ -331,38 +354,46 @@ const groupedMatches = computed(() => {
       </div>
 
       <template v-for="group in groupedMatches" :key="group.date">
-        <!-- Date header -->
-        <div class="px-4 py-2 flex items-center justify-between bg-slate-50 border-b border-[rgba(15,23,42,0.06)]">
-          <span class="text-xs font-semibold text-slate-500">{{ fmtDate(group.date) }}</span>
-          <span class="text-[11px] text-slate-400">
-            {{ group.total }} {{ group.total === 1 ? 'game' : 'games' }} · {{ group.wins }} won
-          </span>
-        </div>
-        <!-- Match rows -->
-        <button v-for="m in group.items" :key="m.id"
-          class="w-full text-left px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0
-                 hover:bg-[rgba(15,23,42,0.03)] transition-colors duration-150 group"
-          @click="router.push('/matches?open=' + m.id)">
-          <div class="flex items-center justify-between mb-1">
-            <span class="text-xs text-slate-500">{{ m.name }}</span>
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-bold"
-                :class="m.won ? 'text-neon' : 'text-rose-400'">
-                {{ m.won ? '🏆 Won' : 'Lost' }}
-              </span>
-              <span v-if="m.eloDelta != null" class="text-[11px] font-semibold"
-                :class="deltaColor(m.eloDelta)">
-                {{ deltaText(m.eloDelta) }}
-              </span>
-              <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
-            </div>
+        <!-- Date header row — tap to expand/collapse -->
+        <button class="w-full px-4 py-2.5 flex items-center justify-between bg-slate-50 border-b border-[rgba(15,23,42,0.06)] hover:bg-slate-100 transition-colors"
+                @click="toggleDate(group.date)">
+          <div class="flex items-center gap-2">
+            <span class="text-xs transition-transform duration-200"
+                  :style="expandedDates.has(group.date) ? 'transform:rotate(90deg)' : ''">▶</span>
+            <span class="text-xs font-semibold text-slate-600">{{ fmtDate(group.date) }}</span>
           </div>
-          <div class="text-xs text-slate-400">
-            <span class="text-slate-200 font-medium">{{ m.myTeam.join(' + ') }}</span>
-            <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
-            <span>{{ m.oppTeam.join(' + ') }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-[11px] text-slate-400">{{ group.total }} {{ group.total === 1 ? 'game' : 'games' }}</span>
+            <span class="text-[11px] font-semibold text-emerald-500">{{ group.wins }} won</span>
           </div>
         </button>
+        <!-- Match rows — shown only when expanded -->
+        <template v-if="expandedDates.has(group.date)">
+          <button v-for="m in group.items" :key="m.id"
+            class="w-full text-left px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0
+                   hover:bg-[rgba(15,23,42,0.03)] transition-colors duration-150 group"
+            @click="router.push('/matches?open=' + m.id)">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs text-slate-500">{{ m.name }}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold"
+                  :class="m.won ? 'text-neon' : 'text-rose-400'">
+                  {{ m.won ? '🏆 Won' : 'Lost' }}
+                </span>
+                <span v-if="m.eloDelta != null" class="text-[11px] font-semibold"
+                  :class="deltaColor(m.eloDelta)">
+                  {{ deltaText(m.eloDelta) }}
+                </span>
+                <span class="text-slate-700 group-hover:text-slate-400 transition text-xs">›</span>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400">
+              <span class="text-slate-200 font-medium">{{ m.myTeam.join(' + ') }}</span>
+              <span class="mx-1.5 text-slate-600">{{ m.myScore }}–{{ m.oppScore }}</span>
+              <span>{{ m.oppTeam.join(' + ') }}</span>
+            </div>
+          </button>
+        </template>
       </template>
       <!-- Load more -->
       <div v-if="hasMoreMatches" class="px-4 py-3 border-t border-[rgba(15,23,42,0.05)]">
