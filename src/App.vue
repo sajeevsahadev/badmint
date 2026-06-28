@@ -269,6 +269,11 @@ const needsClub = computed(() =>
       <RouterView />
     </div>
 
+    <!-- Fullscreen routes (e.g. live match court view) — no shell padding -->
+    <div v-else-if="route.meta.fullscreen">
+      <RouterView />
+    </div>
+
     <!-- ── Authenticated shell ─────────────────────────────────────────────── -->
     <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-4">
 

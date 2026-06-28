@@ -245,10 +245,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="loading" class="flex items-center justify-center h-screen text-slate-400">Loading…</div>
-  <div v-else-if="error" class="flex items-center justify-center h-screen text-rose-500">{{ error }}</div>
+  <div v-if="loading" class="flex items-center justify-center text-slate-400" style="height:100dvh">Loading…</div>
+  <div v-else-if="error" class="flex items-center justify-center text-rose-500" style="height:100dvh">{{ error }}</div>
 
-  <div v-else class="h-screen flex flex-col bg-[#eef4ff] select-none overflow-hidden">
+  <div v-else class="flex flex-col bg-[#eef4ff] select-none overflow-hidden" style="height:100dvh; padding-bottom:64px">
 
     <!-- Score header (dark navy) -->
     <div class="bg-[#0d1b2a] text-white px-3 py-2 flex items-center gap-3 shrink-0">
