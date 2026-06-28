@@ -125,6 +125,14 @@ const miniBoard = computed(() => {
 const medals = ['🥇','🥈','🥉']
 const trendColor = elo => elo >= 1050 ? 'text-neon' : elo <= 950 ? 'text-rose-400' : 'text-slate-400'
 
+// Displayed rank = position within the games>0 leaderboard (same as /scoreboard).
+// NOT v_leaderboard.club_rank, which ranks ALL active players incl. zero-game ones
+// and so disagrees with the leaderboard the user actually sees.
+const myRank = computed(() => {
+  const i = board.value.findIndex(isMe)
+  return i >= 0 ? i + 1 : null
+})
+
 // Tournaments for THIS club (all statuses, so draft ones are visible to manager)
 const myClubTournaments = computed(() =>
   allTournaments.value
@@ -169,7 +177,7 @@ const fmtDate = d => d
             <div>
               <p class="text-xs text-slate-400 uppercase tracking-widest">Your Rank</p>
               <p class="text-lg font-extrabold text-neon leading-none">
-                #{{ myPlayer.club_rank }}
+                #{{ myRank ?? myPlayer.club_rank }}
                 <span class="text-xs text-slate-400 font-normal ml-0.5">in {{ clubName }}</span>
               </p>
             </div>
@@ -251,7 +259,7 @@ const fmtDate = d => d
             class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 transition-colors"
             :class="isMe(p) ? 'bg-cyan-50/80' : 'hover:bg-slate-50'">
             <span class="w-7 text-center text-base shrink-0">
-              {{ p._gap ? `#${p.club_rank}` : (medals[i] ?? `#${i+1}`) }}
+              {{ p._gap ? `#${myRank ?? p.club_rank}` : (medals[i] ?? `#${i+1}`) }}
             </span>
             <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="32" />
             <div class="flex-1 min-w-0">
