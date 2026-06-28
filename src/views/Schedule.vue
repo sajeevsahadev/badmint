@@ -177,8 +177,9 @@ function acceptLineup() {
   if (!lineup.value) return
   const sideAIds = lineup.value.side_a.map(p => p.id).join(',')
   const sideBIds = lineup.value.side_b.map(p => p.id).join(',')
+  const date     = selectedDate.value   // capture before closeDateModal() nulls it
   closeDateModal()
-  router.push(`/match?sideA=${sideAIds}&sideB=${sideBIds}&date=${selectedDate.value}`)
+  router.push(`/match?sideA=${sideAIds}&sideB=${sideBIds}&date=${date}`)
 }
 
 // ── Rotation fairness ──

@@ -90,7 +90,8 @@ onMounted(async () => {
   if (route.query.sideA && route.query.sideB) {
     sideA.value = route.query.sideA.split(',').filter(Boolean)
     sideB.value = route.query.sideB.split(',').filter(Boolean)
-    if (route.query.date) playedOn.value = route.query.date
+    // Only accept a real YYYY-MM-DD date; ignore "null"/"undefined"/garbage so the default (today) stands
+    if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date)) playedOn.value = route.query.date
     pickingFor.value = sideA.value.length < 2 ? 'A' : sideB.value.length < 2 ? 'B' : 'A'
   }
 })
