@@ -121,6 +121,12 @@ const ready = computed(() =>
   Number(scoreA.value) !== Number(scoreB.value))
 
 const nameOf = id => players.value.find(p => p.id === id)?.display_name
+
+const autoMatchName = computed(() => {
+  if (sideA.value.length !== 2 || sideB.value.length !== 2) return ''
+  const abbr = id => (nameOf(id) || '??').slice(0, 2).toUpperCase()
+  return `${abbr(sideA.value[0])}+${abbr(sideA.value[1])} vs ${abbr(sideB.value[0])}+${abbr(sideB.value[1])}`
+})
 const eloOf  = id => players.value.find(p => p.id === id)?.elo
 
 const avgElo = arr => arr.length
@@ -169,7 +175,7 @@ async function doSubmit() {
     p_side_b:       sideB.value,
     p_score_a:      Number(scoreA.value),
     p_score_b:      Number(scoreB.value),
-    p_display_name: matchName.value.trim() || null
+    p_display_name: matchName.value.trim() || autoMatchName.value || null
   })
   saving.value = false
   if (!error) {
@@ -185,7 +191,7 @@ async function doSubmit() {
     supabase.functions.invoke('send-match-email', {
       body: {
         club_id:      currentClub.value.club_id,
-        match_name:   matchName.value.trim() || `Match #${matchData?.match_number ?? ''}`,
+        match_name:   matchName.value.trim() || autoMatchName.value || `Match #${matchData?.match_number ?? ''}`,
         played_on:    playedOn.value,
         side_a_names: sideA.value.map(id => nameOf(id) ?? id),
         side_b_names: sideB.value.map(id => nameOf(id) ?? id),
@@ -237,7 +243,7 @@ async function submitAndStay() {
       </div>
       <div>
         <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
-        <input v-model="matchName" class="input" placeholder="Auto-generated"
+        <input v-model="matchName" class="input" :placeholder="autoMatchName || 'Auto-generated'"
           maxlength="40" />
       </div>
     </div>
