@@ -41,9 +41,19 @@ const sideBPlayers = computed(() =>
 const servingPlayerId = computed(() => match.value?.serving_player)
 const currentScoreA  = computed(() => match.value?.score_a ?? 0)
 const currentScoreB  = computed(() => match.value?.score_b ?? 0)
-const gameScores     = computed(() => match.value?.game_scores ?? [])
-const gamesA         = computed(() => match.value?.games_a ?? 0)
-const gamesB         = computed(() => match.value?.games_b ?? 0)
+
+// Single-game win detection (client-side mirror of SQL logic)
+const isMatchWon = computed(() => {
+  const a = currentScoreA.value, b = currentScoreB.value
+  return (a >= 21 && a - b >= 2) || a === 30 ||
+         (b >= 21 && b - a >= 2) || b === 30
+})
+const matchWinner = computed(() => {
+  const a = currentScoreA.value, b = currentScoreB.value
+  if ((a >= 21 && a - b >= 2) || a === 30) return 'A'
+  if ((b >= 21 && b - a >= 2) || b === 30) return 'B'
+  return null
+})
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 async function loadMatch() {
@@ -130,7 +140,7 @@ function handleNewPoint(point) {
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 async function scoreByPlayer(playerId) {
-  if (!isManager() || match.value?.status !== 'active' || !playerId) return
+  if (!isManager() || match.value?.status !== 'active' || !playerId || isMatchWon.value) return
   tapping.value = playerId
   setTimeout(() => { tapping.value = null }, 300)
   const { data, error: err } = await supabase.rpc('add_live_point_v2', {
@@ -138,9 +148,13 @@ async function scoreByPlayer(playerId) {
     p_scored_by_player: playerId
   })
   if (!err && data) {
-    match.value = { ...match.value, ...data }
-    if (data.game_won) {
-      flashAnnouncement(`Game ${(match.value.current_game - 1)} won by Side ${data.winner_side}!`)
+    match.value = { ...match.value, score_a: data.score_a, score_b: data.score_b,
+      serving_player: data.serving_player, serving_side: data.serving_side }
+    if (data.match_won) {
+      const winnerName = data.winner_side === 'A'
+        ? sideAPlayers.value.map(p => p.name).join(' & ')
+        : sideBPlayers.value.map(p => p.name).join(' & ')
+      flashAnnouncement(`🏆 ${winnerName} wins!`)
     }
   }
 }
@@ -229,34 +243,18 @@ onUnmounted(() => {
   <div v-else class="h-screen flex flex-col bg-[#eef4ff] select-none overflow-hidden">
 
     <!-- Score header (dark navy) -->
-    <div class="bg-[#0d1b2a] text-white px-3 py-2 flex items-center gap-2 shrink-0">
+    <div class="bg-[#0d1b2a] text-white px-3 py-2 flex items-center gap-3 shrink-0">
       <!-- Side B (left) -->
       <div class="flex-1 text-right">
-        <div class="text-xs text-slate-400 truncate">{{ sideBPlayers.map(p => p.name).join(' / ') }}</div>
-        <div class="flex items-end justify-end gap-2">
-          <span v-for="(g, i) in gameScores" :key="i" class="text-xs text-slate-500">{{ g.b }}</span>
-          <span class="text-3xl font-bold text-violet-400">{{ currentScoreB }}</span>
-        </div>
+        <div class="text-[11px] text-slate-400 truncate mb-0.5">{{ sideBPlayers.map(p => p.name).join(' / ') }}</div>
+        <span class="text-4xl font-black text-violet-400 leading-none">{{ currentScoreB }}</span>
       </div>
-
-      <!-- Center: game indicator + game dots -->
-      <div class="flex flex-col items-center shrink-0 px-2">
-        <div class="text-xs text-slate-400">Game {{ match?.current_game ?? 1 }}</div>
-        <div class="flex gap-1 mt-1">
-          <span v-for="g in (gamesA + gamesB + 1)" :key="g"
-                class="w-2 h-2 rounded-full"
-                :class="g <= gamesA ? 'bg-cyan-400' : g <= gamesA + gamesB ? 'bg-violet-400' : 'bg-slate-600'">
-          </span>
-        </div>
-      </div>
-
+      <!-- Center divider -->
+      <div class="text-slate-500 text-xl font-bold shrink-0">–</div>
       <!-- Side A (right) -->
       <div class="flex-1 text-left">
-        <div class="text-xs text-slate-400 truncate">{{ sideAPlayers.map(p => p.name).join(' / ') }}</div>
-        <div class="flex items-end justify-start gap-2">
-          <span class="text-3xl font-bold text-cyan-400">{{ currentScoreA }}</span>
-          <span v-for="(g, i) in gameScores" :key="i" class="text-xs text-slate-500">{{ g.a }}</span>
-        </div>
+        <div class="text-[11px] text-slate-400 truncate mb-0.5">{{ sideAPlayers.map(p => p.name).join(' / ') }}</div>
+        <span class="text-4xl font-black text-cyan-400 leading-none">{{ currentScoreA }}</span>
       </div>
     </div>
 
@@ -275,7 +273,7 @@ onUnmounted(() => {
     <div class="flex-1 flex items-stretch p-2 gap-2 min-h-0">
 
       <!-- Left rail: Side B score tap -->
-      <button @click="scoreBySide('B')" :disabled="!isManager() || match?.status !== 'active'"
+      <button @click="scoreBySide('B')" :disabled="!isManager() || match?.status !== 'active' || isMatchWon"
               class="w-12 flex flex-col items-center justify-center rounded-xl bg-violet-900/20 border border-violet-500/30 shrink-0 transition-all"
               :class="!isManager() ? 'opacity-50 cursor-default' : 'active:bg-violet-900/40'">
         <span class="text-violet-400 text-xs font-medium">+1</span>
@@ -491,6 +489,25 @@ onUnmounted(() => {
           </div>
         </Transition>
 
+        <!-- Match Won overlay — blocks court, prompts to record -->
+        <div v-if="isMatchWon && isManager() && match?.status === 'active'"
+             class="absolute inset-0 flex flex-col items-center justify-center z-20"
+             style="background:rgba(0,0,0,0.72); backdrop-filter:blur(2px)">
+          <div class="text-5xl mb-3">🏆</div>
+          <div class="text-white text-xl font-black mb-1">
+            {{ matchWinner === 'A' ? sideAPlayers.map(p=>p.name).join(' & ') : sideBPlayers.map(p=>p.name).join(' & ') }}
+          </div>
+          <div class="text-slate-300 text-sm mb-6">
+            Wins! &nbsp;{{ currentScoreA }} – {{ currentScoreB }}
+          </div>
+          <button class="btn-success text-base px-8 py-3 font-bold" @click="showFinishModal = true">
+            ✅ Record Match
+          </button>
+          <button class="mt-3 text-slate-400 text-xs underline" @click="showCancelModal = true">
+            Cancel match
+          </button>
+        </div>
+
         <!-- Spectator badge -->
         <div v-if="!isManager()"
              class="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white/70 text-xs px-3 py-1 rounded-full">
@@ -499,7 +516,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Right rail: Side A score tap -->
-      <button @click="scoreBySide('A')" :disabled="!isManager() || match?.status !== 'active'"
+      <button @click="scoreBySide('A')" :disabled="!isManager() || match?.status !== 'active' || isMatchWon"
               class="w-12 flex flex-col items-center justify-center rounded-xl bg-cyan-900/20 border border-cyan-500/30 shrink-0 transition-all"
               :class="!isManager() ? 'opacity-50 cursor-default' : 'active:bg-cyan-900/40'">
         <span class="text-cyan-400 text-xs font-medium">+1</span>
@@ -535,15 +552,7 @@ onUnmounted(() => {
         <div class="card w-full max-w-sm p-6">
           <h3 class="font-semibold text-lg mb-2">Finish &amp; Record Match?</h3>
           <p class="text-slate-500 text-sm mb-4">
-            <template v-if="gamesA > 0 || gamesB > 0">
-              Games won: Side A <strong>{{ gamesA }}</strong> – <strong>{{ gamesB }}</strong> Side B
-              <span v-if="currentScoreA > 0 || currentScoreB > 0">
-                · Current game {{ currentScoreA }}–{{ currentScoreB }}
-              </span>
-            </template>
-            <template v-else>
-              Final score: Side B {{ currentScoreB }} – {{ currentScoreA }} Side A
-            </template>
+            Final score: Side B {{ currentScoreB }} – {{ currentScoreA }} Side A
           </p>
           <p v-if="finishError" class="text-rose-500 text-xs">{{ finishError }}</p>
           <div class="flex gap-3">
