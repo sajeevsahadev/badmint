@@ -343,6 +343,22 @@ async function pickFacility(fac) {
   await createSchedule(fac.id, null)
 }
 
+// ── Cancel Event ──
+const showCancelEventConfirm = ref(false)
+const cancellingEvent        = ref(false)
+
+async function cancelEvent() {
+  const schedId = selectedSchedule.value?.id
+  if (!schedId) return
+  cancellingEvent.value = true
+  const { error } = await supabase.from('club_schedule').delete().eq('id', schedId)
+  cancellingEvent.value = false
+  if (error) { scheduleError.value = error.message; return }
+  showCancelEventConfirm.value = false
+  showDateModal.value = false
+  await loadMonthSchedules()
+}
+
 async function useCustomVenue() {
   const name = newFacName.value.trim()
   if (!name) return
@@ -616,6 +632,12 @@ watch(currentClub, async () => {
                     {{ showInvitePanel ? '✕ Close' : '📢 Invite' }}
                   </button>
                   <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
+                </div>
+                <div v-if="isManager()" class="mt-2">
+                  <button class="w-full text-xs text-rose-500 hover:text-rose-700 py-1.5 rounded-lg hover:bg-rose-50 transition"
+                          @click="showCancelEventConfirm = true">
+                    🗑 Cancel this event
+                  </button>
                 </div>
 
                 <!-- Invite / share panel -->
@@ -1027,6 +1049,31 @@ watch(currentClub, async () => {
               </span>
             </div>
             </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Cancel Event confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showCancelEventConfirm"
+           class="fixed inset-0 bg-black/50 flex items-end justify-center z-[60] p-4">
+        <div class="card w-full max-w-sm p-6">
+          <div class="text-2xl mb-2">🗑</div>
+          <h3 class="font-semibold text-lg mb-1">Cancel this event?</h3>
+          <p class="text-slate-500 text-sm mb-5">
+            This will delete the scheduled event for <strong>{{ selectedDateLabel }}</strong>,
+            including all poll votes and attendees. This cannot be undone.
+          </p>
+          <div class="flex gap-3">
+            <button class="btn-ghost flex-1" :disabled="cancellingEvent"
+                    @click="showCancelEventConfirm = false">
+              Keep Event
+            </button>
+            <button class="btn-danger flex-1" :disabled="cancellingEvent"
+                    @click="cancelEvent">
+              {{ cancellingEvent ? 'Deleting…' : 'Yes, Cancel Event' }}
+            </button>
           </div>
         </div>
       </div>
