@@ -119,6 +119,8 @@ function subscribeRealtime() {
 }
 
 // ── Announcement ──────────────────────────────────────────────────────────────
+const suppressNextPointAnnouncement = ref(false)
+
 function flashAnnouncement(text) {
   if (announcementTimer.value) clearTimeout(announcementTimer.value)
   announcement.value = text
@@ -126,6 +128,11 @@ function flashAnnouncement(text) {
 }
 
 function handleNewPoint(point) {
+  // Skip generic "Point" flash if a win announcement was just issued locally
+  if (suppressNextPointAnnouncement.value) {
+    suppressNextPointAnnouncement.value = false
+    return
+  }
   const a = point.score_a_after
   const b = point.score_b_after
   let msg = point.side === 'A' ? 'Point — Side A' : 'Point — Side B'
@@ -151,6 +158,7 @@ async function scoreByPlayer(playerId) {
     match.value = { ...match.value, score_a: data.score_a, score_b: data.score_b,
       serving_player: data.serving_player, serving_side: data.serving_side }
     if (data.match_won) {
+      suppressNextPointAnnouncement.value = true
       const winnerName = data.winner_side === 'A'
         ? sideAPlayers.value.map(p => p.name).join(' & ')
         : sideBPlayers.value.map(p => p.name).join(' & ')
@@ -184,7 +192,6 @@ const finishing = ref(false)
 const finishError = ref('')
 
 async function finishMatch() {
-  showFinishModal.value = false
   finishing.value = true
   finishError.value = ''
   const { data: matchId, error: err } = await supabase.rpc('finish_live_match', {
@@ -193,6 +200,7 @@ async function finishMatch() {
   })
   finishing.value = false
   if (err) { finishError.value = err.message; return }
+  showFinishModal.value = false
   if (currentClub.value) {
     const playedIds = [...(match.value?.side_a ?? []), ...(match.value?.side_b ?? [])]
     supabase.rpc('update_rotation_stats', {
@@ -339,7 +347,7 @@ onUnmounted(() => {
 
           <!-- B0: top-left service box (cx=15, cy=35) -->
           <g @click="scoreByPlayer(sideBPlayers[0]?.id)"
-             :style="isManager() && match?.status === 'active' && sideBPlayers[0] ? 'cursor:pointer' : 'cursor:default'"
+             :style="isManager() && match?.status === 'active' && !isMatchWon && sideBPlayers[0] ? 'cursor:pointer' : 'cursor:default'"
              style="transition: opacity 0.15s">
             <!-- tap flash zone -->
             <rect x="0" y="0" width="30.5" height="67" fill="transparent"
@@ -377,7 +385,7 @@ onUnmounted(() => {
 
           <!-- B1: top-right service box (cx=46, cy=35) -->
           <g @click="scoreByPlayer(sideBPlayers[1]?.id)"
-             :style="isManager() && match?.status === 'active' && sideBPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
+             :style="isManager() && match?.status === 'active' && !isMatchWon && sideBPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
             <rect x="30.5" y="0" width="30.5" height="67" fill="transparent"
                   :fill-opacity="tapping === sideBPlayers[1]?.id ? 0.18 : 0"
                   style="fill: #a855f7"/>
@@ -410,7 +418,7 @@ onUnmounted(() => {
 
           <!-- A0: bottom-right service box (cx=46, cy=99) -->
           <g @click="scoreByPlayer(sideAPlayers[0]?.id)"
-             :style="isManager() && match?.status === 'active' && sideAPlayers[0] ? 'cursor:pointer' : 'cursor:default'">
+             :style="isManager() && match?.status === 'active' && !isMatchWon && sideAPlayers[0] ? 'cursor:pointer' : 'cursor:default'">
             <rect x="30.5" y="67" width="30.5" height="67" fill="transparent"
                   :fill-opacity="tapping === sideAPlayers[0]?.id ? 0.18 : 0"
                   style="fill: #0891b2"/>
@@ -441,7 +449,7 @@ onUnmounted(() => {
 
           <!-- A1: bottom-left service box (cx=15, cy=99) -->
           <g @click="scoreByPlayer(sideAPlayers[1]?.id)"
-             :style="isManager() && match?.status === 'active' && sideAPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
+             :style="isManager() && match?.status === 'active' && !isMatchWon && sideAPlayers[1] ? 'cursor:pointer' : 'cursor:default'">
             <rect x="0" y="67" width="30.5" height="67" fill="transparent"
                   :fill-opacity="tapping === sideAPlayers[1]?.id ? 0.18 : 0"
                   style="fill: #0891b2"/>
@@ -527,8 +535,9 @@ onUnmounted(() => {
     <!-- Action bar -->
     <div class="flex items-center gap-3 px-4 py-3 bg-white border-t border-slate-200 shrink-0">
       <div v-if="isManager()" class="flex flex-col items-start">
-        <button @click="undoPoint"
-                class="btn-ghost flex items-center gap-1.5 text-sm">
+        <button @click="undoPoint" :disabled="isMatchWon"
+                class="btn-ghost flex items-center gap-1.5 text-sm"
+                :class="isMatchWon ? 'opacity-40 cursor-default' : ''">
           ↩ Undo
         </button>
         <span v-if="undoError" class="text-rose-500 text-[10px] mt-0.5">{{ undoError }}</span>

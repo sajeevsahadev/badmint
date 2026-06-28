@@ -51,13 +51,9 @@ BEGIN
     v_new_b := v_new_b + 1;
   END IF;
 
-  -- Serve rotation: scorer's side retains/gains serve
+  -- Serve rotation: the player who scored becomes the server
   v_srv_side := v_side;
-  IF v_side = 'A' THEN
-    v_new_srv := p_scored_by_player;
-  ELSE
-    v_new_srv := p_scored_by_player;
-  END IF;
+  v_new_srv  := p_scored_by_player;
 
   -- Win detection: ≥21 with 2-point lead, or exactly 30
   IF (v_new_a >= 21 AND v_new_a - v_new_b >= 2) OR v_new_a = 30 THEN
