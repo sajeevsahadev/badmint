@@ -15,6 +15,7 @@ const b = ref('')
 const h2h   = ref(null)
 const pairs = ref([])
 const ranks = ref({})
+const posRank = ref({})
 
 async function load() {
   if (!currentClub.value) return
@@ -26,6 +27,10 @@ async function load() {
   ])
   players.value = await withNicknames(pl ?? [])
   ranks.value = Object.fromEntries((lb ?? []).map(r => [r.id, r]))
+  // Positional rank within the games>0 board (matches /scoreboard), not raw club_rank
+  const ordered = (lb ?? []).filter(r => (r.games ?? 0) > 0)
+    .sort((x, y) => (x.club_rank ?? 0) - (y.club_rank ?? 0))
+  posRank.value = Object.fromEntries(ordered.map((r, i) => [r.id, i + 1]))
   pairs.value = bp ?? []
   loadAvatars(pairs.value.flatMap(p => [p.p1_user_id, p.p2_user_id]))
 }
@@ -56,7 +61,7 @@ const rB = computed(() => ranks.value[b.value])
 const statRows = computed(() => {
   if (!rA.value || !rB.value) return []
   return [
-    { label: 'Rank',     vA: '#' + rA.value.club_rank,  vB: '#' + rB.value.club_rank, betterLow: true },
+    { label: 'Rank',     vA: '#' + (posRank.value[a.value] ?? rA.value.club_rank),  vB: '#' + (posRank.value[b.value] ?? rB.value.club_rank), betterLow: true },
     { label: 'Points',   vA: rA.value.composite,        vB: rB.value.composite },
     { label: 'Elo',      vA: rA.value.elo,              vB: rB.value.elo },
     { label: 'Win %',    vA: rA.value.win_pct + '%',    vB: rB.value.win_pct + '%' },
