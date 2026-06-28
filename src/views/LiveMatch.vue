@@ -88,11 +88,16 @@ async function loadMatch() {
         })
         if (profiles) {
           const aMap = {}
+          const resolvedNames = { ...nameMap }
           profiles.forEach(prof => {
             const playerId = userIdToPlayerId[prof.user_id]
-            if (playerId && prof.avatar_url) aMap[playerId] = prof.avatar_url
+            if (!playerId) return
+            if (prof.avatar_url) aMap[playerId] = prof.avatar_url
+            // Nickname-first, same as the rest of the app (withNicknames/resolve_public_nickname)
+            if (prof.nickname) resolvedNames[playerId] = prof.nickname
           })
           avatarMap.value = aMap
+          playerNames.value = resolvedNames
         }
       }
     }
@@ -191,12 +196,20 @@ async function undoPoint() {
 const finishing = ref(false)
 const finishError = ref('')
 
+// Auto match name from player initials, same format as AddMatch ("AR+AV vs SA+DE")
+const autoMatchName = computed(() => {
+  const a = sideAPlayers.value, b = sideBPlayers.value
+  if (a.length < 2 || b.length < 2) return null
+  const abbr = p => (p.name || '??').slice(0, 2).toUpperCase()
+  return `${abbr(a[0])}+${abbr(a[1])} vs ${abbr(b[0])}+${abbr(b[1])}`
+})
+
 async function finishMatch() {
   finishing.value = true
   finishError.value = ''
   const { data: matchId, error: err } = await supabase.rpc('finish_live_match', {
     p_live_match_id: liveId,
-    p_display_name:  null
+    p_display_name:  autoMatchName.value
   })
   finishing.value = false
   if (err) { finishError.value = err.message; return }
