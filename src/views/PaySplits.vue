@@ -312,6 +312,8 @@ function myContrib(exp) {
 const showLedger = ref(false)
 const shortDate = d => new Date(String(d).includes('T') || String(d).includes(' ') ? d : d + 'T00:00:00')
   .toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
+// Compact number for the ledger's phone-width columns (no "AED " prefix)
+const ledgerNum = n => (n < 0 ? '−' : '') + Math.abs(n).toFixed(2)
 
 const myLedger = computed(() => {
   const mid = myPlayer.value?.id
@@ -1257,78 +1259,64 @@ const categoryBreakdown = computed(() => {
 
         <div v-if="showLedger" class="px-4 pb-4 fade-up">
           <p class="text-[11px] text-slate-400 mb-2 leading-relaxed">
-            Impact = what you paid (or your wallet money the pool spent) − your share.
+            All amounts in AED. Impact = what you paid (or your wallet money the pool spent) − your share;
+            below it, <span class="font-semibold">=</span> is your running balance.
             Wallet top-ups are not debts; they're credited back as the pool spends them.
           </p>
-          <div class="overflow-x-auto -mx-1">
-            <table class="w-full text-xs min-w-[420px]">
-              <thead>
-                <tr class="text-left text-slate-400 border-b border-[rgba(15,23,42,0.08)]">
-                  <th class="py-2 px-1 font-medium">Date</th>
-                  <th class="py-2 px-1 font-medium">Transaction</th>
-                  <th class="py-2 px-1 font-medium text-right">Impact</th>
-                  <th class="py-2 px-1 font-medium text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                <!-- Earlier entries collapsed — statement style -->
-                <tr v-if="ledgerView.hidden">
-                  <td colspan="4" class="py-1">
-                    <div class="flex gap-2">
-                      <button class="flex-1 text-[11px] font-semibold py-1.5 rounded-lg transition text-neon hover:bg-[rgba(0,180,216,0.06)]"
-                        @click="ledgerVisible += LEDGER_PAGE">
-                        ⤒ Load {{ Math.min(LEDGER_PAGE, ledgerView.hidden) }} earlier
-                      </button>
-                      <button class="text-[11px] py-1.5 px-3 rounded-lg transition text-slate-400 hover:text-neon"
-                        @click="ledgerVisible = myLedger.rows.length">
-                        Show all ({{ ledgerView.hidden }})
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                <tr v-if="ledgerView.hidden" class="border-b border-[rgba(15,23,42,0.08)] align-top">
-                  <td class="py-2 px-1 text-slate-400">…</td>
-                  <td class="py-2 px-1 text-slate-500 italic">
-                    Balance brought forward
-                    <div class="text-[10px] text-slate-400 not-italic mt-0.5">{{ ledgerView.hidden }} earlier {{ ledgerView.hidden === 1 ? 'entry' : 'entries' }} above</div>
-                  </td>
-                  <td></td>
-                  <td class="py-2 px-1 text-right whitespace-nowrap font-bold"
-                    :class="ledgerView.broughtForward >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
-                    {{ aed(ledgerView.broughtForward) }}
-                  </td>
-                </tr>
 
-                <tr v-for="r in ledgerView.rows" :key="r.key"
-                  class="border-b border-[rgba(15,23,42,0.04)] align-top">
-                  <td class="py-2 px-1 text-slate-400 whitespace-nowrap">{{ r.dateLabel }}</td>
-                  <td class="py-2 px-1">
-                    <div class="text-slate-600 font-medium">{{ r.title }}</div>
-                    <div v-if="r.sub" class="text-[10px] text-slate-400 mt-0.5">{{ r.sub }}</div>
-                  </td>
-                  <td class="py-2 px-1 text-right whitespace-nowrap font-semibold"
-                    :class="r.impact > 0.005 ? 'text-emerald-500' : r.impact < -0.005 ? 'text-rose-400' : 'text-slate-400'">
-                    {{ r.impact > 0.005 ? '+' : '' }}{{ Math.abs(r.impact) < 0.005 ? '—' : aed(r.impact) }}
-                  </td>
-                  <td class="py-2 px-1 text-right whitespace-nowrap font-bold"
-                    :class="r.balance >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
-                    {{ aed(r.balance) }}
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr class="border-t-2 border-[rgba(15,23,42,0.12)]">
-                  <td colspan="2" class="py-2.5 px-1 font-bold text-slate-700">
-                    {{ myLedger.final >= -0.005 ? 'You get back' : 'You owe' }}
-                  </td>
-                  <td></td>
-                  <td class="py-2.5 px-1 text-right font-black text-sm whitespace-nowrap"
-                    :class="myLedger.final >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
-                    {{ aed(Math.abs(myLedger.final)) }}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <!-- Earlier entries collapsed — statement style -->
+          <div v-if="ledgerView.hidden" class="flex gap-2 mb-1">
+            <button class="flex-1 text-[11px] font-semibold py-1.5 rounded-lg transition text-neon hover:bg-[rgba(0,180,216,0.06)]"
+              @click="ledgerVisible += LEDGER_PAGE">
+              ⤒ Load {{ Math.min(LEDGER_PAGE, ledgerView.hidden) }} earlier
+            </button>
+            <button class="text-[11px] py-1.5 px-3 rounded-lg transition text-slate-400 hover:text-neon"
+              @click="ledgerVisible = myLedger.rows.length">
+              Show all ({{ ledgerView.hidden }})
+            </button>
+          </div>
+          <div v-if="ledgerView.hidden"
+            class="flex items-start gap-2 py-2 border-b border-[rgba(15,23,42,0.08)]">
+            <div class="w-11 shrink-0 text-[10px] text-slate-400 pt-0.5">…</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs text-slate-500 italic">Balance brought forward</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">{{ ledgerView.hidden }} earlier {{ ledgerView.hidden === 1 ? 'entry' : 'entries' }} above</div>
+            </div>
+            <div class="shrink-0 text-right text-xs font-bold pt-0.5"
+              :class="ledgerView.broughtForward >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+              = {{ ledgerNum(ledgerView.broughtForward) }}
+            </div>
+          </div>
+
+          <!-- Ledger rows — phone-first stacked layout -->
+          <div v-for="r in ledgerView.rows" :key="r.key"
+            class="flex items-start gap-2 py-2 border-b border-[rgba(15,23,42,0.04)]">
+            <div class="w-11 shrink-0 text-[10px] text-slate-400 pt-0.5 leading-tight">{{ r.dateLabel }}</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs text-slate-600 font-medium leading-snug">{{ r.title }}</div>
+              <div v-if="r.sub" class="text-[10px] text-slate-400 leading-snug mt-0.5">{{ r.sub }}</div>
+            </div>
+            <div class="shrink-0 text-right">
+              <div class="text-xs font-semibold whitespace-nowrap"
+                :class="r.impact > 0.005 ? 'text-emerald-500' : r.impact < -0.005 ? 'text-rose-400' : 'text-slate-400'">
+                {{ Math.abs(r.impact) < 0.005 ? '—' : (r.impact > 0 ? '+' : '') + ledgerNum(r.impact) }}
+              </div>
+              <div class="text-[10px] font-bold whitespace-nowrap mt-0.5"
+                :class="r.balance >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+                = {{ ledgerNum(r.balance) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Total -->
+          <div class="flex items-center justify-between pt-2.5 mt-0.5 border-t-2 border-[rgba(15,23,42,0.12)]">
+            <span class="text-xs font-bold text-slate-700">
+              {{ myLedger.final >= -0.005 ? 'You get back' : 'You owe' }}
+            </span>
+            <span class="text-sm font-black whitespace-nowrap"
+              :class="myLedger.final >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+              {{ aed(Math.abs(myLedger.final)) }}
+            </span>
           </div>
         </div>
       </div>
