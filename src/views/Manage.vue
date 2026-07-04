@@ -180,21 +180,50 @@ function mailtoLink() {
   return `mailto:${inviteEmail.value}?subject=${subj}&body=${body}`
 }
 
-// ── Guest player invite (link existing roster entry to a Gmail account) ──
+// ── Guest player linking (existing roster entry ↔ a Gmail account) ──
+// 1) If the email already has a B360 account → link instantly, no invite/approval.
+// 2) Otherwise fall back to generating a 7-day invite link they can claim.
+const guestLinkSuccess = ref(null)
+
 async function sendGuestInvite() {
   if (!guestInviteEmail.value.trim() || !guestInviteId.value) return
   guestInviteBusy.value = true; guestInviteNote.value = null; guestInviteLink.value = ''
+  const email    = guestInviteEmail.value.trim()
+  const playerId = guestInviteId.value
+
+  // Step 1: try direct link (registered users)
+  const { data: linkRes, error: linkErr } = await supabase.rpc('link_guest_player', {
+    p_club_id:   currentClub.value.club_id,
+    p_player_id: playerId,
+    p_email:     email,
+  })
+  if (linkErr) {
+    guestInviteBusy.value = false
+    guestInviteNote.value = { ok: false, t: linkErr.message }
+    return
+  }
+  if (linkRes?.linked) {
+    const player = guestPlayers.value.find(p => p.id === playerId)
+    guestLinkSuccess.value =
+      `✅ Linked! ${email} now owns "${player?.display_name ?? 'this player'}" — Elo history and all. No approval needed.`
+    guestInviteBusy.value = false
+    guestInviteId.value   = null
+    await load()   // player moves from Guests to Members
+    return
+  }
+
+  // Step 2: not registered yet → generate the classic invite link
   const { data, error } = await supabase.rpc('invite_guest_player', {
     p_club_id:   currentClub.value.club_id,
-    p_player_id: guestInviteId.value,
-    p_email:     guestInviteEmail.value.trim(),
+    p_player_id: playerId,
+    p_email:     email,
   })
   guestInviteBusy.value = false
   if (error) {
     guestInviteNote.value = { ok: false, t: error.message }
   } else {
     guestInviteLink.value = `${window.location.origin}/join?token=${data}`
-    guestInviteNote.value = { ok: true, t: 'Link generated! Share it so they can claim their Elo history.' }
+    guestInviteNote.value = { ok: true, t: `${email} hasn't signed up yet — share this link so they can sign in and claim their Elo history.` }
   }
 }
 
@@ -540,6 +569,13 @@ async function leaveClub(clubId) {
       <span v-else class="text-xs shrink-0">{{ roleLabel(m.role) }}</span>
     </div>
 
+    <!-- Guest link success (shown even after the row moves to Members) -->
+    <div v-if="guestLinkSuccess"
+      class="mt-2 text-xs px-3 py-2 rounded-lg text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-start gap-2 fade-up">
+      <span class="flex-1">{{ guestLinkSuccess }}</span>
+      <button class="text-emerald-400 hover:text-emerald-600 shrink-0" @click="guestLinkSuccess = null">✕</button>
+    </div>
+
     <!-- Guest players (added manually, no Google account linked yet) -->
     <div v-if="guestPlayers.length" class="mt-1 pt-3 border-t border-[rgba(15,23,42,0.06)]">
       <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Guest players — no account linked</div>
@@ -563,7 +599,8 @@ async function leaveClub(clubId) {
           class="mb-3 p-3 rounded-xl fade-up"
           style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12)">
           <p class="text-[11px] text-slate-400 mb-2">
-            Enter their Gmail — they'll get a link to sign in and claim their Elo history.
+            Enter their Gmail — if they've already signed up, they're linked instantly.
+            Otherwise you'll get an invite link to share.
           </p>
           <div class="flex gap-2 mb-2">
             <input v-model="guestInviteEmail" type="email" placeholder="their@gmail.com"
@@ -572,7 +609,7 @@ async function leaveClub(clubId) {
             <button class="btn-primary px-3 text-sm shrink-0"
               :disabled="guestInviteBusy || !guestInviteEmail.trim()"
               @click="sendGuestInvite">
-              {{ guestInviteBusy ? '…' : 'Generate' }}
+              {{ guestInviteBusy ? '…' : 'Link' }}
             </button>
           </div>
           <div v-if="guestInviteNote" class="text-xs mb-2 px-2 py-1 rounded-lg"
