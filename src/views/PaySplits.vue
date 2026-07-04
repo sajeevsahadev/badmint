@@ -278,7 +278,16 @@ function myContrib(exp) {
   if (!mid) return null
   const part = exp.participants?.find(p => p.player_id === mid)
   if (exp.paid_from_wallet) {
-    return part ? { type: 'wallet', net: -Number(part.share) } : null
+    // Consumption-aware: credit whatever FIFO drew from MY wallet top-ups for
+    // this expense, minus my share — same math as the Balance tab's walletNets.
+    // Without this, a wallet expense funded by your own money still showed
+    // "you borrowed <share>", contradicting the Balance tab.
+    const funded = (walletExpenseContributors.value[exp.id] ?? [])
+      .filter(c => c.player_id === mid)
+      .reduce((s, c) => s + Number(c.amount), 0)
+    if (!part && funded < 0.01) return null
+    const share = part ? Number(part.share) : 0
+    return { type: 'wallet', net: Math.round((funded - share) * 100) / 100 }
   }
   // Multi-payer
   if ((exp.payers?.length ?? 0) > 1) {
@@ -321,7 +330,7 @@ const playerBalanceList = computed(() => {
     .sort((a, b) => {
       if (myPlayer.value?.id === a.id) return -1
       if (myPlayer.value?.id === b.id) return 1
-      return Math.abs(b.net) - Math.abs(a.net)
+      return a.name.localeCompare(b.name)
     })
 })
 
@@ -1075,7 +1084,7 @@ const categoryBreakdown = computed(() => {
             <div class="text-xs text-slate-400 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
               <span v-if="exp.participants?.length">
-                · {{ aed(Number(exp.amount) / exp.participants.length) }} each
+                · ≈{{ aed(Number(exp.amount) / exp.participants.length) }} each
               </span>
             </div>
             <div v-if="exp.participants?.length" class="flex flex-wrap gap-1.5 mb-3">
