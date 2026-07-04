@@ -287,7 +287,7 @@ function myContrib(exp) {
       .reduce((s, c) => s + Number(c.amount), 0)
     if (!part && funded < 0.01) return null
     const share = part ? Number(part.share) : 0
-    return { type: 'wallet', net: Math.round((funded - share) * 100) / 100 }
+    return { type: 'wallet', net: Math.round((funded - share) * 100) / 100, paid: Math.round(funded * 100) / 100, share }
   }
   // Multi-payer
   if ((exp.payers?.length ?? 0) > 1) {
@@ -295,15 +295,62 @@ function myContrib(exp) {
     const paidAmt = myPayer ? Number(myPayer.amount) : 0
     const shareAmt = part ? Number(part.share) : 0
     if (!myPayer && !part) return null
-    return { type: paidAmt > 0 ? 'paid' : 'split', net: paidAmt - shareAmt }
+    return { type: paidAmt > 0 ? 'paid' : 'split', net: paidAmt - shareAmt, paid: paidAmt, share: shareAmt }
   }
   // Single payer
   const isPayer = exp.paid_player_id === mid
   if (!isPayer && !part) return null
-  if (isPayer && !part) return { type: 'paid', net: Number(exp.amount) }
-  if (isPayer &&  part) return { type: 'paid', net: Number(exp.amount) - Number(part.share) }
-  return { type: 'split', net: -Number(part.share) }
+  if (isPayer && !part) return { type: 'paid', net: Number(exp.amount), paid: Number(exp.amount), share: 0 }
+  if (isPayer &&  part) return { type: 'paid', net: Number(exp.amount) - Number(part.share), paid: Number(exp.amount), share: Number(part.share) }
+  return { type: 'split', net: -Number(part.share), paid: 0, share: Number(part.share) }
 }
+
+// ── My Ledger: every transaction affecting my balance, chronologically ──
+// Same math the Balance tab aggregates (opening + direct-pay nets + wallet
+// consumption nets), laid out as an auditable running-balance table.
+// Impact per row = (what I paid, or my wallet money the pool spent) − my share.
+const showLedger = ref(false)
+const shortDate = d => new Date(String(d).includes('T') || String(d).includes(' ') ? d : d + 'T00:00:00')
+  .toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
+
+const myLedger = computed(() => {
+  const mid = myPlayer.value?.id
+  if (!mid) return { rows: [], final: 0 }
+  const rows = []
+
+  const ob = openingBalances.value.find(o => o.player_id === mid)
+  if (ob && Math.abs(Number(ob.amount)) >= 0.005) {
+    rows.push({ key: 'opening', sort: '0', dateLabel: '—', title: 'Opening balance',
+      sub: 'carried over from your previous app', impact: Math.round(Number(ob.amount) * 100) / 100 })
+  }
+
+  ;(walletData.value.contributions ?? []).filter(c => c.player_id === mid).forEach(c => {
+    rows.push({ key: 'topup-' + c.id, sort: String(c.contributed_at ?? ''), dateLabel: shortDate(c.contributed_at),
+      title: `Wallet top-up · ${aed(Number(c.amount))}`,
+      sub: 'not a debt — credited back as the pool spends it', impact: 0 })
+  })
+
+  expenses.value.forEach(exp => {
+    const c = myContrib(exp)
+    if (!c) return
+    const paidLabel = exp.paid_from_wallet
+      ? (c.paid > 0 ? `your wallet money used ${aed(c.paid)}` : 'wallet-paid (others’ money)')
+      : (c.paid > 0 ? `you paid ${aed(c.paid)}` : null)
+    rows.push({
+      key: 'exp-' + exp.id,
+      sort: `${exp.expense_date}~${exp.created_at ?? ''}`,
+      dateLabel: shortDate(exp.expense_date),
+      title: `${exp.title} · ${aed(Number(exp.amount))}`,
+      sub: [paidLabel, c.share > 0 ? `your share ${aed(c.share)}` : null].filter(Boolean).join(' · '),
+      impact: c.net,
+    })
+  })
+
+  rows.sort((a, b) => a.sort.localeCompare(b.sort))
+  let bal = 0
+  rows.forEach(r => { bal = Math.round((bal + r.impact) * 100) / 100; r.balance = bal })
+  return { rows, final: bal }
+})
 
 // ── Balance tab list — derived from the active edge set ───────────────
 // "Club Pool" never gets its own row; pool edges appear inside player rows.
@@ -1180,6 +1227,67 @@ const categoryBreakdown = computed(() => {
         style="background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25); color:#fbbf24">
         ⚠️ Opening balances net to <strong>{{ aed(openingSum) }}</strong> instead of zero,
         so the group can't fully settle. Ask an admin to adjust them in the Expenses tab.
+      </div>
+
+      <!-- My Ledger — auditable running balance -->
+      <div v-if="myPlayer && myLedger.rows.length" class="card mb-3 overflow-hidden">
+        <button class="w-full flex items-center justify-between px-4 py-3 text-left"
+          @click="showLedger = !showLedger">
+          <div>
+            <span class="text-sm font-bold text-slate-700">📒 My Ledger</span>
+            <span class="text-[11px] text-slate-400 ml-2">how your balance is built, line by line</span>
+          </div>
+          <span class="text-xs text-slate-400 shrink-0">{{ showLedger ? 'Hide ▲' : 'Show ▼' }}</span>
+        </button>
+
+        <div v-if="showLedger" class="px-4 pb-4 fade-up">
+          <p class="text-[11px] text-slate-400 mb-2 leading-relaxed">
+            Impact = what you paid (or your wallet money the pool spent) − your share.
+            Wallet top-ups are not debts; they're credited back as the pool spends them.
+          </p>
+          <div class="overflow-x-auto -mx-1">
+            <table class="w-full text-xs min-w-[420px]">
+              <thead>
+                <tr class="text-left text-slate-400 border-b border-[rgba(15,23,42,0.08)]">
+                  <th class="py-2 px-1 font-medium">Date</th>
+                  <th class="py-2 px-1 font-medium">Transaction</th>
+                  <th class="py-2 px-1 font-medium text-right">Impact</th>
+                  <th class="py-2 px-1 font-medium text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in myLedger.rows" :key="r.key"
+                  class="border-b border-[rgba(15,23,42,0.04)] align-top">
+                  <td class="py-2 px-1 text-slate-400 whitespace-nowrap">{{ r.dateLabel }}</td>
+                  <td class="py-2 px-1">
+                    <div class="text-slate-600 font-medium">{{ r.title }}</div>
+                    <div v-if="r.sub" class="text-[10px] text-slate-400 mt-0.5">{{ r.sub }}</div>
+                  </td>
+                  <td class="py-2 px-1 text-right whitespace-nowrap font-semibold"
+                    :class="r.impact > 0.005 ? 'text-emerald-500' : r.impact < -0.005 ? 'text-rose-400' : 'text-slate-400'">
+                    {{ r.impact > 0.005 ? '+' : '' }}{{ Math.abs(r.impact) < 0.005 ? '—' : aed(r.impact) }}
+                  </td>
+                  <td class="py-2 px-1 text-right whitespace-nowrap font-bold"
+                    :class="r.balance >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+                    {{ aed(r.balance) }}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="border-t-2 border-[rgba(15,23,42,0.12)]">
+                  <td colspan="2" class="py-2.5 px-1 font-bold text-slate-700">
+                    {{ myLedger.final >= -0.005 ? 'You get back' : 'You owe' }}
+                  </td>
+                  <td></td>
+                  <td class="py-2.5 px-1 text-right font-black text-sm whitespace-nowrap"
+                    :class="myLedger.final >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+                    {{ aed(Math.abs(myLedger.final)) }}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
