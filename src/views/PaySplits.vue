@@ -352,6 +352,21 @@ const myLedger = computed(() => {
   return { rows, final: bal }
 })
 
+// Bank-statement pagination: render only the most recent N rows (the running
+// balance is computed over ALL rows above, so hiding older ones never changes
+// the numbers). "Balance brought forward" summarises the hidden rows; loading
+// earlier pages is instant since everything is already in memory.
+const LEDGER_PAGE = 50
+const ledgerVisible = ref(LEDGER_PAGE)
+watch(showLedger, open => { if (open) ledgerVisible.value = LEDGER_PAGE })
+
+const ledgerView = computed(() => {
+  const all = myLedger.value.rows
+  if (all.length <= ledgerVisible.value) return { rows: all, hidden: 0, broughtForward: null }
+  const start = all.length - ledgerVisible.value
+  return { rows: all.slice(start), hidden: start, broughtForward: all[start - 1].balance }
+})
+
 // ── Balance tab list — derived from the active edge set ───────────────
 // "Club Pool" never gets its own row; pool edges appear inside player rows.
 const playerBalanceList = computed(() => {
@@ -1256,7 +1271,35 @@ const categoryBreakdown = computed(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="r in myLedger.rows" :key="r.key"
+                <!-- Earlier entries collapsed — statement style -->
+                <tr v-if="ledgerView.hidden">
+                  <td colspan="4" class="py-1">
+                    <div class="flex gap-2">
+                      <button class="flex-1 text-[11px] font-semibold py-1.5 rounded-lg transition text-neon hover:bg-[rgba(0,180,216,0.06)]"
+                        @click="ledgerVisible += LEDGER_PAGE">
+                        ⤒ Load {{ Math.min(LEDGER_PAGE, ledgerView.hidden) }} earlier
+                      </button>
+                      <button class="text-[11px] py-1.5 px-3 rounded-lg transition text-slate-400 hover:text-neon"
+                        @click="ledgerVisible = myLedger.rows.length">
+                        Show all ({{ ledgerView.hidden }})
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="ledgerView.hidden" class="border-b border-[rgba(15,23,42,0.08)] align-top">
+                  <td class="py-2 px-1 text-slate-400">…</td>
+                  <td class="py-2 px-1 text-slate-500 italic">
+                    Balance brought forward
+                    <div class="text-[10px] text-slate-400 not-italic mt-0.5">{{ ledgerView.hidden }} earlier {{ ledgerView.hidden === 1 ? 'entry' : 'entries' }} above</div>
+                  </td>
+                  <td></td>
+                  <td class="py-2 px-1 text-right whitespace-nowrap font-bold"
+                    :class="ledgerView.broughtForward >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
+                    {{ aed(ledgerView.broughtForward) }}
+                  </td>
+                </tr>
+
+                <tr v-for="r in ledgerView.rows" :key="r.key"
                   class="border-b border-[rgba(15,23,42,0.04)] align-top">
                   <td class="py-2 px-1 text-slate-400 whitespace-nowrap">{{ r.dateLabel }}</td>
                   <td class="py-2 px-1">
