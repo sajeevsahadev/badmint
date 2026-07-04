@@ -29,7 +29,7 @@ const GROUPS = [
     ],
   },
   {
-    label: 'PaySplits',
+    label: 'Pay & Split',
     items: [
       { key: 'payment_reminders', label: 'Payment reminders & balance due' },
     ],

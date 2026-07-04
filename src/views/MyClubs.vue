@@ -46,9 +46,10 @@ function switchTo(c) {
 
         <!-- Club header -->
         <div class="flex items-center gap-3 p-4 pb-3">
-          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 overflow-hidden"
             :class="currentClub?.club_id === c.club_id ? 'bg-cyan-100' : 'bg-slate-100'">
-            🏸
+            <img v-if="c.clubs?.logo_url" :src="c.clubs.logo_url" alt="" class="w-full h-full object-cover" />
+            <template v-else>🏸</template>
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">

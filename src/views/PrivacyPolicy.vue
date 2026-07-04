@@ -21,7 +21,7 @@ const { user } = useAuth()
           <li>Your name, email and profile photo from Google when you sign in</li>
           <li>Anything you add yourself — nickname, phone, bio, gender</li>
           <li>Match results, Elo history and attendance for clubs you play in</li>
-          <li>PaySplits / Wallet records among your club's members</li>
+          <li>Pay & Split / Wallet records among your club's members</li>
           <li>Basic device info (browser, rough location via IP) and in-app activity, used for security and to keep the leaderboard accurate</li>
           <li>If you enable biometric app-lock: a device credential reference only — your fingerprint or face data never leaves your device and is never sent to us</li>
         </ul>
@@ -55,7 +55,7 @@ const { user } = useAuth()
           You can permanently delete your account and personal data from
           <RouterLink to="/profile" class="text-cyan-700 hover:underline">Profile → Danger Zone</RouterLink> —
           match history is anonymised rather than deleted outright so your club's rankings stay accurate,
-          and deletion is blocked while you're a club owner or have an unsettled PaySplits balance, so you can
+          and deletion is blocked while you're a club owner or have an unsettled Pay & Split balance, so you can
           resolve those first.
         </p>
       </section>

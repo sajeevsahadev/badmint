@@ -59,7 +59,7 @@ const story = [
     icon: '💸',
     chapter: 'After the game',
     title: 'Split the bill, not the friendship',
-    text: 'Court fee, shuttlecocks, water — someone always pays and someone always forgets. PaySplits divides every cost equally, and the shared Wallet lets players chip in upfront so nobody chases anybody.',
+    text: 'Court fee, shuttlecocks, water — someone always pays and someone always forgets. Pay & Split divides every cost equally, and the shared Wallet lets players chip in upfront so nobody chases anybody.',
     tag: 'Expense splitting & wallet',
   },
   {

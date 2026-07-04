@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { compressImageToDataUrl } from '../lib/imageCompress'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
@@ -66,6 +67,7 @@ async function load() {
     maps_url:         publicClub.maps_url,
     description:      publicClub.description,
     created_at:       publicClub.created_at,
+    logo_url:         publicClub.logo_url,
   }
 
   leaderboard.value = (lbRes.data ?? []).filter(p => p.games > 0)
@@ -138,6 +140,35 @@ async function saveRename() {
     renaming.value = false
   }
 }
+
+// ── Club logo (managers/owners) ──
+const logoInput = ref(null)
+const logoBusy  = ref(false)
+const logoNote  = ref(null)
+
+async function onLogoPick(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  logoBusy.value = true; logoNote.value = null
+  try {
+    const dataUrl = await compressImageToDataUrl(file)
+    const { error } = await supabase.rpc('update_club_logo', { p_club_id: clubId, p_logo: dataUrl })
+    if (error) throw error
+    club.value = { ...club.value, logo_url: dataUrl }
+  } catch (err) {
+    logoNote.value = err.message
+  }
+  logoBusy.value = false
+}
+
+async function removeLogo() {
+  logoBusy.value = true; logoNote.value = null
+  const { error } = await supabase.rpc('update_club_logo', { p_club_id: clubId, p_logo: null })
+  if (error) logoNote.value = error.message
+  else club.value = { ...club.value, logo_url: null }
+  logoBusy.value = false
+}
 </script>
 
 <template>
@@ -196,10 +227,21 @@ async function saveRename() {
     <!-- Club header -->
     <div class="card-neon p-5 mb-4 fade-up">
       <div class="flex items-start gap-4">
-        <!-- Club avatar -->
-        <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black text-slate-950 shrink-0"
-          style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
-          {{ initials(club.name) }}
+        <!-- Club avatar / logo -->
+        <div class="relative shrink-0">
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black text-slate-950 overflow-hidden"
+            style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
+            <img v-if="club.logo_url" :src="club.logo_url" alt="Club logo" class="w-full h-full object-cover" />
+            <template v-else>{{ initials(club.name) }}</template>
+          </div>
+          <button v-if="isManager" type="button"
+            class="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-white border border-slate-200 shadow flex items-center justify-center text-xs hover:scale-110 transition"
+            :title="club.logo_url ? 'Change club logo' : 'Add club logo'"
+            :disabled="logoBusy"
+            @click="logoInput.click()">
+            {{ logoBusy ? '⏳' : '📷' }}
+          </button>
+          <input ref="logoInput" type="file" accept="image/*" class="hidden" @change="onLogoPick" />
         </div>
         <div class="flex-1 min-w-0">
           <!-- Rename inline form -->
@@ -221,10 +263,16 @@ async function saveRename() {
               title="Rename club" @click="startRename">✏️</button>
           </div>
           <p v-if="renameNote" class="text-xs text-rose-400 mt-1">{{ renameNote }}</p>
+          <p v-if="logoNote" class="text-xs text-rose-400 mt-1">{{ logoNote }}</p>
 
-          <div class="flex flex-wrap gap-1.5 mt-1">
+          <div class="flex flex-wrap gap-1.5 mt-1 items-center">
             <span v-if="club.emirates" class="badge-member text-[9px]">{{ club.emirates }}</span>
             <span v-if="isMyClub" class="badge-approved text-[9px]">{{ myRole }}</span>
+            <button v-if="isManager && club.logo_url" type="button"
+              class="text-[10px] text-rose-400 hover:text-rose-300 transition leading-none"
+              :disabled="logoBusy" @click="removeLogo">
+              ✕ Remove logo
+            </button>
           </div>
           <p v-if="club.description" class="text-xs text-slate-400 mt-2 leading-relaxed">{{ club.description }}</p>
         </div>

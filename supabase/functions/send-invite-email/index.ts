@@ -95,7 +95,7 @@ serve(async (req: Request) => {
         🏆 <strong style="color:#0f172a;">Elo Rankings</strong> — updated automatically after every match
       </td></tr>
       <tr><td style="padding:11px 16px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">
-        ⚖️ <strong style="color:#0f172a;">PaySplits</strong> — split court costs equally in seconds
+        ⚖️ <strong style="color:#0f172a;">Pay & Split</strong> — split court costs equally in seconds
       </td></tr>
       <tr><td style="padding:11px 16px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">
         💰 <strong style="color:#0f172a;">Club Wallet</strong> — pre-fund and never chase payments again

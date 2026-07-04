@@ -95,7 +95,7 @@ function buildWelcomeHtml(name: string): string {
                     padding:20px 18px;">
                     <div style="font-size:24px;margin-bottom:10px;">💰</div>
                     <div style="font-size:14px;font-weight:700;color:#a855f7;margin-bottom:6px;">
-                      PaySplits & Wallet
+                      Pay & Split + Wallet
                     </div>
                     <div style="font-size:13px;color:#94a3b8;line-height:1.5;">
                       Split court costs equally. Track who owes what. No drama.

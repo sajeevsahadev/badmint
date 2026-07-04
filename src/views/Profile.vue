@@ -414,7 +414,7 @@ async function confirmDelete() {
                 <div class="font-bold text-slate-700 mb-2">What gets permanently deleted:</div>
                 <div>🗑️ Your profile (name, phone, bio)</div>
                 <div>🗑️ All club memberships &amp; join requests</div>
-                <div>🗑️ Your PaySplit expenses &amp; notes</div>
+                <div>🗑️ Your Pay & Split expenses &amp; notes</div>
                 <div>🗑️ Session &amp; activity history</div>
                 <div class="border-t border-slate-200 pt-2 mt-1 text-slate-500">
                   <div>✅ Match results stay (anonymised) so club rankings remain accurate</div>
@@ -430,7 +430,7 @@ async function confirmDelete() {
                   class="mt-0.5 w-4 h-4 rounded accent-rose-500 shrink-0"
                 />
                 <span class="text-xs text-slate-600 leading-relaxed">
-                  I understand this is <strong>permanent</strong>. I have settled all PaySplit
+                  I understand this is <strong>permanent</strong>. I have settled all Pay & Split
                   balances and no longer need this account.
                 </span>
               </label>

@@ -80,17 +80,17 @@ function buildExpenseHtml(opts: {
     <!-- CTA -->
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
     <tr><td align="center">
-      <a href="https://badminton360.app/paysplits"
+      <a href="https://badminton360.app/splits"
         style="display:inline-block;background:linear-gradient(135deg,#a855f7,#7c3aed);
                color:#fff;font-size:14px;font-weight:700;text-decoration:none;
                padding:13px 32px;border-radius:12px;letter-spacing:.3px;">
-        View PaySplits →
+        View Pay & Split →
       </a>
     </td></tr>
     </table>
 
     <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
-      Check the Balance tab in PaySplits to see who owes what.<br>
+      Check the Balance tab in Pay & Split to see who owes what.<br>
       <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">
         Manage email preferences
       </a>

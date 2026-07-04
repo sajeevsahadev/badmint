@@ -815,7 +815,7 @@ async function leaveClub(clubId) {
           <div class="space-y-1.5 text-xs text-slate-400">
             <p class="font-semibold text-slate-300 mb-1">The following will be permanently deleted:</p>
             <p>• All players and their Elo history</p>
-            <p>• All PaySplits expenses, wallet, and balances</p>
+            <p>• All Pay & Split expenses, wallet, and balances</p>
             <p>• All schedules, polls, and attendees</p>
             <p>• All join requests and invites</p>
             <p>• All facility bookings for this club</p>

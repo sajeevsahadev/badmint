@@ -500,7 +500,7 @@ function finish() {
               </div>
             </div>
             <h2 class="text-xl font-extrabold text-slate-800 mb-1">How does your group manage costs?</h2>
-            <p class="text-sm text-slate-500">We'll set up PaySplits to match your style.</p>
+            <p class="text-sm text-slate-500">We'll set up Pay & Split to match your style.</p>
           </div>
           <div class="px-6 flex flex-col gap-3 overflow-y-auto flex-1 pb-4">
             <button

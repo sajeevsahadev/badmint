@@ -93,7 +93,7 @@ const menuSections = [
     ]
   },
   {
-    label: 'PaySplits',
+    label: 'Pay & Split',
     items: [
       { to: '/splits?tab=activities', icon: '➕', label: 'Add Expenses' },
       { to: '/splits?tab=balance',    icon: '⚖️', label: 'See Balance' },
@@ -170,7 +170,7 @@ function onSwitch(e) {
 const nav = computed(() => [
   { to: '/dashboard', label: 'Home',      icon: '🏠' },
   { to: '/clubs',     label: 'My Clubs',  icon: '🏸' },
-  { to: '/splits',    label: 'PaySplits', icon: '💰' },
+  { to: '/splits',    label: 'Pay & Split', icon: '💰' },
   { to: '/schedule',  label: 'Schedule',  icon: '📅' },
   { to: '/manage',    label: 'Manage',    icon: '⚙️' },
 ])

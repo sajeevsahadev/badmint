@@ -43,16 +43,16 @@ const slides = [
   },
   {
     emoji: '⚖️',
-    title: 'Split Costs with PaySplits',
-    story: "The court cost AED 180 for 12 players. Dev opens PaySplits → Activities, adds the expense, selects everyone who played — the app divides it equally and shows exactly who owes who.",
-    tip: '→ Tap 💰 PaySplits → Activities → Add Expense.',
+    title: 'Split Costs with Pay & Split',
+    story: "The court cost AED 180 for 12 players. Dev opens Pay & Split → Activities, adds the expense, selects everyone who played — the app divides it equally and shows exactly who owes who.",
+    tip: '→ Tap 💰 Pay & Split → Activities → Add Expense.',
     color: 'cyan',
   },
   {
     emoji: '💰',
     title: 'The Wallet — No More "I\'ll Pay Later"',
     story: "Dev gets everyone to top up AED 50 into the club Wallet upfront. From now on, court fees just deduct from the pool automatically. No awkward chasing. No WhatsApp payment requests.",
-    tip: '→ PaySplits → Wallet tab → Add Contribution.',
+    tip: '→ Pay & Split → Wallet tab → Add Contribution.',
     color: 'amber',
   },
   {

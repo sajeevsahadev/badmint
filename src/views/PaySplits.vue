@@ -861,7 +861,7 @@ const categoryBreakdown = computed(() => {
   <div v-if="!currentClub && !loading" class="card p-10 text-center fade-up">
     <div class="text-4xl mb-3">💰</div>
     <p class="font-bold text-slate-600 text-lg mb-1">No club selected</p>
-    <p class="text-slate-400 text-sm mb-4">Select a club from <strong>My Clubs</strong> or the top bar to view PaySplits.</p>
+    <p class="text-slate-400 text-sm mb-4">Select a club from <strong>My Clubs</strong> or the top bar to view Pay & Split.</p>
     <RouterLink to="/clubs" class="btn-primary inline-block px-6 py-2">Go to My Clubs</RouterLink>
   </div>
 
@@ -870,7 +870,7 @@ const categoryBreakdown = computed(() => {
   </div>
 
   <template v-else>
-    <PageHeader icon="💰" title="PaySplits" subtitle="Track & split court costs equally among players">
+    <PageHeader icon="💰" title="Pay & Split" subtitle="Track & split court costs equally among players">
       <template #help>
         <div class="text-xs space-y-1.5">
           <p><strong class="text-slate-800">Activities</strong> — Full expense list with your contribution per item. Only the person who added an entry (or a manager) can edit or delete it.</p>

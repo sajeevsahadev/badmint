@@ -13,7 +13,7 @@ function buildWelcomeHtml(name) {
   <h1>Hey ${displayName}! 🏸</h1>
   <a href="https://badminton360.app">Open Badminton 360</a>
   <p>Elo Rankings</p>
-  <p>PaySplits &amp; Wallet</p>
+  <p>Pay & Split + Wallet</p>
   <p>Tournaments</p>
   <p>Schedule &amp; Polls</p>
   <a href="mailto:hello@badminton360.app">hello@badminton360.app</a>
@@ -47,7 +47,7 @@ describe('buildWelcomeHtml()', () => {
   it('contains all four feature sections', () => {
     const html = buildWelcomeHtml('Test')
     expect(html).toContain('Elo Rankings')
-    expect(html).toContain('PaySplits')
+    expect(html).toContain('Pay & Split')
     expect(html).toContain('Tournaments')
     expect(html).toContain('Schedule')
   })
