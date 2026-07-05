@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -22,15 +22,65 @@ interface LeaderboardRow {
   club_rank: number
 }
 
+const esc = (s: string) =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+// Build the "story of the week" — a short narrative celebrating the winners.
+function winnersStory(club_name: string, top5: LeaderboardRow[]): string {
+  const champ = top5[0]
+  const second = top5[1]
+  const third = top5[2]
+  if (!champ) return ""
+
+  const champName = esc(champ.display_name)
+  let story = `<strong style="color:#0f172a;">${champName}</strong> tops <strong>${esc(club_name)}</strong> this week `
+  story += `with <strong>${Math.round(champ.elo)} Elo</strong>`
+  if (champ.games > 0) story += ` and a ${Number(champ.win_pct).toFixed(0)}% win rate across ${champ.games} game${champ.games === 1 ? "" : "s"}`
+  story += ". "
+
+  if (second) {
+    const gap = Math.round(champ.elo - second.elo)
+    story += `${esc(second.display_name)} is in second`
+    if (third) story += `, ${esc(third.display_name)} takes third`
+    story += "."
+    if (gap >= 0) {
+      story += gap <= 15
+        ? ` The gap at the top is just <strong>${gap} Elo</strong> — next week is anyone's game. 🔥`
+        : ` The lead is <strong>${gap} Elo</strong> — can anyone close it? 🎯`
+    }
+  } else {
+    story += "Get more matches recorded to fill out the podium!"
+  }
+  return story
+}
+
 function buildDigestHtml(opts: {
   club_name: string
   nickname: string
   top5: LeaderboardRow[]
 }): string {
   const { club_name, nickname, top5 } = opts
+  const champ = top5[0]
 
   const medalFor = (rank: number) =>
     rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`
+
+  // Podium (top 3) as a celebratory row of cards
+  const podium = top5.slice(0, 3).map(p => {
+    const medal = medalFor(p.club_rank)
+    const isChamp = p.club_rank === 1
+    const bg = isChamp ? "#fffbea" : "#f8fafc"
+    const border = isChamp ? "#fcd34d" : "#e2e8f0"
+    return `
+      <td width="33%" valign="top" style="padding:4px;">
+        <div style="background:${bg};border:1px solid ${border};border-radius:12px;padding:14px 8px;text-align:center;">
+          <div style="font-size:26px;line-height:1;margin-bottom:6px;">${medal}</div>
+          <div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:2px;">${esc(p.display_name)}</div>
+          <div style="font-size:12px;font-weight:700;color:#0099b8;">${Math.round(p.elo)} Elo</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;">${p.wins}W / ${p.games - p.wins}L</div>
+        </div>
+      </td>`
+  }).join("")
 
   const rows = top5.map(p => {
     const isFirst = p.club_rank === 1
@@ -45,21 +95,22 @@ function buildDigestHtml(opts: {
     return `
     <tr style="${rowBg}border-bottom:1px solid #f1f5f9;">
       ${rankCell}
-      <td style="padding:12px 4px;${nameSt}">${p.display_name}</td>
+      <td style="padding:12px 4px;${nameSt}">${esc(p.display_name)}</td>
       <td style="padding:12px 8px;text-align:right;font-weight:700;color:#0099b8;font-size:13px;">${Math.round(p.elo)}</td>
       <td style="padding:12px 8px;text-align:right;color:#475569;font-size:13px;">${p.wins}W / ${p.games - p.wins}L</td>
       <td style="padding:12px 14px;text-align:right;color:#475569;font-size:12px;">${Number(p.win_pct).toFixed(0)}%</td>
     </tr>`
   }).join("")
 
-  const greeting = nickname ? `Hi ${nickname},` : "Hi,"
+  const greeting = nickname ? `Hi ${esc(nickname)},` : "Hi,"
+  const story = winnersStory(club_name, top5)
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Weekly Rankings — ${club_name}</title>
+<title>Weekly Rankings — ${esc(club_name)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
@@ -68,19 +119,26 @@ function buildDigestHtml(opts: {
 
   <!-- Header -->
   <tr><td style="background:linear-gradient(135deg,#050d1a,#0d1f3a);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
-    <div style="font-size:12px;font-weight:600;color:rgba(0,180,216,.75);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Weekly Rankings</div>
-    <div style="font-size:22px;font-weight:800;color:#00b4d8;letter-spacing:-0.5px;">📊 ${club_name}</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:6px;">Top players this week</div>
+    <div style="font-size:12px;font-weight:600;color:rgba(0,180,216,.75);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">This week in ${esc(club_name)}</div>
+    <div style="font-size:24px;font-weight:800;color:#00b4d8;letter-spacing:-0.5px;">🏆 Champion of the Week</div>
+    ${champ ? `<div style="font-size:16px;font-weight:800;color:#fff;margin-top:8px;">${esc(champ.display_name)}</div>` : ""}
   </td></tr>
 
   <!-- Body -->
-  <tr><td style="background:#ffffff;padding:28px 32px 8px;border-radius:0 0 16px 16px;">
+  <tr><td style="background:#ffffff;padding:26px 32px 8px;border-radius:0 0 16px 16px;">
 
-    <p style="margin:0 0 20px;font-size:14px;color:#334155;line-height:1.6;">
-      ${greeting} here's how the leaderboard looks in <strong>${club_name}</strong>:
-    </p>
+    <p style="margin:0 0 16px;font-size:14px;color:#334155;line-height:1.65;">${greeting}</p>
 
-    <!-- Leaderboard table -->
+    <!-- Winners story -->
+    <p style="margin:0 0 22px;font-size:14px;color:#334155;line-height:1.7;">${story}</p>
+
+    <!-- Podium -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>${podium}</tr>
+    </table>
+
+    <!-- Full top 5 -->
+    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Full standings</div>
     <table width="100%" cellpadding="0" cellspacing="0"
       style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       <thead>
@@ -113,7 +171,7 @@ function buildDigestHtml(opts: {
   <tr><td style="padding:20px 0;text-align:center;">
     <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.8;">
       <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;font-weight:600;">Badminton 360</a>
-      &nbsp;·&nbsp; Unsubscribe in app
+      &nbsp;·&nbsp; Manage emails in
       <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">Settings → Email</a>
     </p>
   </td></tr>
@@ -136,9 +194,23 @@ serve(async (req: Request) => {
     const SUPABASE_URL         = Deno.env.get("SUPABASE_URL")!
     const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     const RESEND_API_KEY       = Deno.env.get("RESEND_API_KEY")!
+    const CRON_SECRET          = Deno.env.get("WEEKLY_DIGEST_SECRET") ?? ""
 
-    // This function is called by pg_cron with the service role key in the
-    // Authorization header. We don't validate a user JWT here.
+    // Auth: this function runs with verify_jwt=false so pg_cron can call it,
+    // but it must present the shared secret (also allow the service-role key
+    // as a bearer for manual/admin triggers).
+    const secretHeader = req.headers.get("x-cron-secret") ?? ""
+    const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")
+    const authorised =
+      (CRON_SECRET && secretHeader === CRON_SECRET) ||
+      (SUPABASE_SERVICE_KEY && bearer === SUPABASE_SERVICE_KEY)
+    if (!authorised) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // 1. Get all clubs
@@ -163,8 +235,6 @@ serve(async (req: Request) => {
 
     let totalSent = 0
     const allErrors: string[] = []
-    // Batch counter — we flush every 10 sends then sleep 1 s to stay under
-    // Resend's 10 req/s free-tier limit.
     let batchCount = 0
 
     for (const club of clubs) {
@@ -176,7 +246,9 @@ serve(async (req: Request) => {
         allErrors.push(`leaderboard(${club.id}): ${lbErr.message}`)
         continue
       }
-      const top5: LeaderboardRow[] = (leaderboard ?? []).slice(0, 5)
+      // Only ranked players (games>0) — unplayed members have null club_rank
+      const ranked: LeaderboardRow[] = (leaderboard ?? []).filter((r: LeaderboardRow) => r.club_rank != null && r.games > 0)
+      const top5 = ranked.slice(0, 5)
       if (!top5.length) continue
 
       // 3. Get all club members
@@ -226,7 +298,7 @@ serve(async (req: Request) => {
           body: JSON.stringify({
             from: "Badminton 360 <noreply@badminton360.app>",
             to: [email],
-            subject: `📊 Weekly Rankings — ${club.name}`,
+            subject: `🏆 ${top5[0].display_name} tops ${club.name} — Weekly Rankings`,
             html,
           }),
         })
@@ -239,7 +311,6 @@ serve(async (req: Request) => {
         }
 
         batchCount++
-        // Rate-limit: sleep 1 s after every 10 sends
         if (batchCount % 10 === 0) {
           await sleep(1000)
         }
