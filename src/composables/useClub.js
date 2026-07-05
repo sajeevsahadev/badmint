@@ -13,7 +13,7 @@ export function useClub() {
 
     const { data, error } = await supabase
       .from('club_members')
-      .select('club_id, role, clubs(name, logo_url)')
+      .select('club_id, role, clubs(name, logo_url, currency)')
       .eq('user_id', user.id)          // â† only THIS user's memberships
 
     if (error) throw error
@@ -39,8 +39,8 @@ export function useClub() {
     localStorage.setItem('clubId', c.club_id)
   }
 
-  async function createClub(name) {
-    const { data, error } = await supabase.rpc('create_club', { p_name: name })
+  async function createClub(name, currency = 'AED') {
+    const { data, error } = await supabase.rpc('create_club', { p_name: name, p_currency: currency })
     if (error) throw error
     await loadClubs()
     const found = clubs.value.find(c => c.club_id === data)

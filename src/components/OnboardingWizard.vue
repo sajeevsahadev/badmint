@@ -4,11 +4,15 @@ import { useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { useGeo } from '../composables/useGeo'
+import { suggestCurrency } from '../utils/currency'
 
 const emit = defineEmits(['done'])
 const router = useRouter()
 const { user } = useAuth()
 const { loadClubs } = useClub()
+const { countryCode, currency: geoCurrency, detectCountry } = useGeo()
+detectCountry()  // warm the geo cache so club creation can suggest a currency
 
 // ── Step state ──────────────────────────────────────────────────────────────
 const step     = ref('welcome')  // welcome | path | search | create | players | payment | done
@@ -86,7 +90,8 @@ async function doCreateClub() {
   if (!name) { clubErr.value = 'Please enter a club name'; return }
   clubErr.value = ''
   creating.value = true
-  const { data, error } = await supabase.rpc('create_club', { p_name: name })
+  const suggested = suggestCurrency(geoCurrency.value, countryCode.value)
+  const { data, error } = await supabase.rpc('create_club', { p_name: name, p_currency: suggested })
   creating.value = false
   if (error) { clubErr.value = error.message; return }
   newClubId.value   = data

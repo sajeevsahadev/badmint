@@ -12,8 +12,9 @@ function buildExpenseHtml(opts: {
   paid_by_name: string
   split_count: number
   club_name: string
+  currency: string
 }): string {
-  const { title, amount, paid_by_name, split_count, club_name } = opts
+  const { title, amount, paid_by_name, split_count, club_name, currency } = opts
   const per_person = split_count > 0 ? amount / split_count : amount
   const fmt = (n: number) => n.toFixed(2)
 
@@ -47,7 +48,7 @@ function buildExpenseHtml(opts: {
             <tr>
               <td style="padding-bottom:12px;border-bottom:1px solid #e9d5ff;">
                 <div style="font-size:12px;color:#7c3aed;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total</div>
-                <div style="font-size:30px;font-weight:900;color:#0f172a;">AED ${fmt(amount)}</div>
+                <div style="font-size:30px;font-weight:900;color:#0f172a;">${currency} ${fmt(amount)}</div>
               </td>
             </tr>
             <tr>
@@ -66,7 +67,7 @@ function buildExpenseHtml(opts: {
                   <tr>
                     <td style="font-size:13px;color:#475569;">
                       <strong style="color:#0f172a;">Your share:</strong>
-                      <span style="font-weight:700;color:#7c3aed;">AED ${fmt(per_person)}</span>
+                      <span style="font-weight:700;color:#7c3aed;">${currency} ${fmt(per_person)}</span>
                     </td>
                   </tr>
                 </table>
@@ -158,7 +159,7 @@ serve(async (req: Request) => {
     // Get club name
     const { data: club } = await admin
       .from("clubs")
-      .select("name")
+      .select("name, currency")
       .eq("id", club_id)
       .single()
 
@@ -218,6 +219,7 @@ serve(async (req: Request) => {
       paid_by_name: paid_by_name ?? "Unknown",
       split_count: Number(split_count) || 1,
       club_name: club?.name ?? "Your Club",
+      currency:  club?.currency ?? "AED",
     })
 
     let sent = 0

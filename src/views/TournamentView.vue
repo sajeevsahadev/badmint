@@ -9,6 +9,7 @@ const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
 const { currentClub, isManager } = useClub()
+const cur = computed(() => currentClub.value?.clubs?.currency || 'AED')
 
 const data     = ref(null)
 const loading  = ref(true)
@@ -172,7 +173,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
             <span>📅</span><span>{{ fmtDate(tour.start_date) }}</span>
           </div>
           <div v-if="tour.entry_fee" class="flex items-center gap-1.5">
-            <span>💰</span><span>AED {{ tour.entry_fee }} per team</span>
+            <span>💰</span><span>{{ cur }} {{ tour.entry_fee }} per team</span>
           </div>
           <div v-if="tour.registration_end && tour.status === 'registration_open'" class="flex items-center gap-1.5 text-amber-600">
             <span>⏰</span><span>Reg. closes {{ fmtDate(tour.registration_end) }}</span>
@@ -457,7 +458,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
             </div>
             <div v-if="tour.entry_fee">
               <p class="label">Entry Fee</p>
-              <p class="text-slate-700">AED {{ tour.entry_fee }}</p>
+              <p class="text-slate-700">{{ cur }} {{ tour.entry_fee }}</p>
             </div>
           </div>
           <div v-if="!tour.description && !tour.venue_address" class="text-sm text-slate-400 text-center py-4">

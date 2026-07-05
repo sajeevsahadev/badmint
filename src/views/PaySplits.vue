@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import { computeSettledEdges } from '../utils/settle-up'
-import { aed, fmtExpMonth, fmtExpDay, timeAgo } from '../utils/formatters'
+import { fmtExpMonth, fmtExpDay, timeAgo } from '../utils/formatters'
+import { formatMoney } from '../utils/currency'
 import PageHeader from '../components/PageHeader.vue'
 
 const route  = useRoute()
@@ -14,8 +15,9 @@ const router = useRouter()
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 
-// ── Constants ──────────────────────────────────────────────────────────
-const CURRENCY = 'AED'
+// ── Money formatting — uses THIS club's currency (falls back to AED) ────
+const clubCurrency = computed(() => currentClub.value?.clubs?.currency || 'AED')
+const aed = n => formatMoney(n, clubCurrency.value)
 const CATEGORIES = [
   { value: 'facility',  label: 'Court Rent',      icon: '🏟️' },
   { value: 'food',      label: 'Food / Snacks',    icon: '🍔' },

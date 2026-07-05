@@ -4,6 +4,7 @@ import { ref } from 'vue'
 // Cached in localStorage so we only hit the geo API once per device.
 const country     = ref(localStorage.getItem('b360_country') || '')
 const countryCode = ref(localStorage.getItem('b360_country_code') || '')
+const currency    = ref(localStorage.getItem('b360_currency') || '')
 let pending = null
 
 function flagEmoji(code) {
@@ -20,6 +21,8 @@ async function detect() {
       if (j.country_name) {
         country.value     = j.country_name
         countryCode.value = j.country_code || ''
+        // ipapi returns the ISO currency for the detected country when available
+        if (j.currency) { currency.value = j.currency; localStorage.setItem('b360_currency', currency.value) }
         localStorage.setItem('b360_country', country.value)
         localStorage.setItem('b360_country_code', countryCode.value)
         return
@@ -40,5 +43,5 @@ export function useGeo() {
     if (!pending) pending = detect()
     return pending
   }
-  return { country, countryCode, flagEmoji, detectCountry }
+  return { country, countryCode, currency, flagEmoji, detectCountry }
 }

@@ -1,20 +1,31 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useClub } from '../composables/useClub'
+import { useGeo } from '../composables/useGeo'
+import { CURRENCIES, suggestCurrency } from '../utils/currency'
 
 const router = useRouter()
 const { createClub, loadClubs } = useClub()
+const { countryCode, currency: geoCurrency, detectCountry } = useGeo()
 
-const name  = ref('')
-const busy  = ref(false)
-const error = ref(null)
+const name     = ref('')
+const currency = ref('AED')
+const busy     = ref(false)
+const error    = ref(null)
+
+// Suggest a currency from the creator's location (IP-detected currency first,
+// else mapped from the country code). Owner can still change it.
+onMounted(async () => {
+  await detectCountry()
+  currency.value = suggestCurrency(geoCurrency.value, countryCode.value)
+})
 
 async function submit() {
   if (!name.value.trim()) return
   busy.value = true; error.value = null
   try {
-    await createClub(name.value.trim())
+    await createClub(name.value.trim(), currency.value)
     await loadClubs()
     router.push('/dashboard')
   } catch (e) {
@@ -43,10 +54,15 @@ async function submit() {
       </div>
 
       <label class="label">Club Name</label>
-      <input v-model="name" class="input mb-2" placeholder="e.g. Court Smashers, Friday Warriors…"
+      <input v-model="name" class="input mb-4" placeholder="e.g. Court Smashers, Friday Warriors…"
         maxlength="50" @keyup.enter="submit" autofocus />
+
+      <label class="label">Currency</label>
+      <select v-model="currency" class="input mb-1.5">
+        <option v-for="c in CURRENCIES" :key="c.code" :value="c.code">{{ c.label }}</option>
+      </select>
       <p class="text-xs text-slate-500 mb-5">
-        You can be a member of up to 10 clubs. You'll be set as the owner.
+        Used for Split Pay and fees. Suggested from your location — change it if needed.
       </p>
 
       <button class="btn-primary w-full py-3.5 text-base"

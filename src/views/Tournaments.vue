@@ -9,6 +9,7 @@ import PageHeader from '../components/PageHeader.vue'
 const router = useRouter()
 const { user } = useAuth()
 const { currentClub, isManager } = useClub()
+const cur = computed(() => currentClub.value?.clubs?.currency || 'AED')
 
 const tournaments = ref([])
 const loading     = ref(true)
@@ -186,7 +187,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
           <span v-if="t.start_date">📅 {{ fmtDate(t.start_date) }}</span>
           <span v-if="t.venue">📍 {{ t.venue }}</span>
           <span v-if="t.emirate">🇦🇪 {{ t.emirate }}</span>
-          <span v-if="t.entry_fee">💰 AED {{ t.entry_fee }}</span>
+          <span v-if="t.entry_fee">💰 {{ cur }} {{ t.entry_fee }}</span>
           <span v-if="t.registration_end && t.status === 'registration_open'"
             class="text-amber-600">
             Reg. closes {{ fmtDate(t.registration_end) }}
@@ -238,7 +239,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Entry Fee (AED)</label>
+              <label class="label">Entry Fee ({{ cur }})</label>
               <input v-model="form.entry_fee" type="number" min="0" class="input" placeholder="0" />
             </div>
             <div>
@@ -268,7 +269,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
           <div>
             <label class="label">Prize Info</label>
-            <input v-model="form.prize_info" class="input" placeholder="1st: AED 500, 2nd: AED 250…" />
+            <input v-model="form.prize_info" class="input" :placeholder="`1st: ${cur} 500, 2nd: ${cur} 250…`" />
           </div>
 
           <div>
