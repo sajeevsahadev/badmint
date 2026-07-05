@@ -327,7 +327,9 @@ async function confirmDelete() {
           <div class="text-[11px] text-slate-500">{{ s.display_name }}</div>
         </div>
         <div class="text-right shrink-0">
-          <div class="text-sm font-extrabold text-neon">Rank #{{ s.club_rank }}</div>
+          <div class="text-sm font-extrabold" :class="s.club_rank ? 'text-neon' : 'text-slate-400'">
+            {{ s.club_rank ? 'Rank #' + s.club_rank : 'Unranked' }}
+          </div>
           <div class="text-[11px] text-slate-500">Elo {{ s.elo }} · {{ s.games }}G · {{ s.win_pct }}% W</div>
         </div>
         <!-- Leave club button — hidden for owners or players with match history -->
