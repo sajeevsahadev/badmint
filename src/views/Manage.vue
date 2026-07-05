@@ -7,6 +7,7 @@ import PageHeader from '../components/PageHeader.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { CURRENCIES } from '../utils/currency'
+import { DAYS, HOURS, TIMEZONES, describeSchedule } from '../utils/schedule'
 
 const { clubs, currentClub, loadClubs, isManager } = useClub()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -38,6 +39,14 @@ const guestInviteBusy  = ref(false)
 const clubCurrency = ref('AED')
 const currencyBusy = ref(false)
 const currencyNote = ref(null)
+
+// Weekly digest schedule (per club)
+const digest      = ref({ dow: 0, hour: 21, tz: 'Asia/Dubai', enabled: true })
+const digestBusy  = ref(false)
+const digestNote  = ref(null)
+const digestSending = ref(false)
+const digestSummary = computed(() =>
+  describeSchedule(digest.value.dow, digest.value.hour, digest.value.tz))
 
 // Existing facility info (club's own fields)
 const facility = ref({ emirates: '', facility_name: '', facility_address: '', maps_url: '', description: '' })
@@ -91,10 +100,16 @@ async function load() {
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
-    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency')
+    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled')
     .eq('id', cid).single()
   if (clubInfo) {
     clubCurrency.value              = clubInfo.currency          ?? 'AED'
+    digest.value = {
+      dow:     clubInfo.digest_dow     ?? 0,
+      hour:    clubInfo.digest_hour    ?? 21,
+      tz:      clubInfo.digest_tz      ?? 'Asia/Dubai',
+      enabled: clubInfo.digest_enabled ?? true,
+    }
     facility.value.emirates         = clubInfo.emirates         ?? ''
     facility.value.facility_name    = clubInfo.facility_name    ?? ''
     facility.value.facility_address = clubInfo.facility_address ?? ''
@@ -281,6 +296,33 @@ async function saveCurrency() {
   if (currentClub.value?.clubs) currentClub.value.clubs.currency = clubCurrency.value
   await loadClubs()
   currencyNote.value = { ok: true, t: '✅ Currency updated.' }
+}
+
+// ── Weekly digest schedule ──
+async function saveDigest() {
+  digestBusy.value = true; digestNote.value = null
+  const { error } = await supabase.rpc('set_club_digest_schedule', {
+    p_club_id: currentClub.value.club_id,
+    p_dow:     digest.value.dow,
+    p_hour:    digest.value.hour,
+    p_tz:      digest.value.tz,
+    p_enabled: digest.value.enabled,
+  })
+  digestBusy.value = false
+  digestNote.value = error
+    ? { ok: false, t: error.message }
+    : { ok: true, t: `✅ Saved. Digest sends ${digestSummary.value}.` }
+}
+
+async function sendDigestNow() {
+  digestSending.value = true; digestNote.value = null
+  const { error } = await supabase.rpc('trigger_club_digest', {
+    p_club_id: currentClub.value.club_id,
+  })
+  digestSending.value = false
+  digestNote.value = error
+    ? { ok: false, t: error.message }
+    : { ok: true, t: '📧 Sending now — the digest is on its way to opted-in members.' }
 }
 
 // ── Facility Master functions ──
@@ -675,6 +717,54 @@ async function leaveClub(clubId) {
     </div>
     <p v-if="currencyNote" class="mt-2 text-xs" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">
       {{ currencyNote.t }}
+    </p>
+  </div>
+
+  <!-- ── Weekly Ranking Digest ── -->
+  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
+    <div class="label">Weekly Ranking Digest — {{ currentClub.clubs?.name }}</div>
+    <p class="text-[11px] text-slate-500 mb-3">
+      An email with the week's champion and standings, sent to members who opted in.
+    </p>
+
+    <label class="flex items-center gap-2 mb-3 cursor-pointer select-none">
+      <input type="checkbox" v-model="digest.enabled" class="w-4 h-4 rounded accent-cyan-500" />
+      <span class="text-sm text-slate-600">Send this club's weekly digest</span>
+    </label>
+
+    <div v-if="digest.enabled" class="grid grid-cols-2 gap-2 mb-2">
+      <div>
+        <label class="label">Day</label>
+        <select v-model.number="digest.dow" class="input">
+          <option v-for="d in DAYS" :key="d.value" :value="d.value">{{ d.label }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="label">Time</label>
+        <select v-model.number="digest.hour" class="input">
+          <option v-for="h in HOURS" :key="h.value" :value="h.value">{{ h.label }}</option>
+        </select>
+      </div>
+      <div class="col-span-2">
+        <label class="label">Timezone</label>
+        <select v-model="digest.tz" class="input">
+          <option v-for="z in TIMEZONES" :key="z.value" :value="z.value">{{ z.label }}</option>
+        </select>
+      </div>
+    </div>
+
+    <p v-if="digest.enabled" class="text-[11px] text-slate-500 mb-3">Sends <strong>{{ digestSummary }}</strong>.</p>
+
+    <div class="flex gap-2">
+      <button class="btn-primary flex-1 py-2.5 text-sm" :disabled="digestBusy" @click="saveDigest">
+        {{ digestBusy ? '…' : 'Save Schedule' }}
+      </button>
+      <button class="btn-ghost px-4 text-sm shrink-0" :disabled="digestSending" @click="sendDigestNow">
+        {{ digestSending ? '…' : '📧 Send test now' }}
+      </button>
+    </div>
+    <p v-if="digestNote" class="mt-2 text-xs" :class="digestNote.ok ? 'text-emerald-500' : 'text-rose-400'">
+      {{ digestNote.t }}
     </p>
   </div>
 

@@ -12,6 +12,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Current day-of-week (0=Sun..6=Sat) and hour (0..23) in a given IANA timezone.
+function nowInTz(tz: string): { dow: number; hour: number } {
+  let parts: Intl.DateTimeFormatPart[]
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz || "Asia/Dubai", weekday: "short", hour: "numeric", hour12: false,
+    }).formatToParts(new Date())
+  } catch {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Dubai", weekday: "short", hour: "numeric", hour12: false,
+    }).formatToParts(new Date())
+  }
+  const wd = parts.find(p => p.type === "weekday")?.value ?? "Sun"
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  let hour = parseInt(parts.find(p => p.type === "hour")?.value ?? "0", 10)
+  if (hour === 24) hour = 0
+  return { dow: dowMap[wd] ?? 0, hour }
+}
+
 interface LeaderboardRow {
   id: string
   display_name: string
@@ -211,16 +230,35 @@ serve(async (req: Request) => {
       })
     }
 
+    // Optional body: { force?: bool, club_id?: uuid }
+    //  - force  → ignore each club's schedule and send now (manual trigger)
+    //  - club_id → restrict to a single club (used by the "Send test now" button)
+    const body = await req.json().catch(() => ({})) as { force?: boolean; club_id?: string }
+    const force = body?.force === true
+    const onlyClubId = body?.club_id ?? null
+
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // 1. Get all clubs
+    // 1. Get all clubs (+ per-club schedule)
     const { data: clubs, error: clubsErr } = await admin
       .from("clubs")
-      .select("id, name")
+      .select("id, name, digest_dow, digest_hour, digest_tz, digest_enabled")
 
     if (clubsErr) throw new Error(`clubs fetch: ${clubsErr.message}`)
-    if (!clubs?.length) {
-      return new Response(JSON.stringify({ ok: true, sent: 0, clubs: 0 }), {
+
+    // Decide which clubs are due right now (or all, when force-triggering).
+    // Doing this BEFORE listUsers avoids that expensive call in the 167/168
+    // hours per week when nothing is scheduled.
+    const dueClubs = (clubs ?? []).filter(club => {
+      if (onlyClubId && club.id !== onlyClubId) return false
+      if (force) return true
+      if (club.digest_enabled === false) return false
+      const { dow, hour } = nowInTz(club.digest_tz || "Asia/Dubai")
+      return dow === club.digest_dow && hour === club.digest_hour
+    })
+
+    if (!dueClubs.length) {
+      return new Response(JSON.stringify({ ok: true, sent: 0, clubs: 0, due: 0 }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
@@ -237,7 +275,7 @@ serve(async (req: Request) => {
     const allErrors: string[] = []
     let batchCount = 0
 
-    for (const club of clubs) {
+    for (const club of dueClubs) {
       // 2. Get top 5 from leaderboard RPC
       const { data: leaderboard, error: lbErr } = await admin.rpc("get_club_leaderboard", {
         p_club_id: club.id,
@@ -310,15 +348,17 @@ serve(async (req: Request) => {
           allErrors.push(`${email}(${club.name}): ${txt}`)
         }
 
+        // Resend free tier allows only 2 requests/second — pause after
+        // every 2 sends to stay safely under the limit (~1.8/s).
         batchCount++
-        if (batchCount % 10 === 0) {
-          await sleep(1000)
+        if (batchCount % 2 === 0) {
+          await sleep(1100)
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ ok: true, sent: totalSent, clubs: clubs.length, errors: allErrors }),
+      JSON.stringify({ ok: true, sent: totalSent, clubs: dueClubs.length, errors: allErrors }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     )
   } catch (err) {
