@@ -270,8 +270,8 @@ const fmtDate = d => d
               </p>
             </div>
             <div class="text-right shrink-0">
-              <p class="text-sm font-extrabold text-neon">{{ p.composite }} pts</p>
-              <p class="text-xs text-slate-400">Elo {{ p.elo }}</p>
+              <p class="text-sm font-extrabold text-neon">{{ p.elo }} <span class="text-[10px] font-semibold text-slate-400">Elo</span></p>
+              <p class="text-xs text-slate-400">{{ p.win_pct }}% win</p>
             </div>
           </RouterLink>
         </div>
