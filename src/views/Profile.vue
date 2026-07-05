@@ -7,6 +7,7 @@ import { useClub } from '../composables/useClub'
 import { useSession } from '../composables/useSession'
 import { compressImageToDataUrl } from '../lib/imageCompress'
 import Avatar from '../components/Avatar.vue'
+import SocialLinks from '../components/SocialLinks.vue'
 import pkg from '../../package.json'
 
 const router = useRouter()
@@ -367,6 +368,7 @@ async function confirmDelete() {
 
     <!-- Footer -->
     <div class="text-center py-8 fade-up">
+      <SocialLinks class="mb-4" />
       <p class="text-xs text-slate-400 mb-2">Made with 🏸 and ❤️ for badminton communities everywhere</p>
       <p class="text-[11px]">
         <RouterLink to="/privacy" class="text-slate-400 hover:text-cyan-600 transition">Privacy Policy</RouterLink>

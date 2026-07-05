@@ -7,6 +7,7 @@ import { useClub } from '../composables/useClub'
 import { useInstall } from '../composables/useInstall'
 import { useGeo } from '../composables/useGeo'
 import Avatar from '../components/Avatar.vue'
+import SocialLinks from '../components/SocialLinks.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -424,6 +425,11 @@ onMounted(() => { load(); detectCountry() })
         <p class="text-[10px] text-slate-600 text-center mt-2">
           Native iOS &amp; Android apps are on the way 🚀
         </p>
+      </div>
+
+      <!-- ── Social footer — always visible (logged in or not) ── -->
+      <div class="text-center pt-2 pb-4 fade-up">
+        <SocialLinks />
       </div>
 
       <!-- ── Android Install Guide ── -->
