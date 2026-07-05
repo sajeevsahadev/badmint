@@ -22,7 +22,7 @@ function buildExpenseHtml(opts: {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>New expense â€” ${title}</title>
+<title>New expense — ${title}</title>
 </head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
@@ -32,7 +32,7 @@ function buildExpenseHtml(opts: {
   <!-- Header -->
   <tr><td style="background:linear-gradient(135deg,#050d1a,#0d1f3a);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
     <div style="font-size:13px;font-weight:600;color:rgba(168,85,247,.8);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">New Expense</div>
-    <div style="font-size:22px;font-weight:800;color:#a855f7;letter-spacing:-0.5px;">ðŸ’° ${title}</div>
+    <div style="font-size:22px;font-weight:800;color:#a855f7;letter-spacing:-0.5px;">💰 ${title}</div>
     <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:6px;">${club_name}</div>
   </td></tr>
 
@@ -84,7 +84,7 @@ function buildExpenseHtml(opts: {
         style="display:inline-block;background:linear-gradient(135deg,#a855f7,#7c3aed);
                color:#fff;font-size:14px;font-weight:700;text-decoration:none;
                padding:13px 32px;border-radius:12px;letter-spacing:.3px;">
-        View Split Pay â†’
+        View Split Pay →
       </a>
     </td></tr>
     </table>
@@ -101,7 +101,7 @@ function buildExpenseHtml(opts: {
   <tr><td style="padding:20px 0;text-align:center;">
     <p style="margin:0;font-size:11px;color:#94a3b8;">
       <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;">Badminton 360</a>
-      &nbsp;Â·&nbsp;
+      &nbsp;·&nbsp;
       <a href="mailto:hello@badminton360.app" style="color:#0099bb;text-decoration:none;">hello@badminton360.app</a>
     </p>
   </td></tr>
@@ -177,7 +177,7 @@ serve(async (req: Request) => {
 
     const userIds = members.map((m: { user_id: string }) => m.user_id)
 
-    // Get profiles â€” check email_prefs->payment_reminders
+    // Get profiles — check email_prefs->payment_reminders
     const { data: profiles } = await admin
       .from("user_profiles")
       .select("user_id, email_prefs")
@@ -236,7 +236,7 @@ serve(async (req: Request) => {
         body: JSON.stringify({
           from: "Badminton 360 <hello@badminton360.app>",
           to: [email],
-          subject: `ðŸ’° New expense added â€” ${title}`,
+          subject: `💰 New expense added — ${title}`,
           html,
         }),
       })

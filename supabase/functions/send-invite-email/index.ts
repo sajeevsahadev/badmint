@@ -62,17 +62,17 @@ serve(async (req: Request) => {
 
   <!-- Header -->
   <tr><td style="background:linear-gradient(135deg,#050d1a,#0d1f3a);border-radius:16px 16px 0 0;padding:32px;text-align:center;">
-    <div style="font-size:40px;margin-bottom:8px;">ðŸ¸</div>
+    <div style="font-size:40px;margin-bottom:8px;">🏸</div>
     <div style="font-size:22px;font-weight:800;color:#00e5ff;letter-spacing:-0.5px;">Badminton 360</div>
-    <div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:2px;margin-top:4px;">YOUR CLUB Â· YOUR GAME Â· ONE APP</div>
+    <div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:2px;margin-top:4px;">YOUR CLUB · YOUR GAME · ONE APP</div>
   </td></tr>
 
   <!-- Body -->
   <tr><td style="background:#fff;padding:36px 32px;border-radius:0 0 16px 16px;">
-    <h1 style="margin:0 0 12px;font-size:22px;color:#0f172a;">Hey ${displayName}! ðŸ‘‹</h1>
+    <h1 style="margin:0 0 12px;font-size:22px;color:#0f172a;">Hey ${displayName}! 👋</h1>
     <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.65;">
       <strong style="color:#0f172a;">${senderFirst}</strong> has invited you to join
-      <strong style="color:#0f172a;">${club_name}</strong> on Badminton 360 â€” the free app
+      <strong style="color:#0f172a;">${club_name}</strong> on Badminton 360 — the free app
       for tracking Elo rankings, splitting court costs, and running tournaments.
     </p>
 
@@ -83,7 +83,7 @@ serve(async (req: Request) => {
         style="display:inline-block;background:linear-gradient(135deg,#00b4d8,#0077a8);
                color:#fff;font-size:15px;font-weight:700;text-decoration:none;
                padding:15px 36px;border-radius:14px;letter-spacing:.3px;">
-        Accept Invite &amp; Join Club â†’
+        Accept Invite &amp; Join Club →
       </a>
     </td></tr>
     </table>
@@ -92,18 +92,18 @@ serve(async (req: Request) => {
     <table width="100%" cellpadding="0" cellspacing="0"
       style="background:#f8fafc;border-radius:12px;margin-bottom:24px;">
       <tr><td style="padding:11px 16px;font-size:13px;color:#475569;">
-        ðŸ† <strong style="color:#0f172a;">Elo Rankings</strong> â€” updated automatically after every match
+        🏆 <strong style="color:#0f172a;">Elo Rankings</strong> — updated automatically after every match
       </td></tr>
       <tr><td style="padding:11px 16px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">
-        âš–ï¸ <strong style="color:#0f172a;">Split Pay</strong> â€” split court costs equally in seconds
+        ⚖️ <strong style="color:#0f172a;">Split Pay</strong> — split court costs equally in seconds
       </td></tr>
       <tr><td style="padding:11px 16px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">
-        ðŸ’° <strong style="color:#0f172a;">Club Wallet</strong> â€” pre-fund and never chase payments again
+        💰 <strong style="color:#0f172a;">Club Wallet</strong> — pre-fund and never chase payments again
       </td></tr>
     </table>
 
     <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;text-align:center;">
-      Sign in with Google to accept â€” it's completely free.
+      Sign in with Google to accept — it's completely free.
     </p>
     <p style="margin:0;font-size:11px;color:#cbd5e1;text-align:center;">
       Or copy: <a href="${inviteUrl}" style="color:#0099bb;">${inviteUrl}</a>
@@ -114,7 +114,7 @@ serve(async (req: Request) => {
   <tr><td style="padding:20px 0;text-align:center;">
     <p style="margin:0;font-size:11px;color:#94a3b8;">
       Sent via <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;">Badminton 360</a>
-      &nbsp;Â·&nbsp;
+      &nbsp;·&nbsp;
       <a href="mailto:hello@badminton360.app" style="color:#0099bb;text-decoration:none;">hello@badminton360.app</a>
     </p>
   </td></tr>
@@ -134,7 +134,7 @@ serve(async (req: Request) => {
       body: JSON.stringify({
         from: "Badminton 360 <hello@badminton360.app>",
         to: [invitee_email],
-        subject: `${senderFirst} invited you to join ${club_name} ðŸ¸`,
+        subject: `${senderFirst} invited you to join ${club_name} 🏸`,
         html,
       }),
     })

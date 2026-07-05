@@ -28,7 +28,7 @@ async function attemptUnlock() {
   unlocking.value = true
   unlockErr.value = ''
   try { await unlock() }
-  catch (e) { unlockErr.value = e.message || 'Could not verify â€” try again.' }
+  catch (e) { unlockErr.value = e.message || 'Could not verify — try again.' }
   unlocking.value = false
 }
 
@@ -59,9 +59,9 @@ function closeWizard() {
   localStorage.setItem(ONBOARDING_KEY, '1')
 }
 
-// â”€â”€ PWA update detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PWA update detection ──────────────────────────────────────────────────────
 // If a new SW is already waiting when the app opens (during loading screen),
-// apply it silently â€” user sees the loading screen for ~1 extra second.
+// apply it silently — user sees the loading screen for ~1 extra second.
 // If detected while the app is running, show the update banner instead.
 const { needRefresh, updateServiceWorker } = useRegisterSW({ immediate: true })
 watch(needRefresh, (yes) => {
@@ -71,42 +71,42 @@ watch(needRefresh, (yes) => {
   }
 })
 
-// â”€â”€ Hamburger menu sections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Hamburger menu sections ──────────────────────────────────────────────────
 const menuSections = [
   {
     label: 'Account',
     items: [
-      { to: '/profile',  icon: 'ðŸ‘¤', label: 'My Profile' },
-      { action: 'wizard', icon: 'ðŸš€', label: 'Club Setup Wizard' },
-      { action: 'guide',  icon: 'ðŸ—ºï¸', label: 'App Guide' },
+      { to: '/profile',  icon: '👤', label: 'My Profile' },
+      { action: 'wizard', icon: '🚀', label: 'Club Setup Wizard' },
+      { action: 'guide',  icon: '🗺️', label: 'App Guide' },
     ]
   },
   {
     label: 'Match Day',
     items: [
-      { to: '/schedule',   icon: 'ðŸ“…', label: "Who's Playing?" },
-      { to: '/scoreboard', icon: 'ðŸ†', label: 'Leaderboard' },
-      { to: '/match',      icon: 'âž•', label: 'Add Match' },
-      { to: '/matches',    icon: 'ðŸ“‹', label: 'Matches' },
-      { to: '/compare',    icon: 'ðŸ“Š', label: 'Compare Players' },
-      { to: '/guide',      icon: 'ðŸ“–', label: 'Ranking Guide' },
+      { to: '/schedule',   icon: '📅', label: "Who's Playing?" },
+      { to: '/scoreboard', icon: '🏆', label: 'Leaderboard' },
+      { to: '/match',      icon: '➕', label: 'Add Match' },
+      { to: '/matches',    icon: '📋', label: 'Matches' },
+      { to: '/compare',    icon: '📊', label: 'Compare Players' },
+      { to: '/guide',      icon: '📖', label: 'Ranking Guide' },
     ]
   },
   {
     label: 'Split Pay',
     items: [
-      { to: '/splits?tab=activities', icon: 'âž•', label: 'Add Expenses' },
-      { to: '/splits?tab=balance',    icon: 'âš–ï¸', label: 'See Balance' },
-      { to: '/splits?tab=wallet',     icon: 'ðŸ’°', label: 'See Wallet' },
+      { to: '/splits?tab=activities', icon: '➕', label: 'Add Expenses' },
+      { to: '/splits?tab=balance',    icon: '⚖️', label: 'See Balance' },
+      { to: '/splits?tab=wallet',     icon: '💰', label: 'See Wallet' },
     ]
   },
   {
     label: 'Club Admin',
     items: [
-      { to: '/clubs',   icon: 'ðŸ¸', label: 'Club Profile' },
-      { to: '/manage',  icon: 'âš™ï¸', label: 'Manage Club' },
-      { to: '/join',    icon: 'ðŸ”—', label: 'Join a Club' },
-      { to: '/explore', icon: 'ðŸŒ', label: 'Explore Clubs & Facilities' },
+      { to: '/clubs',   icon: '🏸', label: 'Club Profile' },
+      { to: '/manage',  icon: '⚙️', label: 'Manage Club' },
+      { to: '/join',    icon: '🔗', label: 'Join a Club' },
+      { to: '/explore', icon: '🌍', label: 'Explore Clubs & Facilities' },
     ]
   },
 ]
@@ -149,8 +149,8 @@ async function refreshPending() {
 
 onMounted(init)
 // Only re-init when the signed-in user actually changes (login / logout).
-// Supabase fires onAuthStateChange after getSession resolves â€” without the ID
-// comparison this would cause loadClubs() to run 2-3Ã— on every startup.
+// Supabase fires onAuthStateChange after getSession resolves — without the ID
+// comparison this would cause loadClubs() to run 2-3× on every startup.
 watch(user, (newUser, oldUser) => {
   if (newUser?.id !== oldUser?.id) init()
 })
@@ -166,13 +166,13 @@ function onSwitch(e) {
   if (c) selectClub(c)
 }
 
-// â”€â”€ Bottom nav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Bottom nav ───────────────────────────────────────────────────────────────
 const nav = computed(() => [
-  { to: '/dashboard', label: 'Home',      icon: 'ðŸ ' },
-  { to: '/clubs',     label: 'My Clubs',  icon: 'ðŸ¸' },
-  { to: '/splits',    label: 'Split Pay', icon: 'ðŸ’°' },
-  { to: '/schedule',  label: 'Schedule',  icon: 'ðŸ“…' },
-  { to: '/manage',    label: 'Manage',    icon: 'âš™ï¸' },
+  { to: '/dashboard', label: 'Home',      icon: '🏠' },
+  { to: '/clubs',     label: 'My Clubs',  icon: '🏸' },
+  { to: '/splits',    label: 'Split Pay', icon: '💰' },
+  { to: '/schedule',  label: 'Schedule',  icon: '📅' },
+  { to: '/manage',    label: 'Manage',    icon: '⚙️' },
 ])
 
 const clubFreeRoutes = [
@@ -189,33 +189,33 @@ const needsClub = computed(() =>
   <!-- Loading splash -->
   <div v-if="!ready" class="grid min-h-screen place-items-center">
     <div class="text-center">
-      <div class="text-5xl mb-4">ðŸ¸</div>
+      <div class="text-5xl mb-4">🏸</div>
       <div class="text-neon font-semibold text-sm animate-pulse">
-        {{ updating ? 'Applying updateâ€¦' : 'Loading Badminton 360â€¦' }}
+        {{ updating ? 'Applying update…' : 'Loading Badminton 360…' }}
       </div>
       <div v-if="updating" class="text-[11px] text-slate-400 mt-2">
-        Getting the latest version â€” one moment
+        Getting the latest version — one moment
       </div>
     </div>
   </div>
 
   <template v-else>
 
-    <!-- â”€â”€ Biometric app-lock overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    <!-- ── Biometric app-lock overlay ──────────────────────────────────────────
          Re-gates an ALREADY-active session on this device after the configured
-         timeout. Never a substitute for Google sign-in â€” "Sign out" below always
+         timeout. Never a substitute for Google sign-in — "Sign out" below always
          leads back to a fresh login. -->
     <Teleport to="body">
       <div v-if="isLocked" class="fixed inset-0 z-[400] flex items-center justify-center px-6"
         style="background:rgba(238,244,255,.97); backdrop-filter:blur(12px);">
         <div class="w-full max-w-xs text-center">
-          <div class="text-5xl mb-4">ðŸ”’</div>
+          <div class="text-5xl mb-4">🔒</div>
           <h2 class="font-display text-xl font-bold gradient-text mb-1">Badminton 360 is locked</h2>
           <p class="text-sm text-slate-500 mb-6">Verify it's you to continue.</p>
           <button class="btn-primary w-full py-3.5 mb-3" :disabled="unlocking" @click="attemptUnlock">
-            {{ unlocking ? 'Verifyingâ€¦' : 'ðŸ”“ Unlock' }}
+            {{ unlocking ? 'Verifying…' : '🔓 Unlock' }}
           </button>
-          <p v-if="unlockErr" class="text-xs text-rose-500 mb-3">âš  {{ unlockErr }}</p>
+          <p v-if="unlockErr" class="text-xs text-rose-500 mb-3">⚠ {{ unlockErr }}</p>
           <button class="text-xs text-slate-400 hover:text-slate-600 transition" @click="signOutFromLockScreen">
             Trouble unlocking? Sign out
           </button>
@@ -223,7 +223,7 @@ const needsClub = computed(() =>
       </div>
     </Teleport>
 
-    <!-- â”€â”€ PWA update banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    <!-- ── PWA update banner ──────────────────────────────────────────────────
          Shown when a new SW is waiting but the app was already past the loading
          screen (so auto-reload didn't fire). User taps Update to reload. -->
     <Teleport to="body">
@@ -233,7 +233,7 @@ const needsClub = computed(() =>
           style="background:linear-gradient(90deg,#0077a8,#0099b8);
                  box-shadow:0 2px 12px rgba(0,119,168,.3);">
           <div class="flex items-center gap-2 min-w-0">
-            <span class="text-base shrink-0">ðŸ”„</span>
+            <span class="text-base shrink-0">🔄</span>
             <div class="min-w-0">
               <div class="text-xs font-semibold text-white leading-tight">New version available</div>
               <div class="text-xs text-white/70 leading-tight">Tap to get the latest Badminton 360</div>
@@ -249,7 +249,7 @@ const needsClub = computed(() =>
       </Transition>
     </Teleport>
 
-    <!-- â”€â”€ Floating hamburger for public routes when logged in â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    <!-- ── Floating hamburger for public routes when logged in ────────────────
          Public views (Explore, Home, FacilityProfile) don't use this shell's
          top bar, so we overlay a fixed button so navigation is always reachable. -->
     <button v-if="user && route.meta.public"
@@ -269,20 +269,20 @@ const needsClub = computed(() =>
       <RouterView />
     </div>
 
-    <!-- Fullscreen routes (e.g. live match court view) â€” no shell padding -->
+    <!-- Fullscreen routes (e.g. live match court view) — no shell padding -->
     <div v-else-if="route.meta.fullscreen">
       <RouterView />
     </div>
 
-    <!-- â”€â”€ Authenticated shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Authenticated shell ─────────────────────────────────────────────── -->
     <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-4">
 
       <!-- PWA install banner -->
       <div v-if="canInstall && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
-        <span class="text-2xl shrink-0">ðŸ“²</span>
+        <span class="text-2xl shrink-0">📲</span>
         <div class="flex-1 min-w-0">
           <div class="text-xs font-bold text-slate-800">Install Badminton 360 on Android</div>
-          <div class="text-xs text-slate-500">Works offline Â· No app store needed</div>
+          <div class="text-xs text-slate-500">Works offline · No app store needed</div>
         </div>
         <button class="btn-primary text-xs px-3 py-1.5 shrink-0" @click="promptInstall">Install</button>
       </div>
@@ -290,20 +290,20 @@ const needsClub = computed(() =>
       <div v-if="isIOS && !isInstalled && showIOSHint"
         class="card mb-4 px-4 py-3 fade-up" style="border-color:rgba(147,51,234,.25)">
         <div class="flex items-start gap-2">
-          <span class="text-xl shrink-0">ðŸŽ</span>
+          <span class="text-xl shrink-0">🍎</span>
           <div>
             <div class="text-xs font-bold text-slate-800 mb-1">Add to iPhone Home Screen</div>
             <div class="text-xs text-slate-500 leading-relaxed">
-              Tap the <strong class="text-slate-700">Share</strong> button (â†‘) in Safari,
+              Tap the <strong class="text-slate-700">Share</strong> button (↑) in Safari,
               then choose <strong class="text-slate-700">"Add to Home Screen"</strong>.
             </div>
           </div>
           <button class="text-slate-400 hover:text-slate-600 text-sm shrink-0 transition"
-            @click="showIOSHint = false">âœ•</button>
+            @click="showIOSHint = false">✕</button>
         </div>
       </div>
 
-      <!-- â”€â”€ Top bar: hamburger on LEFT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- ── Top bar: hamburger on LEFT ──────────────────────────────────────── -->
       <header class="mb-5 flex items-center justify-between gap-3">
 
         <!-- LEFT: hamburger + logo -->
@@ -324,19 +324,19 @@ const needsClub = computed(() =>
           </button>
 
           <RouterLink to="/" class="flex items-center gap-2 hover:opacity-75 transition">
-            <span class="text-2xl leading-none">ðŸ¸</span>
+            <span class="text-2xl leading-none">🏸</span>
             <div>
               <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badminton 360</h1>
-              <div class="text-[9px] text-slate-400 tracking-[0.2em] uppercase">Your Club Â· Your Game Â· One App</div>
+              <div class="text-[9px] text-slate-400 tracking-[0.2em] uppercase">Your Club · Your Game · One App</div>
             </div>
           </RouterLink>
         </div>
 
-        <!-- RIGHT: iOS install Â· club switcher Â· profile avatar -->
+        <!-- RIGHT: iOS install · club switcher · profile avatar -->
         <div class="flex items-center gap-2">
           <button v-if="isIOS && !isInstalled && !showIOSHint"
             class="text-[10px] text-violet hover:opacity-75 transition px-1" @click="showIOSHint = true">
-            ðŸ“² Install
+            📲 Install
           </button>
 
           <select v-if="clubs.length" :value="currentClub?.club_id" @change="onSwitch"
@@ -358,13 +358,13 @@ const needsClub = computed(() =>
 
       <!-- No club state -->
       <div v-if="needsClub" class="card-neon p-8 text-center fade-up">
-        <div class="text-4xl mb-4">ðŸ‘‹</div>
+        <div class="text-4xl mb-4">👋</div>
         <h2 class="font-display text-xl font-bold gradient-text mb-1">Welcome to Badminton 360!</h2>
         <p class="text-sm text-slate-500 mb-6">Join your team's club or create a new one to get started.</p>
         <div class="flex flex-col gap-3">
-          <RouterLink to="/explore" class="btn-primary w-full py-3 text-sm">ðŸŒ Browse &amp; Join a Club</RouterLink>
-          <RouterLink to="/join"    class="btn-ghost  w-full py-3 text-sm">ðŸ”— Have an Invite Link?</RouterLink>
-          <RouterLink to="/manage"  class="btn-ghost  w-full py-3 text-sm">âž• Create My Own Club</RouterLink>
+          <RouterLink to="/explore" class="btn-primary w-full py-3 text-sm">🌍 Browse &amp; Join a Club</RouterLink>
+          <RouterLink to="/join"    class="btn-ghost  w-full py-3 text-sm">🔗 Have an Invite Link?</RouterLink>
+          <RouterLink to="/manage"  class="btn-ghost  w-full py-3 text-sm">➕ Create My Own Club</RouterLink>
         </div>
       </div>
 
@@ -372,12 +372,12 @@ const needsClub = computed(() =>
 
     </div>
 
-    <!-- â”€â”€ Bottom nav: all logged-in users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Bottom nav: all logged-in users ─────────────────────────────────── -->
     <nav v-if="user && route.path !== '/login'"
       class="fixed inset-x-0 bottom-0 z-20 safe-area-pb"
       style="background:rgba(255,255,255,.96); border-top:1px solid rgba(0,0,0,.07);
              backdrop-filter:blur(20px); box-shadow:0 -4px 20px rgba(0,0,0,.06);">
-      <!-- Cyanâ†’violet gradient accent line at top of nav bar -->
+      <!-- Cyan→violet gradient accent line at top of nav bar -->
       <div class="absolute top-0 left-0 right-0 h-px"
         style="background:linear-gradient(90deg,transparent,rgba(0,168,204,.45) 35%,rgba(147,51,234,.40) 65%,transparent);" />
       <div class="mx-auto flex max-w-2xl">
@@ -391,7 +391,7 @@ const needsClub = computed(() =>
       </div>
     </nav>
 
-    <!-- â”€â”€ Hamburger menu drawer (slides from LEFT) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Hamburger menu drawer (slides from LEFT) ─────────────────────────── -->
     <Teleport to="body">
       <Transition name="menu-fade">
         <div v-if="showMenu" class="fixed inset-0 z-50 flex" @keydown.esc="closeMenu">
@@ -408,18 +408,18 @@ const needsClub = computed(() =>
             <div class="flex items-center justify-between px-5 py-4"
               style="border-bottom:1px solid rgba(0,0,0,.07)">
               <div class="flex items-center gap-2">
-                <span class="text-xl">ðŸ¸</span>
+                <span class="text-xl">🏸</span>
                 <span class="font-display font-extrabold gradient-text">Badminton 360</span>
               </div>
               <button @click="closeMenu"
                 class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400
-                       hover:text-slate-700 hover:bg-black/[0.05] transition text-base">âœ•</button>
+                       hover:text-slate-700 hover:bg-black/[0.05] transition text-base">✕</button>
             </div>
 
             <!-- Nav sections -->
             <div class="flex-1 overflow-y-auto py-3">
 
-              <!-- Home â€” always first -->
+              <!-- Home — always first -->
               <div v-for="section in menuSections" :key="section.label" class="mb-1">
                 <div class="text-[10px] uppercase tracking-widest text-slate-400 px-5 py-2 font-semibold">
                   {{ section.label }}
@@ -459,7 +459,7 @@ const needsClub = computed(() =>
                   class="flex items-center gap-3 px-5 py-3 text-sm font-medium text-slate-700
                          hover:bg-black/[0.04] hover:text-slate-900 transition-colors"
                   active-class="!text-cyan-700 bg-cyan-50">
-                  <span class="text-base w-6 text-center shrink-0">ðŸ›¡ï¸</span>
+                  <span class="text-base w-6 text-center shrink-0">🛡️</span>
                   Admin Panel
                   <span class="ml-auto text-[9px] bg-rose-100 text-rose-600 rounded px-1.5 py-0.5 font-bold">ADMIN</span>
                 </RouterLink>
@@ -473,7 +473,7 @@ const needsClub = computed(() =>
               <RouterLink to="/profile" @click="closeMenu"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm
                        text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 transition">
-                <span class="text-base">ðŸ‘¤</span> Profile &amp; Settings
+                <span class="text-base">👤</span> Profile &amp; Settings
               </RouterLink>
             </div>
 
@@ -485,7 +485,7 @@ const needsClub = computed(() =>
     <!-- New-user setup wizard (first login, no clubs) -->
     <OnboardingWizard v-if="user && showWizard" @done="closeWizard" />
 
-    <!-- Story guide (accessible any time from hamburger â†’ App Guide) -->
+    <!-- Story guide (accessible any time from hamburger → App Guide) -->
     <OnboardingGuide v-if="user && showOnboarding" @done="closeGuide" />
 
   </template>

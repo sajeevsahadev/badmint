@@ -101,7 +101,7 @@ async function save() {
   })
   if (err) { saving.value = false; error.value = err.message; return }
 
-  // avatar_url is not a param of upsert_profile â€” update directly on own row
+  // avatar_url is not a param of upsert_profile — update directly on own row
   const avatarVal = form.value.avatar_url.trim() || null
   await supabase.from('user_profiles')
     .update({ avatar_url: avatarVal })
@@ -143,7 +143,7 @@ async function leaveClub(clubId) {
   }
 }
 
-// â”€â”€ Sign out â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sign out ──────────────────────────────────────────────────────────────────
 const loggingOut = ref(false)
 async function logout() {
   loggingOut.value = true
@@ -152,7 +152,7 @@ async function logout() {
   router.push('/login')
 }
 
-// â”€â”€ Delete Account (GDPR) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Delete Account (GDPR) ────────────────────────────────────────────────────
 const showDeleteModal  = ref(false)
 const deleteConfirmText = ref('')
 const deleteChecked    = ref(false)
@@ -191,7 +191,7 @@ async function confirmDelete() {
     )
     const body = await resp.json()
     if (!resp.ok) throw new Error(body.error || 'Deletion failed')
-    // Account deleted â€” sign out and redirect
+    // Account deleted — sign out and redirect
     await supabase.auth.signOut()
     window.location.href = '/login'
   } catch (e) {
@@ -235,7 +235,7 @@ async function confirmDelete() {
             <Avatar :name="form.nickname" :src="form.avatar_url" :size="72" />
             <div class="flex flex-col gap-2">
               <label class="btn-ghost cursor-pointer inline-flex items-center gap-1 text-sm">
-                ðŸ“· Upload Photo
+                📷 Upload Photo
                 <input type="file" accept="image/*" class="hidden" @change="onAvatarFile" />
               </label>
               <button v-if="form.avatar_url" type="button" class="text-[11px] text-rose-500 text-left" @click="removeAvatar">
@@ -243,9 +243,9 @@ async function confirmDelete() {
               </button>
             </div>
           </div>
-          <p v-if="avatarBusy" class="text-[10px] text-neon mt-2">Compressingâ€¦</p>
+          <p v-if="avatarBusy" class="text-[10px] text-neon mt-2">Compressing…</p>
           <p v-if="avatarError" class="text-[10px] text-rose-500 mt-2">{{ avatarError }}</p>
-          <p class="text-[10px] text-slate-500 mt-1">Stored compressed in your profile Â· appears as your avatar across the app.</p>
+          <p class="text-[10px] text-slate-500 mt-1">Stored compressed in your profile · appears as your avatar across the app.</p>
         </div>
         <div>
           <label class="label">Phone Number <span class="text-slate-600">(optional)</span></label>
@@ -260,15 +260,15 @@ async function confirmDelete() {
         <div>
           <label class="label">Bio <span class="text-slate-600">(optional)</span></label>
           <textarea v-model="form.bio" class="input resize-none" rows="2"
-            placeholder="Tell the court about yourselfâ€¦" maxlength="120" />
+            placeholder="Tell the court about yourself…" maxlength="120" />
         </div>
       </div>
 
       <p v-if="error" class="mt-3 text-xs text-rose-400">{{ error }}</p>
-      <p v-if="saved" class="mt-3 text-xs text-emerald-400">âœ… Profile saved!</p>
+      <p v-if="saved" class="mt-3 text-xs text-emerald-400">✅ Profile saved!</p>
 
       <button class="btn-primary w-full mt-4" :disabled="saving" @click="save">
-        {{ saving ? 'Savingâ€¦' : 'Save Profile' }}
+        {{ saving ? 'Saving…' : 'Save Profile' }}
       </button>
     </div>
 
@@ -280,37 +280,37 @@ async function confirmDelete() {
       <RouterLink to="/settings/email"
         class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
         style="border-color:rgba(15,23,42,.04)">
-        <span class="text-lg w-6 text-center shrink-0">ðŸ“§</span>
+        <span class="text-lg w-6 text-center shrink-0">📧</span>
         <span class="text-sm font-medium text-slate-700 flex-1">Email Settings</span>
-        <span class="text-slate-300">â€º</span>
+        <span class="text-slate-300">›</span>
       </RouterLink>
       <RouterLink to="/settings/notifications"
         class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
         style="border-color:rgba(15,23,42,.04)">
-        <span class="text-lg w-6 text-center shrink-0">ðŸ””</span>
+        <span class="text-lg w-6 text-center shrink-0">🔔</span>
         <span class="text-sm font-medium text-slate-700 flex-1">Device &amp; Push Notifications</span>
-        <span class="text-slate-300">â€º</span>
+        <span class="text-slate-300">›</span>
       </RouterLink>
       <RouterLink to="/settings/security"
         class="flex items-center gap-3 px-4 py-3.5 border-b hover:bg-black/[0.02] transition"
         style="border-color:rgba(15,23,42,.04)">
-        <span class="text-lg w-6 text-center shrink-0">ðŸ”’</span>
+        <span class="text-lg w-6 text-center shrink-0">🔒</span>
         <span class="text-sm font-medium text-slate-700 flex-1">Security</span>
-        <span class="text-slate-300">â€º</span>
+        <span class="text-slate-300">›</span>
       </RouterLink>
       <RouterLink to="/settings/appearance"
         class="flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] transition">
-        <span class="text-lg w-6 text-center shrink-0">ðŸŽ¨</span>
+        <span class="text-lg w-6 text-center shrink-0">🎨</span>
         <span class="text-sm font-medium text-slate-700 flex-1">Appearance</span>
-        <span class="text-slate-300">â€º</span>
+        <span class="text-slate-300">›</span>
       </RouterLink>
     </div>
 
     <!-- Sign out -->
     <button class="card w-full flex items-center gap-3 px-4 py-3.5 mb-4 hover:bg-black/[0.02] transition text-left fade-up"
       :disabled="loggingOut" @click="logout">
-      <span class="text-lg w-6 text-center shrink-0">ðŸšª</span>
-      <span class="text-sm font-medium text-slate-700 flex-1">{{ loggingOut ? 'Signing outâ€¦' : 'Sign Out' }}</span>
+      <span class="text-lg w-6 text-center shrink-0">🚪</span>
+      <span class="text-sm font-medium text-slate-700 flex-1">{{ loggingOut ? 'Signing out…' : 'Sign Out' }}</span>
     </button>
 
     <!-- Club stats + leave -->
@@ -327,26 +327,26 @@ async function confirmDelete() {
         </div>
         <div class="text-right shrink-0">
           <div class="text-sm font-extrabold text-neon">Rank #{{ s.club_rank }}</div>
-          <div class="text-[11px] text-slate-500">Elo {{ s.elo }} Â· {{ s.games }}G Â· {{ s.win_pct }}% W</div>
+          <div class="text-[11px] text-slate-500">Elo {{ s.elo }} · {{ s.games }}G · {{ s.win_pct }}% W</div>
         </div>
-        <!-- Leave club button â€” hidden for owners or players with match history -->
+        <!-- Leave club button — hidden for owners or players with match history -->
         <button v-if="clubRole(s.club_id) !== 'owner' && s.games === 0"
           class="text-[10px] text-rose-500/60 hover:text-rose-400 transition shrink-0 px-1 py-0.5"
           :disabled="leaving === s.club_id"
           @click="leaveClub(s.club_id)">
-          {{ leaving === s.club_id ? 'â€¦' : 'Leave' }}
+          {{ leaving === s.club_id ? '…' : 'Leave' }}
         </button>
       </div>
     </div>
 
-    <p v-if="leaveNote" class="text-xs text-emerald-400 mb-3 px-1">âœ… {{ leaveNote }}</p>
+    <p v-if="leaveNote" class="text-xs text-emerald-400 mb-3 px-1">✅ {{ leaveNote }}</p>
     <p v-if="leaveError" class="text-xs text-rose-400 mb-3 px-1">{{ leaveError }}</p>
 
-    <!-- â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Danger Zone ──────────────────────────────────────────────────── -->
     <div class="mt-6 mb-2 fade-up">
       <div class="rounded-2xl border border-rose-200/60 overflow-hidden" style="background:#fff9f9;">
         <div class="px-4 py-3 border-b border-rose-100 flex items-center gap-2">
-          <span class="text-base">âš ï¸</span>
+          <span class="text-base">⚠️</span>
           <span class="text-xs font-bold text-rose-600 uppercase tracking-widest">Danger Zone</span>
         </div>
         <div class="px-4 py-4">
@@ -359,7 +359,7 @@ async function confirmDelete() {
             @click="openDeleteModal"
             class="text-xs font-bold text-rose-600 border border-rose-300 rounded-xl px-4 py-2 hover:bg-rose-50 transition"
           >
-            Delete My Accountâ€¦
+            Delete My Account…
           </button>
         </div>
       </div>
@@ -367,7 +367,7 @@ async function confirmDelete() {
 
     <!-- Footer -->
     <div class="text-center py-8 fade-up">
-      <p class="text-xs text-slate-400 mb-2">Made with ðŸ¸ and â¤ï¸ for badminton communities everywhere</p>
+      <p class="text-xs text-slate-400 mb-2">Made with 🏸 and ❤️ for badminton communities everywhere</p>
       <p class="text-[11px]">
         <RouterLink to="/privacy" class="text-slate-400 hover:text-cyan-600 transition">Privacy Policy</RouterLink>
       </p>
@@ -376,7 +376,7 @@ async function confirmDelete() {
 
   </template>
 
-  <!-- â”€â”€ Delete Account Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Delete Account Modal ─────────────────────────────────────────────── -->
   <Teleport to="body">
     <Transition name="modal-fade">
       <div v-if="showDeleteModal"
@@ -391,7 +391,7 @@ async function confirmDelete() {
 
           <div class="overflow-y-auto flex-1">
             <div class="px-6 pt-6 pb-2">
-              <div class="text-3xl mb-3">ðŸ—‘ï¸</div>
+              <div class="text-3xl mb-3">🗑️</div>
               <h2 class="text-xl font-extrabold text-slate-800 mb-1">Delete Your Account</h2>
               <p class="text-sm text-slate-500 leading-relaxed">
                 This is permanent and cannot be undone.
@@ -402,7 +402,7 @@ async function confirmDelete() {
             <div v-if="deleteCheckResult && !deleteCheckResult.can_delete"
               class="mx-6 mt-4 p-4 rounded-2xl border text-sm leading-relaxed"
               style="background:#fff7f7; border-color:#fecaca; color:#991b1b;">
-              <div class="font-bold mb-1">âŒ Can't delete right now</div>
+              <div class="font-bold mb-1">❌ Can't delete right now</div>
               <p>{{ deleteCheckResult.details }}</p>
             </div>
 
@@ -412,13 +412,13 @@ async function confirmDelete() {
               <!-- What gets deleted -->
               <div class="text-xs text-slate-600 space-y-2 bg-slate-50 rounded-xl p-4">
                 <div class="font-bold text-slate-700 mb-2">What gets permanently deleted:</div>
-                <div>ðŸ—‘ï¸ Your profile (name, phone, bio)</div>
-                <div>ðŸ—‘ï¸ All club memberships &amp; join requests</div>
-                <div>ðŸ—‘ï¸ Your Split Pay expenses &amp; notes</div>
-                <div>ðŸ—‘ï¸ Session &amp; activity history</div>
+                <div>🗑️ Your profile (name, phone, bio)</div>
+                <div>🗑️ All club memberships &amp; join requests</div>
+                <div>🗑️ Your Split Pay expenses &amp; notes</div>
+                <div>🗑️ Session &amp; activity history</div>
                 <div class="border-t border-slate-200 pt-2 mt-1 text-slate-500">
-                  <div>âœ… Match results stay (anonymised) so club rankings remain accurate</div>
-                  <div>âœ… Other players' expenses are unaffected</div>
+                  <div>✅ Match results stay (anonymised) so club rankings remain accurate</div>
+                  <div>✅ Other players' expenses are unaffected</div>
                 </div>
               </div>
 
@@ -449,7 +449,7 @@ async function confirmDelete() {
                 />
               </div>
 
-              <p v-if="deleteError" class="text-xs text-rose-600">âš  {{ deleteError }}</p>
+              <p v-if="deleteError" class="text-xs text-rose-600">⚠ {{ deleteError }}</p>
 
             </div>
           </div>
@@ -463,7 +463,7 @@ async function confirmDelete() {
               class="w-full py-3 rounded-2xl text-sm font-bold text-white transition disabled:opacity-40"
               style="background:linear-gradient(135deg,#ef4444,#b91c1c);"
             >
-              {{ deleting ? 'Deletingâ€¦' : 'ðŸ—‘ï¸ Permanently Delete My Account' }}
+              {{ deleting ? 'Deleting…' : '🗑️ Permanently Delete My Account' }}
             </button>
             <button
               @click="showDeleteModal = false"

@@ -14,16 +14,16 @@ const router = useRouter()
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Constants ──────────────────────────────────────────────────────────
 const CURRENCY = 'AED'
 const CATEGORIES = [
-  { value: 'facility',  label: 'Court Rent',      icon: 'ðŸŸï¸' },
-  { value: 'food',      label: 'Food / Snacks',    icon: 'ðŸ”' },
-  { value: 'drinks',    label: 'Water / Tea',      icon: 'â˜•' },
-  { value: 'equipment', label: 'Cork / Equipment', icon: 'ðŸ¸' },
-  { value: 'transport', label: 'Transport',        icon: 'ðŸš—' },
-  { value: 'tax',       label: 'Tax / Fees',       icon: 'ðŸ“‹' },
-  { value: 'other',     label: 'Other',            icon: 'ðŸ’¡' },
+  { value: 'facility',  label: 'Court Rent',      icon: '🏟️' },
+  { value: 'food',      label: 'Food / Snacks',    icon: '🍔' },
+  { value: 'drinks',    label: 'Water / Tea',      icon: '☕' },
+  { value: 'equipment', label: 'Cork / Equipment', icon: '🏸' },
+  { value: 'transport', label: 'Transport',        icon: '🚗' },
+  { value: 'tax',       label: 'Tax / Fees',       icon: '📋' },
+  { value: 'other',     label: 'Other',            icon: '💡' },
 ]
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -47,11 +47,11 @@ const CAT_BG = {
 }
 const catColorBg = v => CAT_BG[v] ?? 'rgba(129,140,248,.13)'
 
-// custom categories â€” stored in localStorage per club
+// custom categories — stored in localStorage per club
 const customCategories = ref([])
 const allCategories    = computed(() => [...CATEGORIES, ...customCategories.value])
 
-const catIcon  = v => allCategories.value.find(c => c.value === v)?.icon  ?? 'ðŸ·ï¸'
+const catIcon  = v => allCategories.value.find(c => c.value === v)?.icon  ?? '🏷️'
 const catLabel = v => allCategories.value.find(c => c.value === v)?.label ?? v
 const catColor = v => CAT_COLORS[v] ?? '#818cf8'
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -60,7 +60,7 @@ const fmtDatetime = ts => new Date(ts).toLocaleString('en-AE', {
 })
 const toDatetimeLocal = d => new Date(d).toISOString().slice(0, 16)
 
-// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── State ──────────────────────────────────────────────────────────────
 const expenses        = ref([])
 const balances        = ref([])
 const players         = ref([])
@@ -73,7 +73,7 @@ const loading         = ref(true)
 const activeTab       = ref('activities')
 const expandedPlayer  = ref(null)
 
-// Splitwise-style "simplify debts" toggle â€” ON restructures who-pays-whom
+// Splitwise-style "simplify debts" toggle — ON restructures who-pays-whom
 // into the fewest payments; OFF shows debts exactly as recorded.
 const simplifyOn = ref(localStorage.getItem('b360_simplify_debts') !== '0')
 watch(simplifyOn, v => localStorage.setItem('b360_simplify_debts', v ? '1' : '0'))
@@ -84,7 +84,7 @@ const showAllMyBalance = ref(false)
 // Opening balances section collapsed by default in Expenses tab
 const showOpeningBalances = ref(false)
 
-// â”€â”€ Load all data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Load all data ──────────────────────────────────────────────────────
 async function load() {
   if (!currentClub.value || !user.value) {
     loading.value = false   // don't stay stuck; no-club handled in template
@@ -132,7 +132,7 @@ async function load() {
     (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
   )
 
-  // FIFO from server (O(C+W) SQL) â€” falls back to empty if v36b not yet applied
+  // FIFO from server (O(C+W) SQL) — falls back to empty if v36b not yet applied
   fifoResult.value = fifoRes.data ?? { active: [], consumed: [] }
   loadCats()
   } finally {
@@ -154,19 +154,19 @@ watch(() => route.query.tab, (tab) => {
   }
 })
 
-// â”€â”€ Permission helper: creator or club manager/owner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Permission helper: creator or club manager/owner ───────────────────
 function canModify(item) {
   return item.created_by === user.value?.id || isManager()
 }
 
-// â”€â”€ Net positions feeding settle-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Net positions feeding settle-up ────────────────────────────────────
 // "Club Pool" pseudo-party used in the unsimplified view for debts that have
 // no single counterparty (wallet consumption, opening balances).
 const POOL_ID = '__pool__'
 
-// Wallet net positions â€” derived from actual FIFO consumption, not a uniform ratio.
-// For each player: net = (amount FIFO consumed from their contributions) âˆ’ (their wallet expense share)
-// sum(consumed) = totalWalletExpenses = sum(expense_shares), so nets always sum to zero. âœ“
+// Wallet net positions — derived from actual FIFO consumption, not a uniform ratio.
+// For each player: net = (amount FIFO consumed from their contributions) − (their wallet expense share)
+// sum(consumed) = totalWalletExpenses = sum(expense_shares), so nets always sum to zero. ✓
 // This correctly attributes wallet credits to whoever contributed first (per FIFO order),
 // rather than spreading credit proportionally across ALL contributors regardless of order.
 const walletNets = computed(() => {
@@ -206,16 +206,16 @@ const openingNets = computed(() =>
     .filter(o => Math.abs(o.net) >= 0.01)
 )
 
-// When opening balances don't net to zero, the group can't fully settle â€”
+// When opening balances don't net to zero, the group can't fully settle —
 // surfaced as a warning so the admin can correct the migration entries.
 const openingSum = computed(() =>
   Math.round(openingNets.value.reduce((s, o) => s + o.net, 0) * 100) / 100
 )
 
-// â”€â”€ Simplified: minimum transactions to clear ALL debts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Simplified: minimum transactions to clear ALL debts ───────────────
 // 1. Compute each player's net from direct-pay expenses + wallet + opening.
 // 2. Greedy: match biggest getter with biggest ower, repeat.
-// Result: fewest possible payment edges â€” like Splitwise "simplify debts".
+// Result: fewest possible payment edges — like Splitwise "simplify debts".
 const settledEdges = computed(() => {
   const netMap = {}
   const addNet = (id, name, delta) => {
@@ -231,7 +231,7 @@ const settledEdges = computed(() => {
   return computeSettledEdges(netMap).map(e => ({ ...e, kind: 'settle' }))
 })
 
-// â”€â”€ Unsimplified: debts exactly as recorded â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Unsimplified: debts exactly as recorded ────────────────────────────
 // Person-paid expenses stay pairwise; wallet and opening-balance positions
 // are shown against the "Club Pool" since they have no single counterparty.
 const directEdges = computed(() => {
@@ -253,7 +253,7 @@ const directEdges = computed(() => {
 
 const activeEdges = computed(() => simplifyOn.value ? settledEdges.value : directEdges.value)
 
-// â”€â”€ My balance summary â€” derived from the active edge set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── My balance summary — derived from the active edge set ─────────────
 const myBalance = computed(() => {
   const mid = myPlayer.value?.id
   if (!mid) return null
@@ -264,7 +264,7 @@ const myBalance = computed(() => {
   return { owe, gets, totalOwe, totalGets, net: totalGets - totalOwe }
 })
 
-// â”€â”€ My wallet position â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── My wallet position ─────────────────────────────────────────────────
 const myWalletPosition = computed(() => {
   const mid = myPlayer.value?.id
   if (!mid) return null
@@ -272,14 +272,14 @@ const myWalletPosition = computed(() => {
   return wb ? { contributed: Number(wb.contributed), expense_share: Number(wb.expense_share), balance: Number(wb.balance) } : null
 })
 
-// â”€â”€ My contribution per expense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── My contribution per expense ────────────────────────────────────────
 function myContrib(exp) {
   const mid = myPlayer.value?.id
   if (!mid) return null
   const part = exp.participants?.find(p => p.player_id === mid)
   if (exp.paid_from_wallet) {
     // Consumption-aware: credit whatever FIFO drew from MY wallet top-ups for
-    // this expense, minus my share â€” same math as the Balance tab's walletNets.
+    // this expense, minus my share — same math as the Balance tab's walletNets.
     // Without this, a wallet expense funded by your own money still showed
     // "you borrowed <share>", contradicting the Balance tab.
     const funded = (walletExpenseContributors.value[exp.id] ?? [])
@@ -305,15 +305,15 @@ function myContrib(exp) {
   return { type: 'split', net: -Number(part.share), paid: 0, share: Number(part.share) }
 }
 
-// â”€â”€ My Ledger: every transaction affecting my balance, chronologically â”€â”€
+// ── My Ledger: every transaction affecting my balance, chronologically ──
 // Same math the Balance tab aggregates (opening + direct-pay nets + wallet
 // consumption nets), laid out as an auditable running-balance table.
-// Impact per row = (what I paid, or my wallet money the pool spent) âˆ’ my share.
+// Impact per row = (what I paid, or my wallet money the pool spent) − my share.
 const showLedger = ref(false)
 const shortDate = d => new Date(String(d).includes('T') || String(d).includes(' ') ? d : d + 'T00:00:00')
   .toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })
 // Compact number for the ledger's phone-width columns (no "AED " prefix)
-const ledgerNum = n => (n < 0 ? 'âˆ’' : '') + Math.abs(n).toFixed(2)
+const ledgerNum = n => (n < 0 ? '−' : '') + Math.abs(n).toFixed(2)
 
 const myLedger = computed(() => {
   const mid = myPlayer.value?.id
@@ -322,28 +322,28 @@ const myLedger = computed(() => {
 
   const ob = openingBalances.value.find(o => o.player_id === mid)
   if (ob && Math.abs(Number(ob.amount)) >= 0.005) {
-    rows.push({ key: 'opening', sort: '0', dateLabel: 'â€”', title: 'Opening balance',
+    rows.push({ key: 'opening', sort: '0', dateLabel: '—', title: 'Opening balance',
       sub: 'carried over from your previous app', impact: Math.round(Number(ob.amount) * 100) / 100 })
   }
 
   ;(walletData.value.contributions ?? []).filter(c => c.player_id === mid).forEach(c => {
     rows.push({ key: 'topup-' + c.id, sort: String(c.contributed_at ?? ''), dateLabel: shortDate(c.contributed_at),
-      title: `Wallet top-up Â· ${aed(Number(c.amount))}`,
-      sub: 'not a debt â€” credited back as the pool spends it', impact: 0 })
+      title: `Wallet top-up · ${aed(Number(c.amount))}`,
+      sub: 'not a debt — credited back as the pool spends it', impact: 0 })
   })
 
   expenses.value.forEach(exp => {
     const c = myContrib(exp)
     if (!c) return
     const paidLabel = exp.paid_from_wallet
-      ? (c.paid > 0 ? `your wallet money used ${aed(c.paid)}` : 'wallet-paid (othersâ€™ money)')
+      ? (c.paid > 0 ? `your wallet money used ${aed(c.paid)}` : 'wallet-paid (others’ money)')
       : (c.paid > 0 ? `you paid ${aed(c.paid)}` : null)
     rows.push({
       key: 'exp-' + exp.id,
       sort: `${exp.expense_date}~${exp.created_at ?? ''}`,
       dateLabel: shortDate(exp.expense_date),
-      title: `${exp.title} Â· ${aed(Number(exp.amount))}`,
-      sub: [paidLabel, c.share > 0 ? `your share ${aed(c.share)}` : null].filter(Boolean).join(' Â· '),
+      title: `${exp.title} · ${aed(Number(exp.amount))}`,
+      sub: [paidLabel, c.share > 0 ? `your share ${aed(c.share)}` : null].filter(Boolean).join(' · '),
       impact: c.net,
     })
   })
@@ -369,7 +369,7 @@ const ledgerView = computed(() => {
   return { rows: all.slice(start), hidden: start, broughtForward: all[start - 1].balance }
 })
 
-// â”€â”€ Balance tab list â€” derived from the active edge set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Balance tab list — derived from the active edge set ───────────────
 // "Club Pool" never gets its own row; pool edges appear inside player rows.
 const playerBalanceList = computed(() => {
   const map = {}
@@ -399,12 +399,12 @@ const playerBalanceList = computed(() => {
 })
 
 // fifoResult is loaded from the server via get_fifo_result() RPC in load()
-// (replaces the former O(nÂ²) browser loop)
+// (replaces the former O(n²) browser loop)
 
 const expandedConsumed = ref(null)
 const expandedExp      = ref(null)
 
-// For wallet-paid expenses: map expenseId â†’ [{ name, player_id, amount }]
+// For wallet-paid expenses: map expenseId → [{ name, player_id, amount }]
 // Inverts fifoResult.consumedBy so the collapsed card can show who funded it.
 const walletExpenseContributors = computed(() => {
   const map = {}
@@ -435,7 +435,7 @@ const walletTotalExpenses = computed(() =>
 )
 const walletBalance = computed(() => walletTotalContributed.value - walletTotalExpenses.value)
 
-// â”€â”€ Totals tab computeds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Totals tab computeds ───────────────────────────────────────────────
 const allTimeTotal = computed(() =>
   expenses.value.reduce((s, e) => s + Number(e.amount), 0)
 )
@@ -490,7 +490,7 @@ const expensesByMonth = computed(() => {
     })
 })
 
-// â”€â”€ Add / Edit expense form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Add / Edit expense form ────────────────────────────────────────────
 const showForm   = ref(false)
 const editingId  = ref(null)
 const formError  = ref(null)
@@ -605,7 +605,7 @@ async function saveExpense() {
     if (!form.value.payers.length) { formError.value = 'Add at least one payer'; return }
     const payerTotal = form.value.payers.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
     if (Math.abs(payerTotal - amt) > 0.01) {
-      formError.value = `Payer amounts total ${aed(payerTotal)} but expense is ${aed(amt)} â€” they must match`
+      formError.value = `Payer amounts total ${aed(payerTotal)} but expense is ${aed(amt)} — they must match`
       return
     }
     if (form.value.payers.some(p => !p.player_id || !(parseFloat(p.amount) > 0))) {
@@ -624,7 +624,7 @@ async function saveExpense() {
       if (old?.paid_from_wallet) available += Number(old.amount)
     }
     if (amt > available + 0.005) {
-      formError.value = `Wallet balance is ${aed(available)} â€” not enough to cover this expense.`
+      formError.value = `Wallet balance is ${aed(available)} — not enough to cover this expense.`
       return
     }
   }
@@ -679,7 +679,7 @@ async function saveExpense() {
   await load()
 }
 
-// â”€â”€ Delete expense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Delete expense ─────────────────────────────────────────────────────
 const confirmDelId = ref(null)
 const deletingId   = ref(null)
 
@@ -694,7 +694,7 @@ async function doDelete() {
   await load()
 }
 
-// â”€â”€ Wallet contribution form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Wallet contribution form ───────────────────────────────────────────
 const showWalletForm   = ref(false)
 const walletEditId     = ref(null)
 const walletFormError  = ref(null)
@@ -770,7 +770,7 @@ async function doDeleteContrib() {
   await load()
 }
 
-// â”€â”€ Opening balances (v19) â€” club admin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Opening balances (v19) — club admin only ───────────────────────────
 const showObForm   = ref(false)
 const obFormError  = ref(null)
 const obFormSaving = ref(false)
@@ -826,7 +826,7 @@ async function doDeleteOb() {
   await load()
 }
 
-// â”€â”€ Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Notes ──────────────────────────────────────────────────────────────
 const noteText   = ref('')
 const noteSaving = ref(false)
 
@@ -874,7 +874,7 @@ const resolveUserName = uid => {
 // Resolve which player record created an expense (for the expanded card "Added by" line)
 const expCreatorPlayer = exp => players.value.find(p => p.user_id === exp.created_by) ?? null
 
-// â”€â”€ Custom categories (per-club, localStorage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Custom categories (per-club, localStorage) ─────────────────────────
 const showAddCat = ref(false)
 const newCatName = ref('')
 
@@ -897,14 +897,14 @@ function confirmAddCategory() {
   const name = newCatName.value.trim()
   if (!name) return
   const value = 'custom_' + Date.now()
-  customCategories.value = [...customCategories.value, { value, label: name, icon: 'ðŸ·ï¸' }]
+  customCategories.value = [...customCategories.value, { value, label: name, icon: '🏷️' }]
   form.value.category = value
   saveCats()
   showAddCat.value = false
   newCatName.value = ''
 }
 
-// â”€â”€ Category breakdown for Insights tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Category breakdown for Insights tab ───────────────────────────────
 const categoryBreakdown = computed(() => {
   const map = {}
   expenses.value.forEach(e => {
@@ -923,7 +923,7 @@ const categoryBreakdown = computed(() => {
 <template>
   <!-- No club selected -->
   <div v-if="!currentClub && !loading" class="card p-10 text-center fade-up">
-    <div class="text-4xl mb-3">ðŸ’°</div>
+    <div class="text-4xl mb-3">💰</div>
     <p class="font-bold text-slate-600 text-lg mb-1">No club selected</p>
     <p class="text-slate-400 text-sm mb-4">Select a club from <strong>My Clubs</strong> or the top bar to view Split Pay.</p>
     <RouterLink to="/clubs" class="btn-primary inline-block px-6 py-2">Go to My Clubs</RouterLink>
@@ -934,25 +934,25 @@ const categoryBreakdown = computed(() => {
   </div>
 
   <template v-else>
-    <PageHeader icon="ðŸ’°" title="Split Pay" subtitle="Track & split court costs equally among players">
+    <PageHeader icon="💰" title="Split Pay" subtitle="Track & split court costs equally among players">
       <template #help>
         <div class="text-xs space-y-1.5">
-          <p><strong class="text-slate-800">Activities</strong> â€” Full expense list with your contribution per item. Only the person who added an entry (or a manager) can edit or delete it.</p>
-          <p><strong class="text-slate-800">Balance</strong> â€” Who owes whom. With <strong>Simplify debts ON</strong>, the app restructures debts into the fewest possible payments (totals never change). OFF shows debts exactly as recorded. Tap a name to expand.</p>
-          <p><strong class="text-slate-800">Opening Balances</strong> â€” Migrating from another app? A club admin can record each player's starting balance once (positive = gets back, negative = owes).</p>
-          <p><strong class="text-slate-800">Wallet</strong> â€” Shared cash pool. Contributions are consumed oldest-first (FIFO) when a wallet expense is recorded.</p>
-          <p><strong class="text-slate-800">Insights</strong> â€” Category breakdown chart, monthly spending, and all-time summary.</p>
-          <p><strong class="text-slate-800">Notes</strong> â€” Shared notepad for payment reminders.</p>
+          <p><strong class="text-slate-800">Activities</strong> — Full expense list with your contribution per item. Only the person who added an entry (or a manager) can edit or delete it.</p>
+          <p><strong class="text-slate-800">Balance</strong> — Who owes whom. With <strong>Simplify debts ON</strong>, the app restructures debts into the fewest possible payments (totals never change). OFF shows debts exactly as recorded. Tap a name to expand.</p>
+          <p><strong class="text-slate-800">Opening Balances</strong> — Migrating from another app? A club admin can record each player's starting balance once (positive = gets back, negative = owes).</p>
+          <p><strong class="text-slate-800">Wallet</strong> — Shared cash pool. Contributions are consumed oldest-first (FIFO) when a wallet expense is recorded.</p>
+          <p><strong class="text-slate-800">Insights</strong> — Category breakdown chart, monthly spending, and all-time summary.</p>
+          <p><strong class="text-slate-800">Notes</strong> — Shared notepad for payment reminders.</p>
         </div>
       </template>
     </PageHeader>
 
-    <!-- â”€â”€ Summary card â”€â”€ -->
+    <!-- ── Summary card ── -->
     <div class="card-neon p-4 mb-4 fade-up">
       <div v-if="myBalance">
         <!-- Settled -->
         <div v-if="Math.abs(myBalance.net) < 0.01" class="text-base font-bold text-slate-300">
-          All settled up! ðŸŽ‰
+          All settled up! 🎉
         </div>
         <!-- Owe overall -->
         <div v-if="myBalance.net < -0.01">
@@ -964,7 +964,7 @@ const categoryBreakdown = computed(() => {
           <div class="text-xs text-slate-500 mb-0.5">You get back overall</div>
           <div class="text-2xl font-extrabold text-emerald-400 mb-3">+{{ aed(myBalance.net) }}</div>
         </div>
-        <!-- Individual debts â€” Splitwise style list -->
+        <!-- Individual debts — Splitwise style list -->
         <div v-if="myBalance.owe.length || myBalance.gets.length" class="space-y-2">
           <template v-for="(o, i) in myBalance.owe" :key="'owe-' + o.name">
             <div v-if="showAllMyBalance || i < 2" class="flex items-center justify-between">
@@ -990,7 +990,7 @@ const categoryBreakdown = computed(() => {
       </div>
     </div>
 
-    <!-- â”€â”€ Tab bar (5 tabs) â”€â”€ -->
+    <!-- ── Tab bar (5 tabs) ── -->
     <div class="flex gap-1 mb-4 rounded-2xl p-1" style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07)">
       <button v-for="t in [
           { key: 'activities', label: 'Expenses' },
@@ -1007,19 +1007,19 @@ const categoryBreakdown = computed(() => {
       </button>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• EXPENSES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════════ EXPENSES ══════════════════════════ -->
     <div v-if="activeTab === 'activities'" class="fade-up">
       <button class="btn-primary w-full py-3 mb-4 text-sm" @click="openAddForm">
-        âž• Add Expense
+        ➕ Add Expense
       </button>
 
       <div v-if="!expenses.length" class="card p-10 text-center text-slate-400">
-        <div class="text-4xl mb-3">ðŸ’¸</div>
+        <div class="text-4xl mb-3">💸</div>
         <p class="font-semibold mb-1">No expenses yet</p>
         <p class="text-sm">Record the first shared cost for this club.</p>
       </div>
 
-      <!-- Expenses grouped by month â€” Splitwise style -->
+      <!-- Expenses grouped by month — Splitwise style -->
       <template v-for="group in expensesByMonth" :key="group.monthKey">
         <!-- Month header -->
         <div class="flex items-center gap-2 mt-5 mb-2 first:mt-0">
@@ -1029,7 +1029,7 @@ const categoryBreakdown = computed(() => {
         </div>
 
         <div v-for="exp in group.expenses" :key="exp.id" class="card mb-2 overflow-hidden">
-          <!-- Collapsed row â€” tap to expand -->
+          <!-- Collapsed row — tap to expand -->
           <button class="w-full flex items-center gap-3 px-4 py-3 text-left"
             @click="expandedExp = expandedExp === exp.id ? null : exp.id">
             <!-- Date column -->
@@ -1049,12 +1049,12 @@ const categoryBreakdown = computed(() => {
                 <span v-if="exp.paid_from_wallet"
                   class="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md"
                   style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.3)">
-                  ðŸ’° WALLET
+                  💰 WALLET
                 </span>
               </div>
               <div class="text-xs text-slate-400">
                 <template v-if="exp.paid_from_wallet">
-                  <span>Wallet Â· </span>
+                  <span>Wallet · </span>
                   <template v-if="walletExpenseContributors[exp.id]?.length">
                     <template v-for="(wc, i) in walletExpenseContributors[exp.id]" :key="wc.player_id">
                       <span v-if="i > 0">, </span>
@@ -1062,11 +1062,11 @@ const categoryBreakdown = computed(() => {
                     </template>
                   </template>
                   <span v-else class="text-slate-500">common pool</span>
-                  <span class="text-slate-600"> Â· {{ aed(exp.amount) }}</span>
+                  <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
                 </template>
                 <template v-else-if="(exp.payers?.length ?? 0) > 1">
                   <span class="text-slate-400">Multiple payers</span>
-                  <span class="text-slate-600"> Â· {{ aed(exp.amount) }}</span>
+                  <span class="text-slate-600"> · {{ aed(exp.amount) }}</span>
                 </template>
                 <template v-else>
                   <span class="text-slate-400">{{ exp.paid_name }}</span>
@@ -1103,16 +1103,16 @@ const categoryBreakdown = computed(() => {
                 @click.stop="expCreatorPlayer(exp) && router.push('/player/' + expCreatorPlayer(exp).id)">
                 {{ expCreatorPlayer(exp)?.display_name ?? (exp.created_by === user?.id ? 'You' : 'Member') }}
               </span>
-              <span class="text-xs text-slate-500">Â·</span>
+              <span class="text-xs text-slate-500">·</span>
               <span class="text-xs text-slate-500">{{ fmtDatetime(exp.created_at) }}</span>
             </div>
 
-            <!-- Wallet funding breakdown â€” shows exactly who funded how much via FIFO -->
+            <!-- Wallet funding breakdown — shows exactly who funded how much via FIFO -->
             <div v-if="exp.paid_from_wallet && walletExpenseContributors[exp.id]?.length"
               class="rounded-xl overflow-hidden mb-3"
               style="background:rgba(168,85,247,.07); border:1px solid rgba(168,85,247,.18)">
               <div class="px-3 py-2 flex items-center gap-1.5">
-                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#c084fc">ðŸ’° Wallet funded by</span>
+                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#c084fc">💰 Wallet funded by</span>
               </div>
               <div v-for="wc in walletExpenseContributors[exp.id]" :key="wc.player_id"
                 class="flex items-center justify-between px-3 py-2 border-t"
@@ -1131,7 +1131,7 @@ const categoryBreakdown = computed(() => {
               class="rounded-xl overflow-hidden mb-3"
               style="background:rgba(0,180,216,.07); border:1px solid rgba(0,180,216,.2)">
               <div class="px-3 py-2 flex items-center gap-1.5">
-                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#0099b8">ðŸ‘¥ Multiple payers</span>
+                <span class="text-[10px] font-semibold uppercase tracking-wide" style="color:#0099b8">👥 Multiple payers</span>
               </div>
               <div v-for="mp in exp.payers" :key="mp.player_id"
                 class="flex items-center justify-between px-3 py-2 border-t"
@@ -1148,7 +1148,7 @@ const categoryBreakdown = computed(() => {
             <div class="text-xs text-slate-400 mb-2">
               Split equally among {{ exp.participants?.length ?? 0 }} people
               <span v-if="exp.participants?.length">
-                Â· â‰ˆ{{ aed(Number(exp.amount) / exp.participants.length) }} each
+                · ≈{{ aed(Number(exp.amount) / exp.participants.length) }} each
               </span>
             </div>
             <div v-if="exp.participants?.length" class="flex flex-wrap gap-1.5 mb-3">
@@ -1161,27 +1161,27 @@ const categoryBreakdown = computed(() => {
             </div>
             <div v-if="canModify(exp)" class="flex items-center gap-3">
               <button class="text-xs text-slate-400 hover:text-neon transition"
-                @click.stop="openEditForm(exp)">âœï¸ Edit</button>
+                @click.stop="openEditForm(exp)">✏️ Edit</button>
               <button class="text-xs text-rose-400/70 hover:text-rose-400 transition ml-auto"
                 :disabled="deletingId === exp.id"
                 @click.stop="confirmDelId = exp.id">
-                {{ deletingId === exp.id ? 'â³ Deletingâ€¦' : 'ðŸ—‘ï¸ Delete' }}
+                {{ deletingId === exp.id ? '⏳ Deleting…' : '🗑️ Delete' }}
               </button>
             </div>
           </div>
         </div>
       </template>
 
-      <!-- â”€â”€ Opening Balances (migration from another app) â€” collapsible ribbon â”€â”€ -->
+      <!-- ── Opening Balances (migration from another app) — collapsible ribbon ── -->
       <div class="card overflow-hidden mt-4">
-        <!-- Ribbon header â€” always visible -->
+        <!-- Ribbon header — always visible -->
         <button class="w-full px-4 py-3 flex items-center justify-between gap-3 text-left"
           @click="showOpeningBalances = !showOpeningBalances">
           <div class="min-w-0 flex-1">
-            <div class="text-xs font-semibold text-slate-300">âš–ï¸ Opening Balances</div>
+            <div class="text-xs font-semibold text-slate-300">⚖️ Opening Balances</div>
             <div class="text-xs text-slate-500 mt-0.5">
               <template v-if="openingBalances.length">
-                {{ openingBalances.length }} {{ openingBalances.length === 1 ? 'player' : 'players' }} Â·
+                {{ openingBalances.length }} {{ openingBalances.length === 1 ? 'player' : 'players' }} ·
                 net
                 <span :class="Math.abs(openingSum) < 0.01 ? 'text-emerald-400' : 'text-amber-400'">
                   {{ openingSum >= 0 ? '' : '-' }}{{ aed(Math.abs(openingSum)) }}
@@ -1192,9 +1192,9 @@ const categoryBreakdown = computed(() => {
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <button v-if="isManager()" class="btn-primary text-xs px-3 py-1.5"
-              @click.stop="openObAddForm">âž• Set</button>
+              @click.stop="openObAddForm">➕ Set</button>
             <span class="text-slate-400 text-sm transition-transform duration-200"
-              :style="showOpeningBalances ? 'display:inline-block; transform:rotate(180deg)' : ''">â–¾</span>
+              :style="showOpeningBalances ? 'display:inline-block; transform:rotate(180deg)' : ''">▾</span>
           </div>
         </button>
 
@@ -1225,9 +1225,9 @@ const categoryBreakdown = computed(() => {
               </span>
               <template v-if="isManager()">
                 <button class="text-xs text-slate-500 hover:text-neon transition"
-                  @click="openObEditForm(ob)">âœï¸</button>
+                  @click="openObEditForm(ob)">✏️</button>
                 <button class="text-xs text-rose-500/60 hover:text-rose-400 transition"
-                  @click="confirmDelOb = ob.player_id">ðŸ—‘ï¸</button>
+                  @click="confirmDelOb = ob.player_id">🗑️</button>
               </template>
             </div>
           </div>
@@ -1235,40 +1235,40 @@ const categoryBreakdown = computed(() => {
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• BALANCE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
     <div v-if="activeTab === 'balance'" class="fade-up">
 
-      <!-- Opening balances don't net to zero â€” group can't fully settle -->
+      <!-- Opening balances don't net to zero — group can't fully settle -->
       <div v-if="Math.abs(openingSum) >= 0.01"
         class="mb-3 px-3.5 py-2.5 rounded-xl text-[11px] leading-relaxed"
         style="background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.25); color:#fbbf24">
-        âš ï¸ Opening balances net to <strong>{{ aed(openingSum) }}</strong> instead of zero,
+        ⚠️ Opening balances net to <strong>{{ aed(openingSum) }}</strong> instead of zero,
         so the group can't fully settle. Ask an admin to adjust them in the Expenses tab.
       </div>
 
-      <!-- My Ledger â€” auditable running balance -->
+      <!-- My Ledger — auditable running balance -->
       <div v-if="myPlayer && myLedger.rows.length" class="card mb-3 overflow-hidden">
         <button class="w-full flex items-center justify-between px-4 py-3 text-left"
           @click="showLedger = !showLedger">
           <div>
-            <span class="text-sm font-bold text-slate-700">ðŸ“’ My Ledger</span>
+            <span class="text-sm font-bold text-slate-700">📒 My Ledger</span>
             <span class="text-[11px] text-slate-400 ml-2">how your balance is built, line by line</span>
           </div>
-          <span class="text-xs text-slate-400 shrink-0">{{ showLedger ? 'Hide â–²' : 'Show â–¼' }}</span>
+          <span class="text-xs text-slate-400 shrink-0">{{ showLedger ? 'Hide ▲' : 'Show ▼' }}</span>
         </button>
 
         <div v-if="showLedger" class="px-4 pb-4 fade-up">
           <p class="text-[11px] text-slate-400 mb-2 leading-relaxed">
-            All amounts in AED. Impact = what you paid (or your wallet money the pool spent) âˆ’ your share;
+            All amounts in AED. Impact = what you paid (or your wallet money the pool spent) − your share;
             below it, <span class="font-semibold">=</span> is your running balance.
             Wallet top-ups are not debts; they're credited back as the pool spends them.
           </p>
 
-          <!-- Earlier entries collapsed â€” statement style -->
+          <!-- Earlier entries collapsed — statement style -->
           <div v-if="ledgerView.hidden" class="flex gap-2 mb-1">
             <button class="flex-1 text-[11px] font-semibold py-1.5 rounded-lg transition text-neon hover:bg-[rgba(0,180,216,0.06)]"
               @click="ledgerVisible += LEDGER_PAGE">
-              â¤’ Load {{ Math.min(LEDGER_PAGE, ledgerView.hidden) }} earlier
+              ⤒ Load {{ Math.min(LEDGER_PAGE, ledgerView.hidden) }} earlier
             </button>
             <button class="text-[11px] py-1.5 px-3 rounded-lg transition text-slate-400 hover:text-neon"
               @click="ledgerVisible = myLedger.rows.length">
@@ -1277,7 +1277,7 @@ const categoryBreakdown = computed(() => {
           </div>
           <div v-if="ledgerView.hidden"
             class="flex items-start gap-2 py-2 border-b border-[rgba(15,23,42,0.08)]">
-            <div class="w-11 shrink-0 text-[10px] text-slate-400 pt-0.5">â€¦</div>
+            <div class="w-11 shrink-0 text-[10px] text-slate-400 pt-0.5">…</div>
             <div class="flex-1 min-w-0">
               <div class="text-xs text-slate-500 italic">Balance brought forward</div>
               <div class="text-[10px] text-slate-400 mt-0.5">{{ ledgerView.hidden }} earlier {{ ledgerView.hidden === 1 ? 'entry' : 'entries' }} above</div>
@@ -1288,7 +1288,7 @@ const categoryBreakdown = computed(() => {
             </div>
           </div>
 
-          <!-- Ledger rows â€” phone-first stacked layout -->
+          <!-- Ledger rows — phone-first stacked layout -->
           <div v-for="r in ledgerView.rows" :key="r.key"
             class="flex items-start gap-2 py-2 border-b border-[rgba(15,23,42,0.04)]">
             <div class="w-11 shrink-0 text-[10px] text-slate-400 pt-0.5 leading-tight">{{ r.dateLabel }}</div>
@@ -1299,7 +1299,7 @@ const categoryBreakdown = computed(() => {
             <div class="shrink-0 text-right">
               <div class="text-xs font-semibold whitespace-nowrap"
                 :class="r.impact > 0.005 ? 'text-emerald-500' : r.impact < -0.005 ? 'text-rose-400' : 'text-slate-400'">
-                {{ Math.abs(r.impact) < 0.005 ? 'â€”' : (r.impact > 0 ? '+' : '') + ledgerNum(r.impact) }}
+                {{ Math.abs(r.impact) < 0.005 ? '—' : (r.impact > 0 ? '+' : '') + ledgerNum(r.impact) }}
               </div>
               <div class="text-[10px] font-bold whitespace-nowrap mt-0.5"
                 :class="r.balance >= -0.005 ? 'text-emerald-500' : 'text-rose-400'">
@@ -1322,18 +1322,18 @@ const categoryBreakdown = computed(() => {
       </div>
 
       <div v-if="!playerBalanceList.length" class="card p-10 text-center text-slate-400">
-        <div class="text-4xl mb-3">âš–ï¸</div>
+        <div class="text-4xl mb-3">⚖️</div>
         <p class="font-semibold mb-1">All settled!</p>
         <p class="text-sm">No outstanding balances in this club.</p>
       </div>
 
-      <!-- Balance list â€” person rows -->
+      <!-- Balance list — person rows -->
       <div class="space-y-2">
         <div v-for="p in playerBalanceList" :key="p.id"
           class="card overflow-hidden"
           :class="isMe(p.id) ? 'card-neon' : ''">
 
-          <!-- Row header â€” tap to expand -->
+          <!-- Row header — tap to expand -->
           <button class="w-full flex items-center gap-3 px-4 py-4 text-left"
             @click="expandedPlayer = expandedPlayer === p.id ? null : p.id">
 
@@ -1378,8 +1378,8 @@ const categoryBreakdown = computed(() => {
                   <span class="text-slate-500"> owe{{ isMe(p.id) ? '' : 's' }} </span>
                   <span class="font-semibold">{{ o.to }}</span>
                 </div>
-                <div v-if="o.kind === 'wallet'" class="text-xs text-slate-400 mt-0.5">ðŸ’° wallet payment</div>
-                <div v-if="o.kind === 'opening'" class="text-xs text-slate-400 mt-0.5">âš–ï¸ opening balance</div>
+                <div v-if="o.kind === 'wallet'" class="text-xs text-slate-400 mt-0.5">💰 wallet payment</div>
+                <div v-if="o.kind === 'opening'" class="text-xs text-slate-400 mt-0.5">⚖️ opening balance</div>
               </div>
               <span class="text-rose-400 font-bold text-sm shrink-0">{{ aed(o.amount) }}</span>
             </div>
@@ -1392,25 +1392,25 @@ const categoryBreakdown = computed(() => {
                   <span class="text-slate-500"> pays </span>
                   <span class="font-semibold">{{ isMe(p.id) ? 'you' : p.name }}</span>
                 </div>
-                <div v-if="g.kind === 'wallet'" class="text-[10px] text-slate-500 mt-0.5">ðŸ’° wallet payment</div>
-                <div v-if="g.kind === 'opening'" class="text-[10px] text-slate-500 mt-0.5">âš–ï¸ opening balance</div>
+                <div v-if="g.kind === 'wallet'" class="text-[10px] text-slate-500 mt-0.5">💰 wallet payment</div>
+                <div v-if="g.kind === 'opening'" class="text-[10px] text-slate-500 mt-0.5">⚖️ opening balance</div>
               </div>
               <span class="text-emerald-400 font-bold text-sm shrink-0">{{ aed(g.amount) }}</span>
             </div>
             <div v-if="!p.owes.length && !p.gets.length"
-              class="px-5 py-4 text-sm text-slate-500 text-center">Settled up âœ“</div>
+              class="px-5 py-4 text-sm text-slate-500 text-center">Settled up ✓</div>
           </div>
         </div>
       </div>
 
-      <!-- Simplify debts toggle â€” bottom banner (Splitwise style) -->
+      <!-- Simplify debts toggle — bottom banner (Splitwise style) -->
       <div class="mt-4 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl"
         style="background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.1)">
         <p class="text-xs text-slate-400 leading-snug">
           <span class="font-semibold text-neon">Simplify debts</span> is {{ simplifyOn ? 'on' : 'off' }}
           <span class="text-slate-500">{{ simplifyOn
-            ? ' â€” restructured into the fewest payments'
-            : ' â€” showing debts exactly as recorded' }}</span>
+            ? ' — restructured into the fewest payments'
+            : ' — showing debts exactly as recorded' }}</span>
         </p>
         <button @click="simplifyOn = !simplifyOn"
           class="shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition-all duration-200"
@@ -1422,7 +1422,7 @@ const categoryBreakdown = computed(() => {
 
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• WALLET â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->
     <div v-if="activeTab === 'wallet'" class="fade-up space-y-4">
 
       <!-- Wallet balance summary -->
@@ -1440,15 +1440,15 @@ const categoryBreakdown = computed(() => {
         </div>
       </div>
 
-      <!-- Add Contribution â€” managers/owners only; players can still add wallet-paid expenses -->
+      <!-- Add Contribution — managers/owners only; players can still add wallet-paid expenses -->
       <button v-if="isManager()" class="btn-primary w-full py-3 text-sm" @click="openWalletAddForm">
-        âž• Add Contribution
+        ➕ Add Contribution
       </button>
       <div v-else class="text-center text-xs text-slate-500 py-2">
-        Contributions are managed by club managers Â· you can still pay expenses from the wallet
+        Contributions are managed by club managers · you can still pay expenses from the wallet
       </div>
 
-      <!-- â”€â”€ Active FIFO Queue â”€â”€ -->
+      <!-- ── Active FIFO Queue ── -->
       <div class="card overflow-hidden">
         <div class="px-4 py-2.5 border-b border-[rgba(15,23,42,0.06)]">
           <div class="text-xs font-semibold text-slate-300">FIFO Queue</div>
@@ -1456,7 +1456,7 @@ const categoryBreakdown = computed(() => {
         </div>
 
         <div v-if="!fifoResult.active.length" class="px-4 py-8 text-center text-sm text-slate-500">
-          <div class="text-3xl mb-2">ðŸª™</div>
+          <div class="text-3xl mb-2">🪙</div>
           No active contributions. Add the first one!
         </div>
 
@@ -1472,10 +1472,10 @@ const categoryBreakdown = computed(() => {
                 <div class="text-sm font-semibold"
                   :class="isMe(c.player_id) ? 'text-neon' : 'text-slate-100'">
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
-                  <span v-if="isMe(c.player_id)" class="text-[10px] text-slate-500 ml-1">Â· {{ c.player_name }}</span>
+                  <span v-if="isMe(c.player_id)" class="text-[10px] text-slate-500 ml-1">· {{ c.player_name }}</span>
                 </div>
                 <div class="text-xs text-slate-400">
-                  {{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> Â· {{ c.notes }}</span>
+                  {{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span>
                 </div>
                 <div class="text-xs text-slate-500">
                   Added by {{ resolveUserName(c.created_by) }}
@@ -1485,31 +1485,31 @@ const categoryBreakdown = computed(() => {
             <div class="text-right shrink-0">
               <div class="font-bold text-emerald-400 text-base">{{ aed(c.remaining) }}</div>
               <div class="text-xs text-slate-400">of {{ aed(c.amount) }} received</div>
-              <div v-if="c.amount - c.remaining > 0.005" class="text-xs text-rose-400 font-medium">âˆ’{{ aed(Math.round((c.amount - c.remaining) * 100) / 100) }} used</div>
+              <div v-if="c.amount - c.remaining > 0.005" class="text-xs text-rose-400 font-medium">−{{ aed(Math.round((c.amount - c.remaining) * 100) / 100) }} used</div>
             </div>
           </div>
           <!-- Partial consumption so far -->
           <div v-if="c.consumedBy.length" class="mt-2 ml-9 space-y-1.5">
             <div v-for="cb in c.consumedBy" :key="cb.expenseId"
               class="flex items-center justify-between text-xs">
-              <span class="text-slate-300 font-medium">â†’ {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal"> Â· {{ fmtDate(cb.expense_date) }}</span></span>
-              <span class="text-rose-400 font-semibold shrink-0 ml-2">âˆ’{{ aed(cb.amount) }}</span>
+              <span class="text-slate-300 font-medium">→ {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal"> · {{ fmtDate(cb.expense_date) }}</span></span>
+              <span class="text-rose-400 font-semibold shrink-0 ml-2">−{{ aed(cb.amount) }}</span>
             </div>
           </div>
           <div v-if="canModify(c)" class="flex gap-3 mt-2 ml-9">
             <button class="text-xs text-slate-400 hover:text-neon transition"
-              @click="openWalletEditForm(c)">âœï¸ Edit</button>
+              @click="openWalletEditForm(c)">✏️ Edit</button>
             <button class="text-xs text-rose-400/70 hover:text-rose-400 transition"
-              @click="confirmDelWallet = c.id">ðŸ—‘ï¸ Delete</button>
+              @click="confirmDelWallet = c.id">🗑️ Delete</button>
           </div>
         </div>
       </div>
 
-      <!-- â”€â”€ Consumed contributions â”€â”€ -->
+      <!-- ── Consumed contributions ── -->
       <div v-if="fifoResult.consumed.length" class="card overflow-hidden">
         <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
-          <div class="text-sm font-semibold text-slate-300">âœ“ Wallet Consumed</div>
-          <div class="text-xs text-slate-400 mt-0.5">Fully used â€” tap to see which expenses</div>
+          <div class="text-sm font-semibold text-slate-300">✓ Wallet Consumed</div>
+          <div class="text-xs text-slate-400 mt-0.5">Fully used — tap to see which expenses</div>
         </div>
 
         <div v-for="c in fifoResult.consumed" :key="c.id"
@@ -1520,19 +1520,19 @@ const categoryBreakdown = computed(() => {
             @click="expandedConsumed = expandedConsumed === c.id ? null : c.id">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-7 h-7 rounded-xl flex items-center justify-center text-sm shrink-0"
-                style="background:rgba(100,116,139,.18); color:#94a3b8">âœ“</div>
+                style="background:rgba(100,116,139,.18); color:#94a3b8">✓</div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-slate-300">
                   {{ isMe(c.player_id) ? 'You' : c.player_name }}
                 </div>
-                <div class="text-xs text-slate-400">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> Â· {{ c.notes }}</span></div>
+                <div class="text-xs text-slate-400">{{ fmtDatetime(c.contributed_at) }}<span v-if="c.notes"> · {{ c.notes }}</span></div>
                 <div class="text-xs text-slate-500">Added by {{ resolveUserName(c.created_by) }}</div>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <div class="font-bold text-slate-400 line-through text-sm">{{ aed(c.amount) }}</div>
               <span class="text-slate-400 text-xs transition-transform duration-200"
-                :style="expandedConsumed === c.id ? 'transform:rotate(180deg)' : ''">â–¾</span>
+                :style="expandedConsumed === c.id ? 'transform:rotate(180deg)' : ''">▾</span>
             </div>
           </button>
 
@@ -1544,15 +1544,15 @@ const categoryBreakdown = computed(() => {
               class="flex items-center justify-between rounded-xl px-3 py-2.5"
               style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09)">
               <span class="text-sm font-medium text-slate-200 min-w-0 truncate">
-                {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal text-xs"> Â· {{ fmtDate(cb.expense_date) }}</span>
+                {{ cb.title }}<span v-if="cb.expense_date" class="text-slate-400 font-normal text-xs"> · {{ fmtDate(cb.expense_date) }}</span>
               </span>
-              <span class="text-sm font-bold text-rose-400 shrink-0 ml-3">âˆ’{{ aed(cb.amount) }}</span>
+              <span class="text-sm font-bold text-rose-400 shrink-0 ml-3">−{{ aed(cb.amount) }}</span>
             </div>
             <div v-if="canModify(c)" class="flex gap-3 pt-1">
               <button class="text-xs text-slate-400 hover:text-neon transition"
-                @click="openWalletEditForm(c)">âœï¸ Edit</button>
+                @click="openWalletEditForm(c)">✏️ Edit</button>
               <button class="text-xs text-rose-400/70 hover:text-rose-400 transition"
-                @click="confirmDelWallet = c.id">ðŸ—‘ï¸ Delete</button>
+                @click="confirmDelWallet = c.id">🗑️ Delete</button>
             </div>
           </div>
         </div>
@@ -1560,7 +1560,7 @@ const categoryBreakdown = computed(() => {
 
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOTALS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════════ TOTALS ══════════════════════════════ -->
     <div v-if="activeTab === 'totals'" class="fade-up">
       <div class="grid grid-cols-2 gap-3 mb-5">
         <div class="card p-4 text-center">
@@ -1581,7 +1581,7 @@ const categoryBreakdown = computed(() => {
           <div v-for="m in last3Months" :key="m.key" class="flex-1 flex flex-col items-center gap-1.5">
             <div class="text-[10px] text-slate-400 font-semibold text-center leading-tight">
               <span v-if="m.total > 0">{{ aed(m.total) }}</span>
-              <span v-else class="opacity-40">â€”</span>
+              <span v-else class="opacity-40">—</span>
             </div>
             <div class="w-full rounded-t-xl transition-all duration-700 min-h-[4px]"
               :style="{
@@ -1637,21 +1637,21 @@ const categoryBreakdown = computed(() => {
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• NOTES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════════ NOTES ═══════════════════════════════ -->
     <div v-if="activeTab === 'notes'" class="fade-up">
       <div class="card p-4 mb-4">
         <div class="text-xs uppercase tracking-widest text-slate-400 mb-2">Add a Note</div>
         <textarea v-model="noteText" rows="3" class="input resize-none w-full mb-3"
-          placeholder="Payment reminders, group agreements, reimbursements to trackâ€¦" />
+          placeholder="Payment reminders, group agreements, reimbursements to track…" />
         <button class="btn-primary w-full py-2.5 text-sm"
           :disabled="!noteText.trim() || noteSaving"
           @click="addNote">
-          {{ noteSaving ? 'Savingâ€¦' : 'ðŸ“ Post Note' }}
+          {{ noteSaving ? 'Saving…' : '📝 Post Note' }}
         </button>
       </div>
 
       <div v-if="!notes.length" class="card p-10 text-center text-slate-400">
-        <div class="text-4xl mb-3">ðŸ“</div>
+        <div class="text-4xl mb-3">📝</div>
         <p class="font-semibold mb-1">No notes yet</p>
         <p class="text-sm">Post payment reminders or agreements for the group to see.</p>
       </div>
@@ -1662,7 +1662,7 @@ const categoryBreakdown = computed(() => {
           <div class="flex items-center justify-between">
             <div class="text-xs text-slate-400">
               <span class="font-medium text-slate-300">{{ n.author }}</span>
-              Â· {{ timeAgo(n.created_at) }}
+              · {{ timeAgo(n.created_at) }}
             </div>
             <button v-if="canModify(n)" class="text-xs text-rose-400/70 hover:text-rose-400 transition"
               @click="confirmDelNoteId = n.id">Delete</button>
@@ -1671,7 +1671,7 @@ const categoryBreakdown = computed(() => {
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ADD / EDIT EXPENSE FORM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ ADD / EDIT EXPENSE FORM ════════════════ -->
     <Teleport to="body">
       <div v-if="showForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showForm = false" />
@@ -1685,7 +1685,7 @@ const categoryBreakdown = computed(() => {
               <span class="font-semibold text-slate-800">
                 {{ editingId ? 'Edit Expense' : 'Add Expense' }}
               </span>
-              <button @click="showForm = false" class="text-slate-400 hover:text-slate-700 text-lg">âœ•</button>
+              <button @click="showForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
           </div>
 
@@ -1711,7 +1711,7 @@ const categoryBreakdown = computed(() => {
                 </button>
                 <!-- Add new category -->
                 <div v-if="showAddCat" class="flex items-center gap-1.5 w-full mt-1">
-                  <input v-model="newCatName" type="text" placeholder="Category nameâ€¦"
+                  <input v-model="newCatName" type="text" placeholder="Category name…"
                     class="input text-xs h-8 flex-1 px-2 py-1"
                     maxlength="30"
                     @keyup.enter="confirmAddCategory"
@@ -1720,7 +1720,7 @@ const categoryBreakdown = computed(() => {
                     class="px-3 h-8 rounded-xl text-xs font-semibold text-white shrink-0"
                     style="background:linear-gradient(135deg,#00b4cc,#0077a0)">Add</button>
                   <button @click="showAddCat = false; newCatName = ''"
-                    class="text-slate-400 hover:text-slate-600 text-sm shrink-0">âœ•</button>
+                    class="text-slate-400 hover:text-slate-600 text-sm shrink-0">✕</button>
                 </div>
                 <button v-else
                   @click="showAddCat = true"
@@ -1755,14 +1755,14 @@ const categoryBreakdown = computed(() => {
                   class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all"
                   :class="form.paymentSource === 'person' ? 'text-white' : 'text-slate-500 border border-slate-200'"
                   :style="form.paymentSource === 'person' ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
-                  ðŸ‘¤ Person Paid
+                  👤 Person Paid
                 </button>
                 <button
                   @click="form.paymentSource = 'wallet'"
                   class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl text-xs font-semibold transition-all"
                   :class="form.paymentSource === 'wallet' ? 'text-white' : walletBalance <= 0 ? 'text-slate-300 border border-slate-100' : 'text-slate-500 border border-slate-200'"
                   :style="form.paymentSource === 'wallet' ? 'background:linear-gradient(135deg,#a855f7,#7c3aed)' : ''">
-                  <span>ðŸ’° Common Wallet</span>
+                  <span>💰 Common Wallet</span>
                   <span class="text-[11px] font-normal opacity-80">{{ aed(walletBalance) }} available</span>
                 </button>
               </div>
@@ -1773,7 +1773,7 @@ const categoryBreakdown = computed(() => {
                   ? 'background:rgba(0,153,184,.08); color:#0077a0; border:1px solid rgba(0,153,184,.2)'
                   : 'background:rgba(220,38,38,.06); color:#dc2626; border:1px solid rgba(220,38,38,.2)'">
                 Wallet balance: {{ aed(walletBalance) }}
-                {{ walletBalance < 0 ? ' â€” wallet is in deficit' : '' }}
+                {{ walletBalance < 0 ? ' — wallet is in deficit' : '' }}
               </div>
             </div>
 
@@ -1787,14 +1787,14 @@ const categoryBreakdown = computed(() => {
                   class="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
                   :class="!form.multiPayer ? 'text-white' : 'text-slate-500 border border-slate-200'"
                   :style="!form.multiPayer ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
-                  ðŸ‘¤ One person paid
+                  👤 One person paid
                 </button>
                 <button
                   @click="form.multiPayer = true; form.paid_player_id = ''"
                   class="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
                   :class="form.multiPayer ? 'text-white' : 'text-slate-500 border border-slate-200'"
                   :style="form.multiPayer ? 'background:linear-gradient(135deg,#00b4cc,#0077a0)' : ''">
-                  ðŸ‘¥ Multiple people paid
+                  👥 Multiple people paid
                 </button>
               </div>
 
@@ -1806,7 +1806,7 @@ const categoryBreakdown = computed(() => {
                 </option>
               </select>
 
-              <!-- Multi-payer: Splitwise-style â€” all players listed with amount inputs -->
+              <!-- Multi-payer: Splitwise-style — all players listed with amount inputs -->
               <div v-else>
                 <div class="rounded-2xl overflow-hidden border border-slate-200 mb-2">
                   <div v-for="p in players.filter(p => p.is_active)" :key="p.id"
@@ -1848,7 +1848,7 @@ const categoryBreakdown = computed(() => {
                     ? 'background:rgba(16,185,129,.1); color:#059669; border:1px solid rgba(16,185,129,.25)'
                     : 'background:rgba(239,68,68,.07); color:#dc2626; border:1px solid rgba(239,68,68,.2)'">
                   <span>{{ aed(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} entered</span>
-                  <span v-if="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01 && form.payers.length > 0">âœ“ matches total</span>
+                  <span v-if="Math.abs(form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) - (parseFloat(form.amount)||0)) <= 0.01 && form.payers.length > 0">✓ matches total</span>
                   <span v-else-if="form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0) < (parseFloat(form.amount)||0)">
                     {{ aed((parseFloat(form.amount)||0) - form.payers.reduce((s,p) => s + (parseFloat(p.amount)||0), 0)) }} remaining
                   </span>
@@ -1878,7 +1878,7 @@ const categoryBreakdown = computed(() => {
               <div v-if="expSchedAttendeeIds.size && !showAllExpPlayers"
                 class="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg text-[10px] text-violet-300"
                 style="background:rgba(168,85,247,.1); border:1px solid rgba(168,85,247,.2)">
-                <span>ðŸ“‹</span>
+                <span>📋</span>
                 <span>Showing players who attended on this date</span>
               </div>
 
@@ -1897,7 +1897,7 @@ const categoryBreakdown = computed(() => {
                     ? 'background:rgba(0,153,184,.1); border:1px solid rgba(0,153,184,.3)'
                     : ''"
                   @click="toggleParticipant(p.id)">
-                  <span class="text-xs w-3 shrink-0">{{ form.participant_ids.includes(p.id) ? 'âœ“' : '' }}</span>
+                  <span class="text-xs w-3 shrink-0">{{ form.participant_ids.includes(p.id) ? '✓' : '' }}</span>
                   <span class="truncate">{{ p.display_name }}{{ isMe(p.id) ? ' (you)' : '' }}</span>
                 </label>
               </div>
@@ -1906,20 +1906,20 @@ const categoryBreakdown = computed(() => {
             <!-- Notes -->
             <div>
               <label class="label">Notes <span class="text-slate-400 normal-case tracking-normal">(optional)</span></label>
-              <input v-model="form.notes" class="input" placeholder="Any extra detailsâ€¦" maxlength="120" />
+              <input v-model="form.notes" class="input" placeholder="Any extra details…" maxlength="120" />
             </div>
 
             <p v-if="formError" class="text-xs text-rose-600 px-1">{{ formError }}</p>
 
             <button class="btn-primary w-full py-3" :disabled="formSaving" @click="saveExpense">
-              {{ formSaving ? 'Savingâ€¦' : editingId ? 'âœ“ Update Expense' : 'âž• Add Expense' }}
+              {{ formSaving ? 'Saving…' : editingId ? '✓ Update Expense' : '➕ Add Expense' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ADD / EDIT WALLET FORM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ ADD / EDIT WALLET FORM ═════════════════ -->
     <Teleport to="body">
       <div v-if="showWalletForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showWalletForm = false" />
@@ -1933,7 +1933,7 @@ const categoryBreakdown = computed(() => {
               <span class="font-semibold text-slate-800">
                 {{ walletEditId ? 'Edit Contribution' : 'Add Wallet Contribution' }}
               </span>
-              <button @click="showWalletForm = false" class="text-slate-400 hover:text-slate-700 text-lg">âœ•</button>
+              <button @click="showWalletForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
           </div>
 
@@ -1960,7 +1960,7 @@ const categoryBreakdown = computed(() => {
             <div>
               <label class="label">
                 Date &amp; Time
-                <span class="text-[10px] text-slate-400 font-normal normal-case tracking-normal ml-1">â€” determines queue position</span>
+                <span class="text-[10px] text-slate-400 font-normal normal-case tracking-normal ml-1">— determines queue position</span>
               </label>
               <input v-model="walletForm.contributed_at" type="datetime-local" class="input" />
             </div>
@@ -1968,7 +1968,7 @@ const categoryBreakdown = computed(() => {
             <!-- Notes -->
             <div>
               <label class="label">Notes <span class="text-slate-400 normal-case tracking-normal">(optional)</span></label>
-              <input v-model="walletForm.notes" class="input" placeholder="e.g. June court fee, whatsapp paymentâ€¦" maxlength="100" />
+              <input v-model="walletForm.notes" class="input" placeholder="e.g. June court fee, whatsapp payment…" maxlength="100" />
             </div>
 
             <p v-if="walletFormError" class="text-xs text-rose-600 px-1">{{ walletFormError }}</p>
@@ -1977,14 +1977,14 @@ const categoryBreakdown = computed(() => {
               style="background:linear-gradient(135deg,#a855f7,#7c3aed)"
               :disabled="walletFormSaving"
               @click="saveContrib">
-              {{ walletFormSaving ? 'Savingâ€¦' : walletEditId ? 'âœ“ Update Contribution' : 'ðŸ’° Record Contribution' }}
+              {{ walletFormSaving ? 'Saving…' : walletEditId ? '✓ Update Contribution' : '💰 Record Contribution' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• OPENING BALANCE FORM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ OPENING BALANCE FORM ═══════════════════ -->
     <Teleport to="body">
       <div v-if="showObForm" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="showObForm = false" />
@@ -1995,15 +1995,15 @@ const categoryBreakdown = computed(() => {
             style="background:#ffffff; border-bottom:1px solid rgba(0,0,0,.07)">
             <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-3" />
             <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-800">âš–ï¸ Set Opening Balance</span>
-              <button @click="showObForm = false" class="text-slate-400 hover:text-slate-700 text-lg">âœ•</button>
+              <span class="font-semibold text-slate-800">⚖️ Set Opening Balance</span>
+              <button @click="showObForm = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
           </div>
 
           <div class="overflow-y-auto px-4 pb-8 space-y-4 pt-4" style="max-height: calc(85vh - 72px)">
 
             <p class="text-[11px] text-slate-500 leading-relaxed -mt-1">
-              Carry over a player's balance from another app. One entry per player â€”
+              Carry over a player's balance from another app. One entry per player —
               saving again replaces the previous value. Admins only.
             </p>
 
@@ -2027,14 +2027,14 @@ const categoryBreakdown = computed(() => {
                   class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all"
                   :class="obForm.direction === 'gets' ? 'text-white' : 'text-slate-500 border border-slate-200'"
                   :style="obForm.direction === 'gets' ? 'background:linear-gradient(135deg,#10b981,#059669)' : ''">
-                  âž• Gets back (group owes them)
+                  ➕ Gets back (group owes them)
                 </button>
                 <button
                   @click="obForm.direction = 'owes'"
                   class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all"
                   :class="obForm.direction === 'owes' ? 'text-white' : 'text-slate-500 border border-slate-200'"
                   :style="obForm.direction === 'owes' ? 'background:linear-gradient(135deg,#f43f5e,#dc2626)' : ''">
-                  âž– Owes (they owe the group)
+                  ➖ Owes (they owe the group)
                 </button>
               </div>
             </div>
@@ -2057,14 +2057,14 @@ const categoryBreakdown = computed(() => {
               style="background:linear-gradient(135deg,#f59e0b,#d97706)"
               :disabled="obFormSaving"
               @click="saveOb">
-              {{ obFormSaving ? 'Savingâ€¦' : 'âš–ï¸ Save Opening Balance' }}
+              {{ obFormSaving ? 'Saving…' : '⚖️ Save Opening Balance' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE OPENING BALANCE CONFIRM â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ DELETE OPENING BALANCE CONFIRM ═════════ -->
     <Teleport to="body">
       <div v-if="confirmDelOb"
         class="fixed inset-0 z-50 flex items-center justify-center px-5"
@@ -2074,7 +2074,7 @@ const categoryBreakdown = computed(() => {
           style="background:#0d1a2e; border:1px solid rgba(251,191,36,.25); box-shadow:0 0 40px rgba(251,191,36,.1)">
           <div class="text-center mb-4">
             <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
-              style="background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.25)">âš–ï¸</div>
+              style="background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.25)">⚖️</div>
             <h3 class="font-display text-lg font-bold text-slate-100">Remove Opening Balance?</h3>
             <p class="text-sm text-slate-400 mt-1">The player's balance will be recalculated without it.</p>
           </div>
@@ -2089,7 +2089,7 @@ const categoryBreakdown = computed(() => {
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE EXPENSE CONFIRM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ DELETE EXPENSE CONFIRM ═════════════════ -->
     <Teleport to="body">
       <div v-if="confirmDelId"
         class="fixed inset-0 z-50 flex items-center justify-center px-5"
@@ -2099,7 +2099,7 @@ const categoryBreakdown = computed(() => {
           style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
           <div class="text-center mb-4">
             <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
-              style="background:rgba(244,63,94,.12); border:1px solid rgba(244,63,94,.25)">ðŸ—‘ï¸</div>
+              style="background:rgba(244,63,94,.12); border:1px solid rgba(244,63,94,.25)">🗑️</div>
             <h3 class="font-display text-lg font-bold text-slate-100">Delete Expense?</h3>
             <p class="text-sm text-slate-400 mt-1">Balances will be recalculated for all members.</p>
           </div>
@@ -2114,7 +2114,7 @@ const categoryBreakdown = computed(() => {
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE WALLET CONFIRM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ DELETE WALLET CONFIRM ══════════════════ -->
     <Teleport to="body">
       <div v-if="confirmDelWallet"
         class="fixed inset-0 z-50 flex items-center justify-center px-5"
@@ -2124,7 +2124,7 @@ const categoryBreakdown = computed(() => {
           style="background:#0d1a2e; border:1px solid rgba(168,85,247,.25); box-shadow:0 0 40px rgba(168,85,247,.1)">
           <div class="text-center mb-4">
             <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
-              style="background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.25)">ðŸ’°</div>
+              style="background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.25)">💰</div>
             <h3 class="font-display text-lg font-bold text-slate-100">Delete Contribution?</h3>
             <p class="text-sm text-slate-400 mt-1">The FIFO queue and wallet balance will update accordingly.</p>
           </div>
@@ -2139,7 +2139,7 @@ const categoryBreakdown = computed(() => {
       </div>
     </Teleport>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• DELETE NOTE CONFIRM â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ══════════════════════════ DELETE NOTE CONFIRM ════════════════════ -->
     <Teleport to="body">
       <div v-if="confirmDelNoteId"
         class="fixed inset-0 z-50 flex items-center justify-center px-5"
@@ -2148,7 +2148,7 @@ const categoryBreakdown = computed(() => {
         <div class="w-full max-w-sm rounded-2xl p-6"
           style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
           <div class="text-center mb-4">
-            <div class="text-3xl mb-2">ðŸ—‘ï¸</div>
+            <div class="text-3xl mb-2">🗑️</div>
             <p class="font-semibold text-slate-100 mb-1">Delete this note?</p>
             <p class="text-xs text-slate-400">This will permanently remove the note.</p>
           </div>

@@ -7,59 +7,59 @@ const step = ref(0)
 
 const slides = [
   {
-    emoji: 'ðŸ¸',
+    emoji: '🏸',
     title: 'Welcome to Badminton 360',
-    story: "Meet Dev's Saturday Crew â€” 14 friends who book a court every weekend. They've been settling scores by memory, splitting costs on WhatsApp, and arguing about who's actually the best player.",
+    story: "Meet Dev's Saturday Crew — 14 friends who book a court every weekend. They've been settling scores by memory, splitting costs on WhatsApp, and arguing about who's actually the best player.",
     tip: 'This guide walks you through the whole app in 2 minutes.',
     color: 'cyan',
   },
   {
-    emoji: 'ðŸŸï¸',
+    emoji: '🏟️',
     title: 'Create Your Club',
-    story: 'Dev opens the app and taps Manage â†’ Create Club. He types "Dev\'s Saturday Crew", hits Create â€” done. His club is live in under 10 seconds.',
-    tip: 'â†’ Tap âš™ï¸ Manage in the bottom nav, then Create Club.',
+    story: 'Dev opens the app and taps Manage → Create Club. He types "Dev\'s Saturday Crew", hits Create — done. His club is live in under 10 seconds.',
+    tip: '→ Tap ⚙️ Manage in the bottom nav, then Create Club.',
     color: 'violet',
   },
   {
-    emoji: 'ðŸ“²',
+    emoji: '📲',
     title: 'Invite Your Crew',
-    story: "Dev goes to Manage â†’ Invite Members and copies the invite link. He drops it in the WhatsApp group. Everyone taps the link, signs in with Google, and they're on the roster instantly.",
-    tip: 'â†’ Manage â†’ Invite Members â†’ share the link on WhatsApp.',
+    story: "Dev goes to Manage → Invite Members and copies the invite link. He drops it in the WhatsApp group. Everyone taps the link, signs in with Google, and they're on the roster instantly.",
+    tip: '→ Manage → Invite Members → share the link on WhatsApp.',
     color: 'cyan',
   },
   {
-    emoji: 'ðŸŽ¯',
+    emoji: '🎯',
     title: 'Record a Match',
-    story: "First game done â€” Dev opens Add Match, picks the 4 players, assigns them to Side A and Side B, types in the score, and hits Record. The Elo engine updates everyone's rating in one tap.",
-    tip: 'â†’ Tap âž• Add Match in the bottom nav (or hamburger menu).',
+    story: "First game done — Dev opens Add Match, picks the 4 players, assigns them to Side A and Side B, types in the score, and hits Record. The Elo engine updates everyone's rating in one tap.",
+    tip: '→ Tap ➕ Add Match in the bottom nav (or hamburger menu).',
     color: 'amber',
   },
   {
-    emoji: 'ðŸ†',
+    emoji: '🏆',
     title: 'The Leaderboard',
-    story: "After three games, the leaderboard is already alive. Dev's crew finally has proof â€” ranked by Elo rating, updated after every match. No more arguments about who's the best.",
-    tip: 'â†’ Tap ðŸ  Home in the bottom nav to see live rankings.',
+    story: "After three games, the leaderboard is already alive. Dev's crew finally has proof — ranked by Elo rating, updated after every match. No more arguments about who's the best.",
+    tip: '→ Tap 🏠 Home in the bottom nav to see live rankings.',
     color: 'violet',
   },
   {
-    emoji: 'âš–ï¸',
+    emoji: '⚖️',
     title: 'Split Costs with Split Pay',
-    story: "The court cost AED 180 for 12 players. Dev opens Split Pay â†’ Activities, adds the expense, selects everyone who played â€” the app divides it equally and shows exactly who owes who.",
-    tip: 'â†’ Tap ðŸ’° Split Pay â†’ Activities â†’ Add Expense.',
+    story: "The court cost AED 180 for 12 players. Dev opens Split Pay → Activities, adds the expense, selects everyone who played — the app divides it equally and shows exactly who owes who.",
+    tip: '→ Tap 💰 Split Pay → Activities → Add Expense.',
     color: 'cyan',
   },
   {
-    emoji: 'ðŸ’°',
-    title: 'The Wallet â€” No More "I\'ll Pay Later"',
+    emoji: '💰',
+    title: 'The Wallet — No More "I\'ll Pay Later"',
     story: "Dev gets everyone to top up AED 50 into the club Wallet upfront. From now on, court fees just deduct from the pool automatically. No awkward chasing. No WhatsApp payment requests.",
-    tip: 'â†’ Split Pay â†’ Wallet tab â†’ Add Contribution.',
+    tip: '→ Split Pay → Wallet tab → Add Contribution.',
     color: 'amber',
   },
   {
-    emoji: 'ðŸŽ‰',
+    emoji: '🎉',
     title: "Dev's crew is ready!",
-    story: "Matches tracked. Rankings live. Costs split fairly. Wallet pre-funded. Dev's Saturday Crew runs like a proper league now â€” and it took less than 5 minutes to set up.",
-    tip: 'The whole game. The whole club. One app. 360Â°.',
+    story: "Matches tracked. Rankings live. Costs split fairly. Wallet pre-funded. Dev's Saturday Crew runs like a proper league now — and it took less than 5 minutes to set up.",
+    tip: 'The whole game. The whole club. One app. 360°.',
     color: 'violet',
   },
 ]
@@ -103,7 +103,7 @@ const colorMap = {
             </span>
             <button @click="finish"
               class="text-xs text-slate-400 hover:text-slate-600 transition px-2 py-1 rounded-lg hover:bg-slate-100">
-              Skip âœ•
+              Skip ✕
             </button>
           </div>
 
@@ -120,12 +120,12 @@ const colorMap = {
                 </div>
               </div>
 
-              <!-- Title â€” dark text, readable on white -->
+              <!-- Title — dark text, readable on white -->
               <h2 class="font-display text-xl font-extrabold mb-3 leading-tight text-slate-800">
                 {{ slides[step].title }}
               </h2>
 
-              <!-- Story â€” proper dark body text -->
+              <!-- Story — proper dark body text -->
               <p class="text-slate-600 text-sm leading-relaxed mb-4">
                 {{ slides[step].story }}
               </p>
@@ -133,20 +133,20 @@ const colorMap = {
               <!-- Tip chip -->
               <div class="flex items-start gap-2.5 px-4 py-3 rounded-xl text-xs font-medium text-left w-full"
                 :style="`background:${colorMap[slides[step].color].light}; border:1px solid ${colorMap[slides[step].color].border};`">
-                <span class="shrink-0 mt-0.5">ðŸ’¡</span>
+                <span class="shrink-0 mt-0.5">💡</span>
                 <span :style="`color:${colorMap[slides[step].color].accent}`" class="font-semibold">
                   {{ slides[step].tip }}
                 </span>
               </div>
             </div>
 
-            <!-- Mini diagram â€” dark card on white, looks like a preview screen -->
+            <!-- Mini diagram — dark card on white, looks like a preview screen -->
             <div class="rounded-2xl overflow-hidden mb-2"
               style="border:1px solid rgba(0,0,0,0.07); box-shadow:0 2px 8px rgba(0,0,0,0.06);">
               <svg viewBox="0 0 360 140" xmlns="http://www.w3.org/2000/svg"
                 class="w-full" style="display:block;">
 
-                <!-- Slide 0: Welcome â€” players on a court -->
+                <!-- Slide 0: Welcome — players on a court -->
                 <template v-if="step === 0">
                   <rect width="360" height="140" fill="#0f172a"/>
                   <rect x="40" y="30" width="280" height="80" rx="4" fill="none" stroke="#00e5ff30" stroke-width="1.5"/>
@@ -177,7 +177,7 @@ const colorMap = {
                   <rect x="136" y="60" width="88" height="20" rx="6" fill="#00e5ff"/>
                   <text x="180" y="73" text-anchor="middle" font-size="9" fill="#050d1a" font-weight="bold">Create Club</text>
                   <circle cx="180" cy="108" r="14" fill="#00e5ff20" stroke="#00e5ff50" stroke-width="1"/>
-                  <text x="180" y="114" text-anchor="middle" font-size="15" fill="#00e5ff">âœ“</text>
+                  <text x="180" y="114" text-anchor="middle" font-size="15" fill="#00e5ff">✓</text>
                 </template>
 
                 <!-- Slide 2: Invite -->
@@ -186,7 +186,7 @@ const colorMap = {
                   <rect x="148" y="18" width="64" height="104" rx="10" fill="none" stroke="#a855f740" stroke-width="1.5"/>
                   <rect x="154" y="26" width="52" height="88" rx="6" fill="#1e293b"/>
                   <circle cx="180" cy="55" r="15" fill="#25d36620"/>
-                  <text x="180" y="61" text-anchor="middle" font-size="16">ðŸ’¬</text>
+                  <text x="180" y="61" text-anchor="middle" font-size="16">💬</text>
                   <rect x="158" y="78" width="44" height="9" rx="3" fill="#a855f730"/>
                   <text x="180" y="85" text-anchor="middle" font-size="6.5" fill="#a855f7">invite link</text>
                   <line x1="148" y1="68" x2="78" y2="48" stroke="#a855f750" stroke-width="1" stroke-dasharray="3,2"/>
@@ -223,26 +223,26 @@ const colorMap = {
                   <rect x="140" y="52" width="80" height="62" rx="4" fill="#fbbf2420" stroke="#fbbf2450" stroke-width="1"/>
                   <rect x="72"  y="72" width="63" height="42" rx="4" fill="#64748b20" stroke="#64748b50" stroke-width="1"/>
                   <rect x="225" y="80" width="63" height="34" rx="4" fill="#f9731620" stroke="#f9731650" stroke-width="1"/>
-                  <text x="180" y="44" text-anchor="middle" font-size="16">ðŸ¥‡</text>
-                  <text x="103" y="65" text-anchor="middle" font-size="14">ðŸ¥ˆ</text>
-                  <text x="256" y="72" text-anchor="middle" font-size="14">ðŸ¥‰</text>
+                  <text x="180" y="44" text-anchor="middle" font-size="16">🥇</text>
+                  <text x="103" y="65" text-anchor="middle" font-size="14">🥈</text>
+                  <text x="256" y="72" text-anchor="middle" font-size="14">🥉</text>
                   <text x="180" y="74" text-anchor="middle" font-size="8.5" fill="#fbbf24" font-weight="bold">Dev</text>
                   <text x="180" y="86" text-anchor="middle" font-size="7" fill="#fbbf2499">1187 Elo</text>
                   <text x="103" y="90" text-anchor="middle" font-size="8" fill="#94a3b8">Anil</text>
                   <text x="256" y="96" text-anchor="middle" font-size="8" fill="#f97316">Ravi</text>
                   <rect x="38" y="122" width="284" height="12" rx="3" fill="#ffffff08"/>
-                  <text x="50" y="131" font-size="7.5" fill="#ffffff50">#4  Sam  Â·  1050 Elo</text>
-                  <text x="220" y="131" font-size="7.5" fill="#ffffff50">#5  Kiran  Â·  1038</text>
+                  <text x="50" y="131" font-size="7.5" fill="#ffffff50">#4  Sam  ·  1050 Elo</text>
+                  <text x="220" y="131" font-size="7.5" fill="#ffffff50">#5  Kiran  ·  1038</text>
                 </template>
 
                 <!-- Slide 5: PaySplits -->
                 <template v-else-if="step === 5">
                   <rect width="360" height="140" fill="#0f172a"/>
                   <rect x="48" y="16" width="264" height="52" rx="10" fill="#00e5ff0a" stroke="#00e5ff30" stroke-width="1"/>
-                  <text x="66" y="34" font-size="8" fill="#94a3b8">Court Booking â€” Saturday</text>
+                  <text x="66" y="34" font-size="8" fill="#94a3b8">Court Booking — Saturday</text>
                   <text x="66" y="52" font-size="17" fill="#00e5ff" font-weight="bold">AED 180</text>
-                  <text x="292" y="44" text-anchor="end" font-size="8" fill="#ffffff50">Ã· 12 players</text>
-                  <text x="180" y="82" text-anchor="middle" font-size="14" fill="#00e5ff50">â†“</text>
+                  <text x="292" y="44" text-anchor="end" font-size="8" fill="#ffffff50">÷ 12 players</text>
+                  <text x="180" y="82" text-anchor="middle" font-size="14" fill="#00e5ff50">↓</text>
                   <rect x="48" y="88" width="264" height="46" rx="10" fill="#1e293b" stroke="#ffffff0a" stroke-width="1"/>
                   <text x="64" y="107" font-size="8" fill="#94a3b8">Dev</text>
                   <text x="296" y="107" text-anchor="end" font-size="8" fill="#f87171" font-weight="bold">owes AED 15</text>
@@ -257,15 +257,15 @@ const colorMap = {
                   <rect x="128" y="22" width="104" height="72" rx="12" fill="#fbbf2410" stroke="#fbbf2440" stroke-width="1.5"/>
                   <text x="180" y="50" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="bold">Club Pool</text>
                   <text x="180" y="70" text-anchor="middle" font-size="19" fill="#fbbf24" font-weight="bold">AED 700</text>
-                  <text x="180" y="84" text-anchor="middle" font-size="7.5" fill="#fbbf2480">14 Ã— AED 50</text>
+                  <text x="180" y="84" text-anchor="middle" font-size="7.5" fill="#fbbf2480">14 × AED 50</text>
                   <circle cx="90" cy="36" r="9" fill="#fbbf2420" stroke="#fbbf2440" stroke-width="1"/>
-                  <text x="90" y="41" text-anchor="middle" font-size="9">ðŸ’°</text>
+                  <text x="90" y="41" text-anchor="middle" font-size="9">💰</text>
                   <circle cx="270" cy="36" r="9" fill="#fbbf2420" stroke="#fbbf2440" stroke-width="1"/>
-                  <text x="270" y="41" text-anchor="middle" font-size="9">ðŸ’°</text>
+                  <text x="270" y="41" text-anchor="middle" font-size="9">💰</text>
                   <line x1="97" y1="43" x2="126" y2="54" stroke="#fbbf2450" stroke-width="1" stroke-dasharray="3,2"/>
                   <line x1="263" y1="43" x2="234" y2="54" stroke="#fbbf2450" stroke-width="1" stroke-dasharray="3,2"/>
                   <rect x="76" y="108" width="208" height="24" rx="8" fill="#fbbf2412" stroke="#fbbf2440" stroke-width="1"/>
-                  <text x="180" y="123" text-anchor="middle" font-size="8" fill="#fbbf24">Court fee auto-deducted each week âœ“</text>
+                  <text x="180" y="123" text-anchor="middle" font-size="8" fill="#fbbf24">Court fee auto-deducted each week ✓</text>
                 </template>
 
                 <!-- Slide 7: Ready! -->
@@ -279,13 +279,13 @@ const colorMap = {
                   </defs>
                   <circle cx="180" cy="70" r="52" fill="none" stroke="url(#readyGrad)" stroke-width="1.5" opacity=".6"/>
                   <circle cx="180" cy="70" r="38" fill="none" stroke="#ffffff10" stroke-width="1"/>
-                  <text x="180" y="30"  text-anchor="middle" font-size="14">ðŸ†</text>
-                  <text x="224" y="47"  text-anchor="middle" font-size="14">ðŸ“‹</text>
-                  <text x="233" y="94"  text-anchor="middle" font-size="14">ðŸ’°</text>
-                  <text x="180" y="115" text-anchor="middle" font-size="14">ðŸ“…</text>
-                  <text x="127" y="94"  text-anchor="middle" font-size="14">ðŸ‘¥</text>
-                  <text x="136" y="47"  text-anchor="middle" font-size="14">ðŸŽ¯</text>
-                  <text x="180" y="63"  text-anchor="middle" font-size="22">ðŸ¸</text>
+                  <text x="180" y="30"  text-anchor="middle" font-size="14">🏆</text>
+                  <text x="224" y="47"  text-anchor="middle" font-size="14">📋</text>
+                  <text x="233" y="94"  text-anchor="middle" font-size="14">💰</text>
+                  <text x="180" y="115" text-anchor="middle" font-size="14">📅</text>
+                  <text x="127" y="94"  text-anchor="middle" font-size="14">👥</text>
+                  <text x="136" y="47"  text-anchor="middle" font-size="14">🎯</text>
+                  <text x="180" y="63"  text-anchor="middle" font-size="22">🏸</text>
                   <text x="180" y="81"  text-anchor="middle" font-size="8.5" fill="#00e5ff" font-weight="bold">B360</text>
                 </template>
 
@@ -313,14 +313,14 @@ const colorMap = {
               <button v-if="step > 0" @click="prev"
                 class="flex-1 py-3 rounded-xl text-sm font-semibold transition text-slate-600 hover:text-slate-800 hover:bg-slate-100"
                 style="background:#f8fafc; border:1px solid rgba(0,0,0,0.1);">
-                â† Back
+                ← Back
               </button>
               <div v-else class="flex-1" />
 
               <button @click="next"
                 class="flex-1 py-3 rounded-xl text-sm font-bold transition"
                 :style="`background:${colorMap[slides[step].color].btn}; color:${colorMap[slides[step].color].btnText};`">
-                {{ step === total - 1 ? "Let's go! ðŸ¸" : 'Next â†’' }}
+                {{ step === total - 1 ? "Let's go! 🏸" : 'Next →' }}
               </button>
             </div>
 

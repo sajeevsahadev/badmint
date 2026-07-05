@@ -10,25 +10,25 @@ const router = useRouter()
 const { user } = useAuth()
 const { loadClubs } = useClub()
 
-// â”€â”€ Step state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Step state ──────────────────────────────────────────────────────────────
 const step     = ref('welcome')  // welcome | path | search | create | players | payment | done
 const destPath = ref('/dashboard')
 
-// â”€â”€ Club creation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Club creation ────────────────────────────────────────────────────────────
 const clubInput   = ref('')
 const clubErr     = ref('')
 const creating    = ref(false)
 const newClubId   = ref(null)
 const newClubName = ref('')
 
-// â”€â”€ Club search (join path) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Club search (join path) ──────────────────────────────────────────────────
 const searchQ       = ref('')
 const searchResults = ref([])
 const searching     = ref(false)
 const requested     = ref(new Set())
 const searchErr     = ref('')
 
-// â”€â”€ Player invite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Player invite ────────────────────────────────────────────────────────────
 // playerList items: { name, email, via: 'email'|'whatsapp'|null }
 const playerList = ref([])
 const pName      = ref('')
@@ -42,7 +42,7 @@ const firstName = computed(() =>
   user.value?.email?.split('@')[0] || 'Friend'
 )
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function clearPlayerForm() {
   pName.value    = ''
   pEmail.value   = ''
@@ -58,7 +58,7 @@ function addToList(name, email, via) {
   playerList.value.push({ name: display, email: email || null, via })
 }
 
-// â”€â”€ Club search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Club search ──────────────────────────────────────────────────────────────
 let searchTimer = null
 async function onSearch() {
   clearTimeout(searchTimer)
@@ -80,7 +80,7 @@ async function requestJoin(clubId) {
   requested.value = new Set([...requested.value, clubId])
 }
 
-// â”€â”€ Club creation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Club creation ────────────────────────────────────────────────────────────
 async function doCreateClub() {
   const name = clubInput.value.trim()
   if (!name) { clubErr.value = 'Please enter a club name'; return }
@@ -95,7 +95,7 @@ async function doCreateClub() {
   step.value = 'players'
 }
 
-// â”€â”€ Send email invite â†’ adds to list â†’ clears form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Send email invite → adds to list → clears form ───────────────────────────
 async function doSendEmail() {
   const email = pEmail.value.trim()
   if (!email) { inviteErr.value = 'Enter an email address to send the invite'; return }
@@ -140,7 +140,7 @@ async function doSendEmail() {
   inviting.value = false
 }
 
-// â”€â”€ WhatsApp share â†’ adds to list â†’ clears form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── WhatsApp share → adds to list → clears form ──────────────────────────────
 async function doWhatsApp() {
   const email       = pEmail.value.trim()
   const phoneDigits = pPhone.value.replace(/\D/g, '')
@@ -160,9 +160,9 @@ async function doWhatsApp() {
   let msg
   if (token) {
     const url = `https://badminton360.app/join?token=${token}`
-    msg = `Hey ${name}! ðŸ¸ Join ${club} on Badminton 360 â€” rankings, expense splits & tournaments.\nYour invite: ${url}`
+    msg = `Hey ${name}! 🏸 Join ${club} on Badminton 360 — rankings, expense splits & tournaments.\nYour invite: ${url}`
   } else {
-    msg = `Hey${name ? ' ' + name : ''}! ðŸ¸ We're on Badminton 360 for ${club}.\nSign in at https://badminton360.app and search for "${club}" to join!`
+    msg = `Hey${name ? ' ' + name : ''}! 🏸 We're on Badminton 360 for ${club}.\nSign in at https://badminton360.app and search for "${club}" to join!`
   }
   // Deep-link straight to the contact's chat when a phone number was given
   const waUrl = phoneDigits
@@ -174,7 +174,7 @@ async function doWhatsApp() {
   clearPlayerForm()
 }
 
-// â”€â”€ Name-only add (no invite) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Name-only add (no invite) ─────────────────────────────────────────────────
 function doAddByName() {
   const name = pName.value.trim()
   if (!name) { inviteErr.value = 'Enter a name to add'; return }
@@ -182,7 +182,7 @@ function doAddByName() {
   clearPlayerForm()
 }
 
-// â”€â”€ Payment choice & finish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Payment choice & finish ──────────────────────────────────────────────────
 function paymentChoice(path) {
   destPath.value = path
   step.value = 'done'
@@ -205,17 +205,17 @@ function finish() {
         style="max-height:92dvh; box-shadow:0 24px 80px rgba(0,0,0,.45);"
       >
 
-        <!-- â•â•â• WELCOME â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ WELCOME ════════════════════════════════════════════════════════ -->
         <div v-if="step === 'welcome'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#00b4d8,#9333ea,#f59e0b)" />
           <div class="flex-1 px-8 pt-10 pb-4 text-center">
-            <div class="text-6xl mb-5">ðŸ¸</div>
+            <div class="text-6xl mb-5">🏸</div>
             <h1 class="text-[1.65rem] font-extrabold text-slate-800 leading-tight mb-3">
               Welcome, {{ firstName }}!
             </h1>
             <p class="text-slate-500 text-[0.93rem] leading-relaxed mb-3">
               Badminton 360 helps your group track Elo rankings, split court costs, and run
-              tournaments â€” all for free, forever.
+              tournaments — all for free, forever.
             </p>
             <p class="text-slate-500 text-[0.93rem] leading-relaxed">
               Let's get your club set up in just a few steps.
@@ -227,19 +227,19 @@ function finish() {
               class="w-full py-4 rounded-2xl text-[0.93rem] font-bold text-white hover:opacity-90 active:scale-[.99] transition-all"
               style="background:linear-gradient(135deg,#00b4d8,#0077a8);"
             >
-              Get Started â†’
+              Get Started →
             </button>
             <button @click="finish()" class="text-xs text-slate-400 hover:text-slate-600 transition py-1">
-              Skip setup â€” I'll do it later
+              Skip setup — I'll do it later
             </button>
           </div>
         </div>
 
-        <!-- â•â•â• PATH CHOICE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ PATH CHOICE ═══════════════════════════════════════════════════ -->
         <div v-if="step === 'path'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#9333ea,#00b4d8)" />
           <div class="px-6 pt-6 pb-4">
-            <button @click="step = 'welcome'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">â† Back</button>
+            <button @click="step = 'welcome'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">← Back</button>
             <h2 class="text-xl font-extrabold text-slate-800 mb-1">What would you like to do?</h2>
             <p class="text-sm text-slate-500">Choose how you'd like to get started.</p>
           </div>
@@ -249,7 +249,7 @@ function finish() {
               class="w-full text-left p-5 rounded-2xl border-2 transition hover:border-cyan-400 hover:shadow-md active:scale-[.99]"
               style="border-color:rgba(0,180,216,.3); background:rgba(0,229,255,.04);"
             >
-              <div class="text-3xl mb-3">ðŸ”</div>
+              <div class="text-3xl mb-3">🔍</div>
               <div class="font-bold text-slate-800 text-sm">Find &amp; Join an Existing Club</div>
               <div class="text-xs text-slate-500 mt-1">Search for your club and send a join request to the manager</div>
             </button>
@@ -258,18 +258,18 @@ function finish() {
               class="w-full text-left p-5 rounded-2xl border-2 transition hover:border-violet-400 hover:shadow-md active:scale-[.99]"
               style="border-color:rgba(147,51,234,.3); background:rgba(168,85,247,.04);"
             >
-              <div class="text-3xl mb-3">ðŸŸï¸</div>
+              <div class="text-3xl mb-3">🏟️</div>
               <div class="font-bold text-slate-800 text-sm">Create a New Club</div>
-              <div class="text-xs text-slate-500 mt-1">Set up your group from scratch â€” takes about 2 minutes</div>
+              <div class="text-xs text-slate-500 mt-1">Set up your group from scratch — takes about 2 minutes</div>
             </button>
           </div>
         </div>
 
-        <!-- â•â•â• SEARCH / JOIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ SEARCH / JOIN ════════════════════════════════════════════════ -->
         <div v-if="step === 'search'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#00b4d8,#0077a8)" />
           <div class="px-6 pt-6 pb-4 shrink-0">
-            <button @click="step = 'path'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">â† Back</button>
+            <button @click="step = 'path'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">← Back</button>
             <h2 class="text-xl font-extrabold text-slate-800 mb-1">Find Your Club</h2>
             <p class="text-sm text-slate-500">Search by club name. The manager will approve your request.</p>
           </div>
@@ -279,13 +279,13 @@ function finish() {
                 v-model="searchQ"
                 @input="onSearch"
                 type="text"
-                placeholder="Type your club nameâ€¦"
+                placeholder="Type your club name…"
                 class="w-full pl-10 pr-4 py-3 rounded-xl text-sm border text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-300"
                 style="border-color:rgba(0,0,0,.13);"
               />
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none">ðŸ”</span>
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none">🔍</span>
             </div>
-            <div v-if="searching" class="text-center py-8 text-sm text-slate-400 animate-pulse">Searchingâ€¦</div>
+            <div v-if="searching" class="text-center py-8 text-sm text-slate-400 animate-pulse">Searching…</div>
             <div v-if="!searching" class="flex flex-col gap-2">
               <div
                 v-for="club in searchResults"
@@ -305,10 +305,10 @@ function finish() {
                     ? 'background:#dcfce7;color:#166534;'
                     : 'background:linear-gradient(135deg,#00b4d8,#0077a8);color:#fff;'"
                 >
-                  {{ requested.has(club.id) ? 'âœ“ Requested' : 'Request to Join' }}
+                  {{ requested.has(club.id) ? '✓ Requested' : 'Request to Join' }}
                 </button>
               </div>
-              <p v-if="searchErr" class="text-center py-2 text-xs text-rose-500">âš  {{ searchErr }}</p>
+              <p v-if="searchErr" class="text-center py-2 text-xs text-rose-500">⚠ {{ searchErr }}</p>
               <p v-if="searchQ.trim() && !searchResults.length" class="text-center py-6 text-sm text-slate-400">
                 No clubs found for "{{ searchQ }}"
               </p>
@@ -320,7 +320,7 @@ function finish() {
               class="w-full py-3 rounded-xl text-sm font-semibold border transition hover:bg-slate-50"
               style="border-color:rgba(0,0,0,.12); color:#475569;"
             >
-              Browse all clubs in Explore â†’
+              Browse all clubs in Explore →
             </button>
             <button @click="finish()" class="w-full text-xs text-slate-400 hover:text-slate-600 transition py-2 mt-1">
               Done for now
@@ -328,11 +328,11 @@ function finish() {
           </div>
         </div>
 
-        <!-- â•â•â• CREATE CLUB â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ CREATE CLUB ══════════════════════════════════════════════════ -->
         <div v-if="step === 'create'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#9333ea,#7c3aed)" />
           <div class="px-6 pt-6 pb-4">
-            <button @click="step = 'path'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">â† Back</button>
+            <button @click="step = 'path'" class="text-sm text-slate-400 hover:text-slate-600 transition flex items-center gap-1 mb-5">← Back</button>
             <div class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold mb-4">Step 1 of 3</div>
             <h2 class="text-xl font-extrabold text-slate-800 mb-1">Name Your Club</h2>
             <p class="text-sm text-slate-500">Pick something your crew will recognise. You can change it later.</p>
@@ -350,9 +350,9 @@ function finish() {
             />
             <p v-if="clubErr" class="text-xs text-rose-500 -mt-2">{{ clubErr }}</p>
             <div class="text-xs text-slate-500 bg-slate-50 rounded-xl p-4 space-y-1.5">
-              <div>âœ… You're automatically added as <strong class="text-slate-700">Club Owner</strong></div>
-              <div>âœ… Invite your crew by email or WhatsApp in the next step</div>
-              <div>âœ… Elo rankings start for everyone at 1000 â€” totally fair</div>
+              <div>✅ You're automatically added as <strong class="text-slate-700">Club Owner</strong></div>
+              <div>✅ Invite your crew by email or WhatsApp in the next step</div>
+              <div>✅ Elo rankings start for everyone at 1000 — totally fair</div>
             </div>
           </div>
           <div class="px-6 pb-8 pt-4">
@@ -362,12 +362,12 @@ function finish() {
               class="w-full py-4 rounded-2xl text-[0.93rem] font-bold text-white hover:opacity-90 active:scale-[.99] transition-all disabled:opacity-60"
               style="background:linear-gradient(135deg,#9333ea,#7c3aed);"
             >
-              {{ creating ? 'Creatingâ€¦' : 'ðŸŸï¸ Create Club â†’' }}
+              {{ creating ? 'Creating…' : '🏟️ Create Club →' }}
             </button>
           </div>
         </div>
 
-        <!-- â•â•â• ADD PLAYERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ ADD PLAYERS ══════════════════════════════════════════════════ -->
         <div v-if="step === 'players'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#f59e0b,#d97706)" />
 
@@ -381,7 +381,7 @@ function finish() {
             </div>
             <h2 class="text-xl font-extrabold text-slate-800 mb-1">Invite Your Crew</h2>
             <p class="text-sm text-slate-500">
-              {{ playerList.length ? `${playerList.length} player${playerList.length !== 1 ? 's' : ''} added Â· Keep going or tap Done` : 'Fill in details and tap Send â€” player is added instantly.' }}
+              {{ playerList.length ? `${playerList.length} player${playerList.length !== 1 ? 's' : ''} added · Keep going or tap Done` : 'Fill in details and tap Send — player is added instantly.' }}
             </p>
           </div>
 
@@ -394,7 +394,7 @@ function finish() {
                 class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                 style="background:#f0fdf4; color:#166534; border:1px solid #bbf7d0;"
               >
-                <span>{{ p.via === 'email' ? 'ðŸ“§' : p.via === 'whatsapp' ? 'ðŸ’¬' : 'ðŸ‘¤' }}</span>
+                <span>{{ p.via === 'email' ? '📧' : p.via === 'whatsapp' ? '💬' : '👤' }}</span>
                 <span>{{ p.name }}</span>
               </div>
             </div>
@@ -445,7 +445,7 @@ function finish() {
               />
             </div>
 
-            <!-- Primary invite actions â€” each sends + saves + clears form -->
+            <!-- Primary invite actions — each sends + saves + clears form -->
             <div class="flex gap-2 pt-1">
               <button
                 @click="doSendEmail"
@@ -453,7 +453,7 @@ function finish() {
                 class="flex-1 py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[.99] disabled:opacity-60"
                 style="background:linear-gradient(135deg,#00b4d8,#0077a8);"
               >
-                {{ inviting ? 'Sendingâ€¦' : 'ðŸ“§ Send Email & Add' }}
+                {{ inviting ? 'Sending…' : '📧 Send Email & Add' }}
               </button>
               <button
                 @click="doWhatsApp"
@@ -461,7 +461,7 @@ function finish() {
                 class="flex-1 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[.99] disabled:opacity-60"
                 style="background:#dcfce7; color:#166534; border:2px solid #bbf7d0;"
               >
-                ðŸ’¬ WhatsApp & Add
+                💬 WhatsApp & Add
               </button>
             </div>
 
@@ -474,7 +474,7 @@ function finish() {
               + Add by name only (no invite)
             </button>
 
-            <p v-if="inviteErr" class="text-xs text-rose-500">âš  {{ inviteErr }}</p>
+            <p v-if="inviteErr" class="text-xs text-rose-500">⚠ {{ inviteErr }}</p>
           </div>
 
           <!-- Done button (pinned) -->
@@ -484,12 +484,12 @@ function finish() {
               class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition hover:opacity-90 active:scale-[.99]"
               style="background:linear-gradient(135deg,#f59e0b,#d97706);"
             >
-              {{ playerList.length ? `Done â€” ${playerList.length} player${playerList.length !== 1 ? 's' : ''} added â†’` : 'Skip â€” I\'ll add players later â†’' }}
+              {{ playerList.length ? `Done — ${playerList.length} player${playerList.length !== 1 ? 's' : ''} added →` : 'Skip — I\'ll add players later →' }}
             </button>
           </div>
         </div>
 
-        <!-- â•â•â• PAYMENT SETUP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ PAYMENT SETUP ════════════════════════════════════════════════ -->
         <div v-if="step === 'payment'" class="flex flex-col overflow-y-auto">
           <div class="h-1.5 shrink-0" style="background:linear-gradient(90deg,#00b4d8,#9333ea,#f59e0b)" />
           <div class="px-6 pt-6 pb-4 shrink-0">
@@ -509,9 +509,9 @@ function finish() {
               style="border-color:rgba(245,158,11,.25); background:rgba(251,191,36,.04);"
             >
               <div class="flex items-start gap-3">
-                <span class="text-2xl shrink-0 mt-0.5">ðŸ’°</span>
+                <span class="text-2xl shrink-0 mt-0.5">💰</span>
                 <div>
-                  <div class="font-bold text-slate-800 text-sm">Club Wallet â€” Pre-collect Money</div>
+                  <div class="font-bold text-slate-800 text-sm">Club Wallet — Pre-collect Money</div>
                   <div class="text-xs text-slate-500 mt-1 leading-relaxed">Players contribute upfront. Auto-deduct per session. No more chasing payments.</div>
                 </div>
               </div>
@@ -522,7 +522,7 @@ function finish() {
               style="border-color:rgba(0,180,216,.25); background:rgba(0,229,255,.03);"
             >
               <div class="flex items-start gap-3">
-                <span class="text-2xl shrink-0 mt-0.5">âš–ï¸</span>
+                <span class="text-2xl shrink-0 mt-0.5">⚖️</span>
                 <div>
                   <div class="font-bold text-slate-800 text-sm">Split After Each Session</div>
                   <div class="text-xs text-slate-500 mt-1 leading-relaxed">Record expenses and split equally. Track who owes what at a glance.</div>
@@ -535,7 +535,7 @@ function finish() {
               style="border-color:rgba(147,51,234,.25); background:rgba(168,85,247,.03);"
             >
               <div class="flex items-start gap-3">
-                <span class="text-2xl shrink-0 mt-0.5">ðŸ”„</span>
+                <span class="text-2xl shrink-0 mt-0.5">🔄</span>
                 <div>
                   <div class="font-bold text-slate-800 text-sm">Migrating From Another App?</div>
                   <div class="text-xs text-slate-500 mt-1 leading-relaxed">Set opening balances to carry over amounts from your previous system.</div>
@@ -545,30 +545,30 @@ function finish() {
           </div>
           <div class="px-6 pb-6 shrink-0">
             <button @click="paymentChoice('/dashboard')" class="w-full text-sm text-slate-400 hover:text-slate-600 transition py-2">
-              Set up later â†’ Go to Dashboard
+              Set up later → Go to Dashboard
             </button>
           </div>
         </div>
 
-        <!-- â•â•â• DONE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- ═══ DONE ══════════════════════════════════════════════════════════ -->
         <div v-if="step === 'done'" class="flex flex-col items-center text-center overflow-y-auto">
           <div class="h-1.5 w-full shrink-0" style="background:linear-gradient(90deg,#22c55e,#16a34a)" />
           <div class="flex-1 px-8 pt-10 pb-4 w-full">
-            <div class="text-6xl mb-4">ðŸŽ‰</div>
+            <div class="text-6xl mb-4">🎉</div>
             <h2 class="text-2xl font-extrabold text-slate-800 mb-2 leading-tight">
               {{ newClubName ? newClubName + ' is all set!' : "You're all set!" }}
             </h2>
             <p class="text-slate-500 text-sm leading-relaxed mb-8">Your club is ready. Record your first match and let the rankings begin!</p>
             <div class="text-left space-y-2.5 mb-6">
               <div class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" style="background:#f0fdf4; color:#166534;">
-                <span>âœ…</span><span>Club created â€” you're the <strong>owner</strong></span>
+                <span>✅</span><span>Club created — you're the <strong>owner</strong></span>
               </div>
               <div v-if="playerList.length" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" style="background:#f0fdf4; color:#166534;">
-                <span>âœ…</span>
-                <span>{{ playerList.filter(p => p.via === 'email').length }} email invite{{ playerList.filter(p => p.via === 'email').length !== 1 ? 's' : '' }} sent Â· {{ playerList.length }} player{{ playerList.length !== 1 ? 's' : '' }} added</span>
+                <span>✅</span>
+                <span>{{ playerList.filter(p => p.via === 'email').length }} email invite{{ playerList.filter(p => p.via === 'email').length !== 1 ? 's' : '' }} sent · {{ playerList.length }} player{{ playerList.length !== 1 ? 's' : '' }} added</span>
               </div>
               <div class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" style="background:#f0fdf4; color:#166534;">
-                <span>âœ…</span><span>Elo rankings start at 1000 â€” fair for everyone</span>
+                <span>✅</span><span>Elo rankings start at 1000 — fair for everyone</span>
               </div>
             </div>
           </div>
@@ -578,7 +578,7 @@ function finish() {
               class="w-full py-4 rounded-2xl text-[0.93rem] font-bold text-white hover:opacity-90 active:scale-[.99] transition-all"
               style="background:linear-gradient(135deg,#22c55e,#16a34a);"
             >
-              Let's Play! ðŸ¸
+              Let's Play! 🏸
             </button>
           </div>
         </div>
