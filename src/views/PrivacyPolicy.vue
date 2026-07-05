@@ -8,10 +8,10 @@ const { user } = useAuth()
 
 <template>
   <div class="max-w-2xl mx-auto px-4 py-6" :class="user ? 'pb-28' : ''">
-    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-cyan-700 transition mb-6" @click="router.back()">‹ Back</button>
+    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-cyan-700 transition mb-6" @click="router.back()">â€¹ Back</button>
 
     <h1 class="font-display text-2xl font-extrabold gradient-text mb-1">Privacy Policy</h1>
-    <p class="text-xs text-slate-400 mb-8">Last updated June 2026 · Badminton 360</p>
+    <p class="text-xs text-slate-400 mb-8">Last updated June 2026 Â· Badminton 360</p>
 
     <div class="space-y-6 text-sm text-slate-600 leading-relaxed">
 
@@ -19,18 +19,18 @@ const { user } = useAuth()
         <h2 class="font-display text-base font-bold text-slate-800 mb-2">What we collect</h2>
         <ul class="list-disc pl-5 space-y-1">
           <li>Your name, email and profile photo from Google when you sign in</li>
-          <li>Anything you add yourself — nickname, phone, bio, gender</li>
+          <li>Anything you add yourself â€” nickname, phone, bio, gender</li>
           <li>Match results, Elo history and attendance for clubs you play in</li>
-          <li>Pay & Split / Wallet records among your club's members</li>
+          <li>Split Pay / Wallet records among your club's members</li>
           <li>Basic device info (browser, rough location via IP) and in-app activity, used for security and to keep the leaderboard accurate</li>
-          <li>If you enable biometric app-lock: a device credential reference only — your fingerprint or face data never leaves your device and is never sent to us</li>
+          <li>If you enable biometric app-lock: a device credential reference only â€” your fingerprint or face data never leaves your device and is never sent to us</li>
         </ul>
       </section>
 
       <section>
         <h2 class="font-display text-base font-bold text-slate-800 mb-2">What's public vs. private</h2>
         <p>
-          Your <strong>nickname</strong>, <strong>bio</strong> and match stats are visible to anyone using the app —
+          Your <strong>nickname</strong>, <strong>bio</strong> and match stats are visible to anyone using the app â€”
           that's how leaderboards and club/player profiles work. Your <strong>phone number, email,
           and gender</strong> are never shown to other players.
         </p>
@@ -40,10 +40,10 @@ const { user } = useAuth()
         <h2 class="font-display text-base font-bold text-slate-800 mb-2">Who else processes your data</h2>
         <p class="mb-2">We don't sell your data. We use a small set of services to run the app:</p>
         <ul class="list-disc pl-5 space-y-1">
-          <li><strong>Supabase</strong> — hosts our database and handles authentication</li>
-          <li><strong>Google</strong> — sign-in (we never see your Google password)</li>
-          <li><strong>Resend</strong> — delivers transactional emails like club invites</li>
-          <li><strong>ipapi.co</strong> — a one-time, anonymous lookup to guess your country for the homepage</li>
+          <li><strong>Supabase</strong> â€” hosts our database and handles authentication</li>
+          <li><strong>Google</strong> â€” sign-in (we never see your Google password)</li>
+          <li><strong>Resend</strong> â€” delivers transactional emails like club invites</li>
+          <li><strong>ipapi.co</strong> â€” a one-time, anonymous lookup to guess your country for the homepage</li>
         </ul>
       </section>
 
@@ -53,9 +53,9 @@ const { user } = useAuth()
           You can edit or remove most of your info any time from
           <RouterLink to="/profile" class="text-cyan-700 hover:underline">your Profile</RouterLink>.
           You can permanently delete your account and personal data from
-          <RouterLink to="/profile" class="text-cyan-700 hover:underline">Profile → Danger Zone</RouterLink> —
+          <RouterLink to="/profile" class="text-cyan-700 hover:underline">Profile â†’ Danger Zone</RouterLink> â€”
           match history is anonymised rather than deleted outright so your club's rankings stay accurate,
-          and deletion is blocked while you're a club owner or have an unsettled Pay & Split balance, so you can
+          and deletion is blocked while you're a club owner or have an unsettled Split Pay balance, so you can
           resolve those first.
         </p>
       </section>

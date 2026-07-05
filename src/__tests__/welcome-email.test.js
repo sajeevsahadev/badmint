@@ -10,10 +10,10 @@ function buildWelcomeHtml(name) {
 <html lang="en">
 <head><title>Welcome to Badminton 360</title></head>
 <body>
-  <h1>Hey ${displayName}! 🏸</h1>
+  <h1>Hey ${displayName}! ðŸ¸</h1>
   <a href="https://badminton360.app">Open Badminton 360</a>
   <p>Elo Rankings</p>
-  <p>Pay & Split + Wallet</p>
+  <p>Split Pay + Wallet</p>
   <p>Tournaments</p>
   <p>Schedule &amp; Polls</p>
   <a href="mailto:hello@badminton360.app">hello@badminton360.app</a>
@@ -47,7 +47,7 @@ describe('buildWelcomeHtml()', () => {
   it('contains all four feature sections', () => {
     const html = buildWelcomeHtml('Test')
     expect(html).toContain('Elo Rankings')
-    expect(html).toContain('Pay & Split')
+    expect(html).toContain('Split Pay')
     expect(html).toContain('Tournaments')
     expect(html).toContain('Schedule')
   })
@@ -66,7 +66,7 @@ describe('buildWelcomeHtml()', () => {
   it('handles names with special characters safely', () => {
     // Should not break HTML or inject script tags
     const html = buildWelcomeHtml('<script>alert(1)</script>')
-    // The first-name split returns the raw value here — in production
+    // The first-name split returns the raw value here â€” in production
     // this goes to a Resend-rendered email. Flag if raw script tag appears.
     // Note: this test documents current behaviour; the fix would be to
     // HTML-escape the name before interpolation.

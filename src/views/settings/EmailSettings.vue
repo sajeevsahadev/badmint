@@ -29,7 +29,7 @@ const GROUPS = [
     ],
   },
   {
-    label: 'Pay & Split',
+    label: 'Split Pay',
     items: [
       { key: 'payment_reminders', label: 'Payment reminders & balance due' },
     ],
@@ -63,13 +63,13 @@ async function save() {
 
 <template>
   <div class="max-w-sm mx-auto pt-2 fade-up">
-    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-6" @click="router.back()">‹ Back</button>
+    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-6" @click="router.back()">â€¹ Back</button>
 
-    <h1 class="font-display text-xl font-extrabold gradient-text mb-1">📧 Email Settings</h1>
+    <h1 class="font-display text-xl font-extrabold gradient-text mb-1">ðŸ“§ Email Settings</h1>
     <p class="text-sm text-slate-400 mb-5">Choose what Badminton 360 emails you about.</p>
 
     <div class="rounded-2xl px-4 py-3 mb-5 text-xs text-slate-500 leading-relaxed" style="background:rgba(0,168,204,.06); border:1px solid rgba(0,168,204,.15)">
-      ⚙️ Your choices here are saved. Club invite emails always send today since
+      âš™ï¸ Your choices here are saved. Club invite emails always send today since
       that's how invites work; the other categories will start respecting these
       preferences as each notification type goes live.
     </div>
@@ -90,9 +90,9 @@ async function save() {
       </div>
 
       <button class="btn-primary w-full py-3" :disabled="saving" @click="save">
-        {{ saving ? 'Saving…' : 'Save Changes' }}
+        {{ saving ? 'Savingâ€¦' : 'Save Changes' }}
       </button>
-      <p v-if="saved" class="text-center text-xs text-emerald-500">✅ Saved!</p>
+      <p v-if="saved" class="text-center text-xs text-emerald-500">âœ… Saved!</p>
     </div>
   </div>
 </template>

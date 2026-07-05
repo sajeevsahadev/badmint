@@ -76,7 +76,7 @@ async function load() {
       profileMap[member.user_id]?.nickname ||
       profileMap[member.user_id]?.full_name ||
       playerMap[member.user_id]?.display_name ||
-      '—',
+      'â€”',
   }))
   guestPlayers.value = guests ?? []
 
@@ -107,7 +107,7 @@ async function load() {
 onMounted(() => { loadClubs(); load() })
 watch(currentClub, load)
 
-// ── Ranking config ──
+// â”€â”€ Ranking config â”€â”€
 async function saveCfg() {
   const { elo_weight, participation_weight } = cfg.value
   const sum = Number(elo_weight) + Number(participation_weight)
@@ -122,10 +122,10 @@ async function saveCfg() {
   busy.value = false
   cfgNote.value = error
     ? { ok: false, t: `Save failed: ${error.message}` }
-    : { ok: true, t: '✅ Weights saved. Leaderboard updates immediately.' }
+    : { ok: true, t: 'âœ… Weights saved. Leaderboard updates immediately.' }
 }
 
-// ── Join request actions ──
+// â”€â”€ Join request actions â”€â”€
 async function approveRequest(id) {
   const { error } = await supabase.rpc('approve_join', { p_request_id: id })
   if (error) { note.value = { ok: false, t: error.message }; return }
@@ -149,7 +149,7 @@ async function deleteRequest() {
   requests.value = requests.value.filter(r => r.id !== id)
 }
 
-// ── Email invite ──
+// â”€â”€ Email invite â”€â”€
 async function generateInvite() {
   if (!inviteEmail.value.trim()) return
   busy.value = true; inviteNote.value = null; inviteLink.value = ''
@@ -168,20 +168,20 @@ async function generateInvite() {
 
 function copyLink() {
   navigator.clipboard.writeText(inviteLink.value)
-  inviteNote.value = { ok: true, t: '✅ Link copied to clipboard!' }
+  inviteNote.value = { ok: true, t: 'âœ… Link copied to clipboard!' }
 }
 
 function mailtoLink() {
   const club = currentClub.value?.clubs?.name ?? 'our club'
   const subj = encodeURIComponent(`You're invited to join ${club} on Badminton 360`)
   const body = encodeURIComponent(
-    `Hi!\n\nYou've been invited to join "${club}" on Badminton 360 — the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! 🏸`
+    `Hi!\n\nYou've been invited to join "${club}" on Badminton 360 â€” the smart ranking app for badminton teams.\n\nClick the link below to join:\n${inviteLink.value}\n\nThe link expires in 7 days.\n\nSee you on the court! ðŸ¸`
   )
   return `mailto:${inviteEmail.value}?subject=${subj}&body=${body}`
 }
 
-// ── Guest player linking (existing roster entry ↔ a Gmail account) ──
-// 1) If the email already has a B360 account → link instantly, no invite/approval.
+// â”€â”€ Guest player linking (existing roster entry â†” a Gmail account) â”€â”€
+// 1) If the email already has a B360 account â†’ link instantly, no invite/approval.
 // 2) Otherwise fall back to generating a 7-day invite link they can claim.
 const guestLinkSuccess = ref(null)
 
@@ -205,14 +205,14 @@ async function sendGuestInvite() {
   if (linkRes?.linked) {
     const player = guestPlayers.value.find(p => p.id === playerId)
     guestLinkSuccess.value =
-      `✅ Linked! ${email} now owns "${player?.display_name ?? 'this player'}" — Elo history and all. No approval needed.`
+      `âœ… Linked! ${email} now owns "${player?.display_name ?? 'this player'}" â€” Elo history and all. No approval needed.`
     guestInviteBusy.value = false
     guestInviteId.value   = null
     await load()   // player moves from Guests to Members
     return
   }
 
-  // Step 2: not registered yet → generate the classic invite link
+  // Step 2: not registered yet â†’ generate the classic invite link
   const { data, error } = await supabase.rpc('invite_guest_player', {
     p_club_id:   currentClub.value.club_id,
     p_player_id: playerId,
@@ -223,25 +223,25 @@ async function sendGuestInvite() {
     guestInviteNote.value = { ok: false, t: error.message }
   } else {
     guestInviteLink.value = `${window.location.origin}/join?token=${data}`
-    guestInviteNote.value = { ok: true, t: `${email} hasn't signed up yet — share this link so they can sign in and claim their Elo history.` }
+    guestInviteNote.value = { ok: true, t: `${email} hasn't signed up yet â€” share this link so they can sign in and claim their Elo history.` }
   }
 }
 
 function copyGuestLink() {
   navigator.clipboard.writeText(guestInviteLink.value)
-  guestInviteNote.value = { ok: true, t: '✅ Link copied to clipboard!' }
+  guestInviteNote.value = { ok: true, t: 'âœ… Link copied to clipboard!' }
 }
 
 function guestWhatsApp() {
   const player = guestPlayers.value.find(p => p.id === guestInviteId.value)
   const club   = currentClub.value?.clubs?.name ?? 'our club'
   const msg    = encodeURIComponent(
-    `Hi ${player?.display_name ?? 'there'}!\n\nYou've been added to "${club}" on Badminton 360. Click the link below to sign in with Google and claim your account — your Elo ranking and match history will be waiting for you:\n${guestInviteLink.value}\n\nThe link expires in 7 days. See you on the court! 🏸`
+    `Hi ${player?.display_name ?? 'there'}!\n\nYou've been added to "${club}" on Badminton 360. Click the link below to sign in with Google and claim your account â€” your Elo ranking and match history will be waiting for you:\n${guestInviteLink.value}\n\nThe link expires in 7 days. See you on the court! ðŸ¸`
   )
   window.open(`https://wa.me/?text=${msg}`, '_blank')
 }
 
-// ── Save facility info ──
+// â”€â”€ Save facility info â”€â”€
 async function saveFacility() {
   busy.value = true; facNote.value = null
   const { error } = await supabase.rpc('update_club_facility', {
@@ -255,10 +255,10 @@ async function saveFacility() {
   busy.value = false
   facNote.value = error
     ? { ok: false, t: error.message }
-    : { ok: true, t: '✅ Facility info saved. Visible on the Explore page.' }
+    : { ok: true, t: 'âœ… Facility info saved. Visible on the Explore page.' }
 }
 
-// ── Facility Master functions ──
+// â”€â”€ Facility Master functions â”€â”€
 async function searchFacilities() {
   if (!facSearch.value.trim()) { facResults.value = []; return }
   const { data } = await supabase.rpc('get_facilities', { p_search: facSearch.value.trim() })
@@ -303,7 +303,7 @@ async function createAndLinkFacility() {
   await supabase.rpc('set_club_facility', { p_club_id: currentClub.value.club_id, p_facility_id: fId })
   linkedFacility.value = { id: fId, name: newFac.value.name, address: newFac.value.address }
   newFac.value = { name:'', address:'', emirate:'', maps_url:'', image_url:'', phone:'', website:'', description:'' }
-  newFacNote.value = { ok: true, t: '✅ Facility created and linked!' }
+  newFacNote.value = { ok: true, t: 'âœ… Facility created and linked!' }
   busy.value = false
 }
 
@@ -340,13 +340,13 @@ async function changeRole(userId, newRole, selectEl = null) {
   }
 }
 
-const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: '🏸 Player' }[r] ?? r)
+const roleLabel = r => ({ owner: 'ðŸ‘‘ Owner', manager: 'ðŸ›  Manager', player: 'ðŸ¸ Player' }[r] ?? r)
 
-// ── Leave club ──
+// â”€â”€ Leave club â”€â”€
 const leaving   = ref(null)   // club_id in progress
 const leaveNote = ref(null)
 
-// ── Delete club ──
+// â”€â”€ Delete club â”€â”€
 const deleteTarget      = ref(null)   // club object to delete
 const deleteConfirmText = ref('')     // user must type club name
 const deleteBusy        = ref(false)
@@ -393,12 +393,12 @@ async function leaveClub(clubId) {
     if (error.message.includes('match history')) {
       leaveNote.value = {
         ok: false,
-        t: `You already have matches recorded in "${name}". You cannot leave directly — ask the club manager to mark you as Inactive from the Players page.`,
+        t: `You already have matches recorded in "${name}". You cannot leave directly â€” ask the club manager to mark you as Inactive from the Players page.`,
       }
     } else if (error.message.includes('owner')) {
       leaveNote.value = {
         ok: false,
-        t: `You are the owner of "${name}". Transfer ownership to another member first (Manage → Members).`,
+        t: `You are the owner of "${name}". Transfer ownership to another member first (Manage â†’ Members).`,
       }
     } else {
       leaveNote.value = { ok: false, t: error.message }
@@ -411,22 +411,22 @@ async function leaveClub(clubId) {
 </script>
 
 <template>
-  <PageHeader icon="⚙️" title="Manage" subtitle="Clubs, members, and ranking settings">
+  <PageHeader icon="âš™ï¸" title="Manage" subtitle="Clubs, members, and ranking settings">
     <template #help>
       <div class="text-xs space-y-1.5">
-        <p><strong class="text-slate-800">Create a Club</strong> — Each club has its own roster, matches, and leaderboard. You become the owner.</p>
-        <p><strong class="text-slate-800">Roles:</strong> 👑 Owner has full control. 🛠 Manager records matches. 🏸 Player views dashboards.</p>
-        <p><strong class="text-slate-800">Join Requests</strong> — Players who request to join appear here. Approve to add them.</p>
-        <p><strong class="text-slate-800">Invite by Email</strong> — Generate a 7-day invite link and send it to anyone.</p>
-        <p><strong class="text-slate-800">Ranking Weights</strong> — Tune skill vs attendance. Must add to 1.0. K-factor controls Elo swing per match.</p>
+        <p><strong class="text-slate-800">Create a Club</strong> â€” Each club has its own roster, matches, and leaderboard. You become the owner.</p>
+        <p><strong class="text-slate-800">Roles:</strong> ðŸ‘‘ Owner has full control. ðŸ›  Manager records matches. ðŸ¸ Player views dashboards.</p>
+        <p><strong class="text-slate-800">Join Requests</strong> â€” Players who request to join appear here. Approve to add them.</p>
+        <p><strong class="text-slate-800">Invite by Email</strong> â€” Generate a 7-day invite link and send it to anyone.</p>
+        <p><strong class="text-slate-800">Ranking Weights</strong> â€” Tune skill vs attendance. Must add to 1.0. K-factor controls Elo swing per match.</p>
       </div>
     </template>
   </PageHeader>
 
-  <!-- ── Pending Join Requests ── -->
+  <!-- â”€â”€ Pending Join Requests â”€â”€ -->
   <div v-if="currentClub && isManager() && requests.length" class="card-violet p-4 mb-4 fade-up">
     <div class="flex items-center justify-between mb-3">
-      <div class="label mb-0">Join Requests — {{ currentClub.clubs?.name }}</div>
+      <div class="label mb-0">Join Requests â€” {{ currentClub.clubs?.name }}</div>
       <span v-if="pendingRequests.length" class="badge-dot">{{ pendingRequests.length }}</span>
     </div>
 
@@ -452,7 +452,7 @@ async function leaveClub(clubId) {
             <button v-if="r.status === 'rejected'"
               class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
               title="Delete request"
-              @click="confirmDelReqId = r.id">🗑</button>
+              @click="confirmDelReqId = r.id">ðŸ—‘</button>
           </template>
           <template v-else>
             <button class="btn-success text-xs px-2.5 py-1" @click="approveRequest(r.id)">Approve</button>
@@ -463,9 +463,9 @@ async function leaveClub(clubId) {
     </div>
   </div>
 
-  <!-- ── Invite by Email ── -->
+  <!-- â”€â”€ Invite by Email â”€â”€ -->
   <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
-    <div class="label">Invite by Email — {{ currentClub.clubs?.name }}</div>
+    <div class="label">Invite by Email â€” {{ currentClub.clubs?.name }}</div>
     <p class="text-[11px] text-slate-500 mb-3">
       Generate a personal invite link and share it via email, WhatsApp, or any channel.
       Links expire in 7 days.
@@ -486,10 +486,10 @@ async function leaveClub(clubId) {
       <div class="text-xs text-slate-300 break-all font-mono mb-2.5 select-all">{{ inviteLink }}</div>
       <div class="flex gap-2">
         <button class="btn-primary flex-1 py-2 text-xs" @click="copyLink">
-          📋 Copy Link
+          ðŸ“‹ Copy Link
         </button>
         <a :href="mailtoLink()" class="btn-ghost flex-1 py-2 text-xs text-center">
-          ✉️ Open in Email
+          âœ‰ï¸ Open in Email
         </a>
       </div>
     </div>
@@ -500,9 +500,9 @@ async function leaveClub(clubId) {
     </p>
   </div>
 
-  <!-- ── Ranking weights ── -->
+  <!-- â”€â”€ Ranking weights â”€â”€ -->
   <div v-if="currentClub && isManager() && cfg" class="card p-4 mb-4 fade-up">
-    <div class="label">Ranking Weights — {{ currentClub.clubs?.name }}</div>
+    <div class="label">Ranking Weights â€” {{ currentClub.clubs?.name }}</div>
     <div class="grid grid-cols-3 gap-3 mb-3">
       <div>
         <label class="label">Skill (Elo)</label>
@@ -517,7 +517,7 @@ async function leaveClub(clubId) {
       <div>
         <label class="label">K-factor</label>
         <div class="input text-center text-slate-500 bg-[rgba(15,23,42,0.02)] cursor-not-allowed select-none">24</div>
-        <div class="text-[10px] text-slate-600 mt-1">Fixed · not editable</div>
+        <div class="text-[10px] text-slate-600 mt-1">Fixed Â· not editable</div>
       </div>
     </div>
 
@@ -529,8 +529,8 @@ async function leaveClub(clubId) {
       <strong class="text-violet">{{ Math.round(cfg.participation_weight * 100) }}%</strong>
       = {{ Math.round((cfg.elo_weight + cfg.participation_weight) * 100) }}%
       <span v-if="Math.abs(cfg.elo_weight + cfg.participation_weight - 1) > 0.01"
-        class="text-amber-400"> ⚠️ must equal 100%</span>
-      <span v-else class="text-neon"> ✓</span>
+        class="text-amber-400"> âš ï¸ must equal 100%</span>
+      <span v-else class="text-neon"> âœ“</span>
     </div>
 
     <p v-if="cfgNote" class="text-xs rounded-xl px-3 py-2 mb-3"
@@ -540,14 +540,14 @@ async function leaveClub(clubId) {
     <button class="btn-ghost w-full" :disabled="busy" @click="saveCfg">Save Ranking Weights</button>
   </div>
 
-  <!-- ── Members ── -->
+  <!-- â”€â”€ Members â”€â”€ -->
   <div v-if="currentClub && (members.length || guestPlayers.length)" class="card p-4 mb-4 fade-up">
-    <div class="label">Members — {{ currentClub.clubs?.name }}</div>
+    <div class="label">Members â€” {{ currentClub.clubs?.name }}</div>
 
     <div v-if="memberError"
       class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl text-xs font-medium text-rose-300"
       style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
-      <span>⚠️</span>
+      <span>âš ï¸</span>
       <span>{{ memberError }}</span>
     </div>
 
@@ -562,9 +562,9 @@ async function leaveClub(clubId) {
         :value="m.role"
         class="text-xs rounded-lg border border-[rgba(15,23,42,0.10)] bg-[rgba(15,23,42,0.05)] px-2 py-1 outline-none cursor-pointer"
         @change="changeRole(m.user_id, $event.target.value, $event.target)">
-        <option value="player">🏸 Player</option>
-        <option value="manager">🛠 Manager</option>
-        <option v-if="currentClub.role === 'owner'" value="owner">👑 Owner</option>
+        <option value="player">ðŸ¸ Player</option>
+        <option value="manager">ðŸ›  Manager</option>
+        <option v-if="currentClub.role === 'owner'" value="owner">ðŸ‘‘ Owner</option>
       </select>
       <span v-else class="text-xs shrink-0">{{ roleLabel(m.role) }}</span>
     </div>
@@ -573,12 +573,12 @@ async function leaveClub(clubId) {
     <div v-if="guestLinkSuccess"
       class="mt-2 text-xs px-3 py-2 rounded-lg text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-start gap-2 fade-up">
       <span class="flex-1">{{ guestLinkSuccess }}</span>
-      <button class="text-emerald-400 hover:text-emerald-600 shrink-0" @click="guestLinkSuccess = null">✕</button>
+      <button class="text-emerald-400 hover:text-emerald-600 shrink-0" @click="guestLinkSuccess = null">âœ•</button>
     </div>
 
     <!-- Guest players (added manually, no Google account linked yet) -->
     <div v-if="guestPlayers.length" class="mt-1 pt-3 border-t border-[rgba(15,23,42,0.06)]">
-      <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Guest players — no account linked</div>
+      <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Guest players â€” no account linked</div>
 
       <div v-for="gp in guestPlayers" :key="gp.id" class="mb-1">
         <div class="flex items-center justify-between py-2 gap-2">
@@ -599,7 +599,7 @@ async function leaveClub(clubId) {
           class="mb-3 p-3 rounded-xl fade-up"
           style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12)">
           <p class="text-[11px] text-slate-400 mb-2">
-            Enter their Gmail — if they've already signed up, they're linked instantly.
+            Enter their Gmail â€” if they've already signed up, they're linked instantly.
             Otherwise you'll get an invite link to share.
           </p>
           <div class="flex gap-2 mb-2">
@@ -609,7 +609,7 @@ async function leaveClub(clubId) {
             <button class="btn-primary px-3 text-sm shrink-0"
               :disabled="guestInviteBusy || !guestInviteEmail.trim()"
               @click="sendGuestInvite">
-              {{ guestInviteBusy ? '…' : 'Link' }}
+              {{ guestInviteBusy ? 'â€¦' : 'Link' }}
             </button>
           </div>
           <div v-if="guestInviteNote" class="text-xs mb-2 px-2 py-1 rounded-lg"
@@ -621,12 +621,12 @@ async function leaveClub(clubId) {
               {{ guestInviteLink }}
             </div>
             <div class="flex gap-2">
-              <button class="flex-1 btn-ghost text-xs py-2" @click="copyGuestLink">📋 Copy</button>
+              <button class="flex-1 btn-ghost text-xs py-2" @click="copyGuestLink">ðŸ“‹ Copy</button>
               <button class="flex-1 text-xs py-2 rounded-xl font-semibold transition"
                 style="background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.3); color:#25d366"
                 @click="guestWhatsApp">WhatsApp</button>
               <button class="text-slate-500 hover:text-slate-300 text-xs px-2 transition"
-                @click="guestInviteId = null">✕</button>
+                @click="guestInviteId = null">âœ•</button>
             </div>
           </div>
         </div>
@@ -634,17 +634,17 @@ async function leaveClub(clubId) {
     </div>
   </div>
 
-  <!-- ── Facility / Location info ── -->
+  <!-- â”€â”€ Facility / Location info â”€â”€ -->
   <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
-    <div class="label">Club Location &amp; Facility — {{ currentClub.clubs?.name }}</div>
+    <div class="label">Club Location &amp; Facility â€” {{ currentClub.clubs?.name }}</div>
     <p class="text-[11px] text-slate-500 mb-3">
-      Optional · Shown on the Explore page so new players can find your court.
+      Optional Â· Shown on the Explore page so new players can find your court.
     </p>
     <div class="space-y-3">
       <div>
         <label class="label">Emirates</label>
         <select v-model="facility.emirates" class="input">
-          <option value="">— Select Emirates —</option>
+          <option value="">â€” Select Emirates â€”</option>
           <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
         </select>
       </div>
@@ -661,12 +661,12 @@ async function leaveClub(clubId) {
       <div>
         <label class="label">Google Maps Link <span class="text-slate-600">(optional)</span></label>
         <input v-model="facility.maps_url" class="input" type="url"
-          placeholder="https://maps.app.goo.gl/…" />
+          placeholder="https://maps.app.goo.gl/â€¦" />
       </div>
       <div>
         <label class="label">Description <span class="text-slate-600">(optional)</span></label>
         <textarea v-model="facility.description" class="input resize-none" rows="2"
-          placeholder="Who can join, what time you play…" maxlength="200" />
+          placeholder="Who can join, what time you playâ€¦" maxlength="200" />
       </div>
     </div>
     <p v-if="facNote" class="mt-3 text-xs rounded-xl px-3 py-2"
@@ -678,9 +678,9 @@ async function leaveClub(clubId) {
     </button>
   </div>
 
-  <!-- ── Facility Master: Create or link ── -->
+  <!-- â”€â”€ Facility Master: Create or link â”€â”€ -->
   <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
-    <div class="label">🏟️ Facility Master — {{ currentClub.clubs?.name }}</div>
+    <div class="label">ðŸŸï¸ Facility Master â€” {{ currentClub.clubs?.name }}</div>
     <p class="text-[11px] text-slate-500 mb-3">
       Create a facility profile that any club can link to. Once linked, matches automatically
       show as bookings on the facility's public page.
@@ -695,7 +695,7 @@ async function leaveClub(clubId) {
       </div>
       <div class="flex gap-2">
         <RouterLink :to="'/facility/' + linkedFacility.id"
-          class="text-xs text-neon hover:opacity-75 transition">View →</RouterLink>
+          class="text-xs text-neon hover:opacity-75 transition">View â†’</RouterLink>
         <button class="text-xs text-slate-500 hover:text-rose-400 transition"
           @click="unlinkFacility">Unlink</button>
       </div>
@@ -705,7 +705,7 @@ async function leaveClub(clubId) {
     <div class="mb-3">
       <label class="label">Search &amp; Link Existing Facility</label>
       <div class="flex gap-2">
-        <input v-model="facSearch" class="input text-sm" placeholder="Type facility name…"
+        <input v-model="facSearch" class="input text-sm" placeholder="Type facility nameâ€¦"
           @input="searchFacilities" />
         <button class="btn-ghost shrink-0 px-3 text-sm" @click="searchFacilities">Search</button>
       </div>
@@ -722,14 +722,14 @@ async function leaveClub(clubId) {
     <!-- Create new facility -->
     <details class="group">
       <summary class="text-xs text-neon cursor-pointer hover:opacity-75 transition list-none flex items-center gap-1">
-        <span class="group-open:rotate-90 transition-transform inline-block">▶</span>
+        <span class="group-open:rotate-90 transition-transform inline-block">â–¶</span>
         Create a New Facility Profile
       </summary>
       <div class="mt-3 space-y-2">
         <input v-model="newFac.name" class="input text-sm" placeholder="Facility name *" />
         <input v-model="newFac.address" class="input text-sm" placeholder="Address" />
         <select v-model="newFac.emirate" class="input text-sm">
-          <option value="">— Emirates —</option>
+          <option value="">â€” Emirates â€”</option>
           <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
         </select>
         <input v-model="newFac.maps_url" class="input text-sm" placeholder="Google Maps URL" />
@@ -742,27 +742,27 @@ async function leaveClub(clubId) {
           :class="newFacNote.ok ? 'text-emerald-400' : 'text-rose-400'">{{ newFacNote.t }}</p>
         <button class="btn-violet w-full text-sm" :disabled="busy || !newFac.name.trim()"
           @click="createAndLinkFacility">
-          🏟️ Create &amp; Link to This Club
+          ðŸŸï¸ Create &amp; Link to This Club
         </button>
       </div>
     </details>
   </div>
 
-  <!-- ── Browse / Join more clubs ── -->
+  <!-- â”€â”€ Browse / Join more clubs â”€â”€ -->
   <RouterLink to="/join"
     class="card mb-4 p-4 flex items-center justify-between text-sm text-slate-400
            hover:border-[rgba(15,23,42,0.15)] transition-all duration-200 fade-up">
     <div class="flex items-center gap-3">
-      <span class="text-2xl">🏟️</span>
+      <span class="text-2xl">ðŸŸï¸</span>
       <div>
         <div class="font-semibold text-slate-200">Browse &amp; Join Other Clubs</div>
         <div class="text-[11px] text-slate-500">Find teams and request to join</div>
       </div>
     </div>
-    <span class="text-slate-600 text-lg">→</span>
+    <span class="text-slate-600 text-lg">â†’</span>
   </RouterLink>
 
-  <!-- ── Club list with Leave option ── -->
+  <!-- â”€â”€ Club list with Leave option â”€â”€ -->
   <div v-if="clubs.length" class="card p-4 fade-up">
     <div class="label mb-1">Your Clubs</div>
     <p class="text-[11px] text-slate-500 mb-3">
@@ -792,7 +792,7 @@ async function leaveClub(clubId) {
       <span v-if="currentClub?.club_id === c.club_id"
         class="badge-member shrink-0">Active</span>
 
-      <!-- Leave button — hidden for owners -->
+      <!-- Leave button â€” hidden for owners -->
       <button v-if="c.role !== 'owner'"
         class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-150"
         :class="leaving === c.club_id
@@ -800,7 +800,7 @@ async function leaveClub(clubId) {
           : 'border-rose-500/25 text-rose-500/70 hover:border-rose-400/50 hover:text-rose-400'"
         :disabled="!!leaving"
         @click="leaveClub(c.club_id)">
-        {{ leaving === c.club_id ? '…' : 'Leave' }}
+        {{ leaving === c.club_id ? 'â€¦' : 'Leave' }}
       </button>
 
       <!-- Owner: Delete button -->
@@ -808,12 +808,12 @@ async function leaveClub(clubId) {
         class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-150
                border-rose-500/30 text-rose-500/60 hover:border-rose-400/60 hover:text-rose-400"
         @click="openDeleteModal(c)">
-        🗑 Delete
+        ðŸ—‘ Delete
       </button>
     </div>
   </div>
 
-  <!-- ── Delete Club Modal ── -->
+  <!-- â”€â”€ Delete Club Modal â”€â”€ -->
   <Teleport to="body">
     <div v-if="deleteTarget"
       class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
@@ -828,14 +828,14 @@ async function leaveClub(clubId) {
           <div class="flex items-center gap-3 mb-1">
             <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl shrink-0"
               style="background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.25)">
-              🗑
+              ðŸ—‘
             </div>
             <div>
               <h3 class="font-display font-bold text-slate-100">Delete Club</h3>
               <p class="text-[11px] text-rose-400">This action is permanent and cannot be undone</p>
             </div>
             <button class="ml-auto text-slate-500 hover:text-slate-300 text-xl transition"
-              @click="closeDeleteModal">✕</button>
+              @click="closeDeleteModal">âœ•</button>
           </div>
         </div>
 
@@ -851,22 +851,22 @@ async function leaveClub(clubId) {
           <!-- What gets deleted -->
           <div class="space-y-1.5 text-xs text-slate-400">
             <p class="font-semibold text-slate-300 mb-1">The following will be permanently deleted:</p>
-            <p>• All players and their Elo history</p>
-            <p>• All Pay & Split expenses, wallet, and balances</p>
-            <p>• All schedules, polls, and attendees</p>
-            <p>• All join requests and invites</p>
-            <p>• All facility bookings for this club</p>
+            <p>â€¢ All players and their Elo history</p>
+            <p>â€¢ All Split Pay expenses, wallet, and balances</p>
+            <p>â€¢ All schedules, polls, and attendees</p>
+            <p>â€¢ All join requests and invites</p>
+            <p>â€¢ All facility bookings for this club</p>
           </div>
 
           <!-- Error / match blocker -->
           <div v-if="deleteNote" class="rounded-xl px-4 py-3 text-xs"
             :class="deleteNote.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'">
-            <p class="font-semibold mb-1">{{ deleteNote.ok ? '✅ Done' : '⚠️ Cannot delete yet' }}</p>
+            <p class="font-semibold mb-1">{{ deleteNote.ok ? 'âœ… Done' : 'âš ï¸ Cannot delete yet' }}</p>
             <p>{{ deleteNote.t }}</p>
             <RouterLink v-if="deleteMatchCount > 0" to="/matches"
               class="mt-2 inline-block underline text-rose-400 hover:text-rose-300"
               @click="closeDeleteModal">
-              Go to Matches →
+              Go to Matches â†’
             </RouterLink>
           </div>
 
@@ -889,7 +889,7 @@ async function leaveClub(clubId) {
                 : 'bg-rose-900/40 text-rose-700 cursor-not-allowed'"
               :disabled="deleteConfirmText !== deleteTarget.clubs?.name || deleteBusy"
               @click="confirmDeleteClub">
-              {{ deleteBusy ? 'Deleting…' : '🗑 Delete Club Permanently' }}
+              {{ deleteBusy ? 'Deletingâ€¦' : 'ðŸ—‘ Delete Club Permanently' }}
             </button>
           </div>
         </div>
@@ -898,7 +898,7 @@ async function leaveClub(clubId) {
     </div>
   </Teleport>
 
-  <!-- ── Delete join request confirm ── -->
+  <!-- â”€â”€ Delete join request confirm â”€â”€ -->
   <Teleport to="body">
     <div v-if="confirmDelReqId" class="fixed inset-0 z-50 flex items-center justify-center px-5"
       style="background:rgba(0,0,0,.75);backdrop-filter:blur(6px)"
@@ -906,7 +906,7 @@ async function leaveClub(clubId) {
       <div class="w-full max-w-sm rounded-2xl p-6"
         style="background:#0d1a2e; border:1px solid rgba(244,63,94,.25); box-shadow:0 0 40px rgba(244,63,94,.12)">
         <div class="text-center mb-4">
-          <div class="text-3xl mb-2">🗑️</div>
+          <div class="text-3xl mb-2">ðŸ—‘ï¸</div>
           <p class="font-semibold text-slate-100 mb-1">Delete this request?</p>
           <p class="text-xs text-slate-400">This will permanently remove the rejected join request.</p>
         </div>

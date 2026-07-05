@@ -51,10 +51,10 @@ function buildWelcomeHtml(name: string): string {
                 background:linear-gradient(90deg,#00e5ff,#a855f7);
                 -webkit-background-clip:text;-webkit-text-fill-color:transparent;
                 background-clip:text;color:#00e5ff;">
-                Hey ${displayName}! 🏸
+                Hey ${displayName}! ðŸ¸
               </h1>
               <p style="margin:0;font-size:16px;color:#cbd5e1;line-height:1.6;">
-                You're now part of <strong style="color:#f8fafc;">Badminton 360</strong> —
+                You're now part of <strong style="color:#f8fafc;">Badminton 360</strong> â€”
                 the free app your whole badminton crew has been waiting for.
               </p>
             </td>
@@ -81,7 +81,7 @@ function buildWelcomeHtml(name: string): string {
                   <td width="48%" valign="top"
                     style="background-color:#0f2040;border-radius:12px;border:1px solid #1a3050;
                     padding:20px 18px;">
-                    <div style="font-size:24px;margin-bottom:10px;">🏆</div>
+                    <div style="font-size:24px;margin-bottom:10px;">ðŸ†</div>
                     <div style="font-size:14px;font-weight:700;color:#00e5ff;margin-bottom:6px;">
                       Elo Rankings
                     </div>
@@ -93,9 +93,9 @@ function buildWelcomeHtml(name: string): string {
                   <td width="48%" valign="top"
                     style="background-color:#0f2040;border-radius:12px;border:1px solid #1a3050;
                     padding:20px 18px;">
-                    <div style="font-size:24px;margin-bottom:10px;">💰</div>
+                    <div style="font-size:24px;margin-bottom:10px;">ðŸ’°</div>
                     <div style="font-size:14px;font-weight:700;color:#a855f7;margin-bottom:6px;">
-                      Pay & Split + Wallet
+                      Split Pay + Wallet
                     </div>
                     <div style="font-size:13px;color:#94a3b8;line-height:1.5;">
                       Split court costs equally. Track who owes what. No drama.
@@ -112,7 +112,7 @@ function buildWelcomeHtml(name: string): string {
                   <td width="48%" valign="top"
                     style="background-color:#0f2040;border-radius:12px;border:1px solid #1a3050;
                     padding:20px 18px;">
-                    <div style="font-size:24px;margin-bottom:10px;">🎯</div>
+                    <div style="font-size:24px;margin-bottom:10px;">ðŸŽ¯</div>
                     <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px;">
                       Tournaments
                     </div>
@@ -124,7 +124,7 @@ function buildWelcomeHtml(name: string): string {
                   <td width="48%" valign="top"
                     style="background-color:#0f2040;border-radius:12px;border:1px solid #1a3050;
                     padding:20px 18px;">
-                    <div style="font-size:24px;margin-bottom:10px;">📅</div>
+                    <div style="font-size:24px;margin-bottom:10px;">ðŸ“…</div>
                     <div style="font-size:14px;font-weight:700;color:#00e5ff;margin-bottom:6px;">
                       Schedule & Polls
                     </div>
@@ -144,10 +144,10 @@ function buildWelcomeHtml(name: string): string {
                 style="display:inline-block;padding:15px 40px;font-size:15px;font-weight:700;
                 color:#060e1c;text-decoration:none;border-radius:10px;letter-spacing:0.3px;
                 background:linear-gradient(135deg,#00e5ff,#00b8d4);">
-                Open Badminton 360 →
+                Open Badminton 360 â†’
               </a>
               <p style="margin:16px 0 0;font-size:12px;color:#475569;">
-                Install it on your phone — it works like a native app.
+                Install it on your phone â€” it works like a native app.
               </p>
             </td>
           </tr>
@@ -163,7 +163,7 @@ function buildWelcomeHtml(name: string): string {
           <tr>
             <td style="padding:28px 40px;text-align:center;">
               <p style="margin:0;font-size:15px;font-style:italic;color:#64748b;line-height:1.6;">
-                "Your Club · Your Game · One App"
+                "Your Club Â· Your Game Â· One App"
               </p>
             </td>
           </tr>
@@ -178,7 +178,7 @@ function buildWelcomeHtml(name: string): string {
                   style="color:#00e5ff;text-decoration:none;">hello@badminton360.app</a>
               </p>
               <p style="margin:0;font-size:11px;color:#334155;">
-                © 2026 Badminton 360 · Free for every club, worldwide
+                Â© 2026 Badminton 360 Â· Free for every club, worldwide
               </p>
             </td>
           </tr>
@@ -242,7 +242,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: "Badminton 360 <hello@badminton360.app>",
         to: [to],
-        subject: "Welcome to Badminton 360 🏸",
+        subject: "Welcome to Badminton 360 ðŸ¸",
         html,
       }),
     })

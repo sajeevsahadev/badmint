@@ -42,38 +42,38 @@ const filteredClubs = computed(() =>
 // Every chapter is a tap-target that leads to Google sign-in.
 const story = [
   {
-    icon: '🏟️',
+    icon: 'ðŸŸï¸',
     chapter: 'Saturday, 5:58 AM',
     title: 'The court is booked. Who\'s in?',
-    text: 'Your badminton crew has a court every weekend — but the roster lives in one person\'s head. With Badminton 360, your club exists in one place. Add every member, invite by link, all free. Forever.',
+    text: 'Your badminton crew has a court every weekend â€” but the roster lives in one person\'s head. With Badminton 360, your club exists in one place. Add every member, invite by link, all free. Forever.',
     tag: 'Free club management',
   },
   {
-    icon: '🏸',
+    icon: 'ðŸ¸',
     chapter: 'Game on',
     title: 'Every smash is remembered',
-    text: 'Pick 4 players, enter the score, done. The app rates every player with the same Elo system chess grandmasters use — beat a stronger pair, climb faster. The leaderboard settles every "I\'m better than you" debate.',
+    text: 'Pick 4 players, enter the score, done. The app rates every player with the same Elo system chess grandmasters use â€” beat a stronger pair, climb faster. The leaderboard settles every "I\'m better than you" debate.',
     tag: 'Match tracking & Elo rankings',
   },
   {
-    icon: '💸',
+    icon: 'ðŸ’¸',
     chapter: 'After the game',
     title: 'Split the bill, not the friendship',
-    text: 'Court fee, shuttlecocks, water — someone always pays and someone always forgets. Pay & Split divides every cost equally, and the shared Wallet lets players chip in upfront so nobody chases anybody.',
+    text: 'Court fee, shuttlecocks, water â€” someone always pays and someone always forgets. Split Pay divides every cost equally, and the shared Wallet lets players chip in upfront so nobody chases anybody.',
     tag: 'Expense splitting & wallet',
   },
   {
-    icon: '📅',
+    icon: 'ðŸ“…',
     chapter: 'The next challenge',
     title: 'Tournaments are waiting for you',
     text: 'Browse upcoming tournaments around you, register your pair in two taps, and follow the bracket live from your phone.',
     tag: 'Discover tournaments',
   },
   {
-    icon: '🏆',
+    icon: 'ðŸ†',
     chapter: 'Your big day',
     title: 'Run your own tournament',
-    text: 'Knockouts or round robin — create a tournament, approve registrations, auto-generate the bracket and record results as they happen. Your club\'s championship, organised like a pro event.',
+    text: 'Knockouts or round robin â€” create a tournament, approve registrations, auto-generate the bracket and record results as they happen. Your club\'s championship, organised like a pro event.',
     tag: 'Host tournaments',
   },
 ]
@@ -126,10 +126,10 @@ onMounted(() => { load(); detectCountry() })
 <template>
   <div class="min-h-screen">
 
-    <!-- ── Global Hero (Professional Sport) ── -->
+    <!-- â”€â”€ Global Hero (Professional Sport) â”€â”€ -->
     <div class="relative overflow-hidden" style="min-height:256px">
 
-      <!-- Professional sport blue gradient — bold, not black -->
+      <!-- Professional sport blue gradient â€” bold, not black -->
       <div class="absolute inset-0"
         style="background:linear-gradient(150deg,#0B2D6B 0%,#0D47A1 45%,#006064 100%)" />
 
@@ -146,23 +146,23 @@ onMounted(() => { load(); detectCountry() })
       <!-- Hero text + search -->
       <div class="relative px-4 pt-6 pb-7 mx-auto max-w-2xl">
         <div class="flex items-center gap-2.5 mb-0.5">
-          <span class="text-3xl" style="filter:drop-shadow(0 0 18px rgba(255,255,255,.35))">🏸</span>
+          <span class="text-3xl" style="filter:drop-shadow(0 0 18px rgba(255,255,255,.35))">ðŸ¸</span>
           <div>
             <h1 class="font-display text-3xl font-extrabold gradient-text leading-none">Badminton 360</h1>
-            <p class="text-xs text-white/50 tracking-[0.2em] uppercase mt-0.5">Your Club · Your Game · One App</p>
+            <p class="text-xs text-white/50 tracking-[0.2em] uppercase mt-0.5">Your Club Â· Your Game Â· One App</p>
           </div>
         </div>
         <p class="text-white/70 text-xs mb-4 mt-2">
-          {{ country ? flagEmoji(countryCode) + ' ' + country : '🌍 Worldwide' }} · Elo Rankings · Free Forever
+          {{ country ? flagEmoji(countryCode) + ' ' + country : 'ðŸŒ Worldwide' }} Â· Elo Rankings Â· Free Forever
         </p>
 
-        <!-- Search — glass style for colored hero -->
+        <!-- Search â€” glass style for colored hero -->
         <div class="relative">
-          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none select-none">🔍</span>
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none select-none">ðŸ”</span>
           <input v-model="searchQ"
             class="w-full rounded-xl py-3 pl-11 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-white/30"
             style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px)"
-            placeholder="Search clubs or facilities…"
+            placeholder="Search clubs or facilitiesâ€¦"
             @input="doSearch" @keyup.enter="doSearch"/>
         </div>
 
@@ -171,26 +171,26 @@ onMounted(() => { load(); detectCountry() })
           <RouterLink v-for="r in searchRes" :key="r.type + r.id" :to="r.to"
             class="flex items-center gap-3 px-4 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0
                    hover:bg-[rgba(15,23,42,0.04)] transition-colors">
-            <span class="text-base">{{ r.type === 'club' ? '🏢' : '🏟️' }}</span>
+            <span class="text-base">{{ r.type === 'club' ? 'ðŸ¢' : 'ðŸŸï¸' }}</span>
             <div class="min-w-0">
               <div class="text-sm font-semibold text-slate-100 truncate">{{ r.name }}</div>
-              <div class="text-xs text-slate-500">{{ r.type === 'club' ? 'Club' : 'Facility' }}{{ r.sub ? ' · ' + r.sub : '' }}</div>
+              <div class="text-xs text-slate-500">{{ r.type === 'club' ? 'Club' : 'Facility' }}{{ r.sub ? ' Â· ' + r.sub : '' }}</div>
             </div>
           </RouterLink>
         </div>
       </div>
     </div>
 
-    <!-- ── Page content ── -->
+    <!-- â”€â”€ Page content â”€â”€ -->
     <div class="px-4 mx-auto max-w-2xl pb-10 pt-5">
 
-      <!-- ── My Teams (logged-in) ── -->
+      <!-- â”€â”€ My Teams (logged-in) â”€â”€ -->
       <template v-if="user && clubs.length">
         <div class="mb-5 fade-up">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">My Teams</h2>
             <RouterLink to="/dashboard" class="text-xs text-neon hover:opacity-75 transition">
-              View Rankings →
+              View Rankings â†’
             </RouterLink>
           </div>
           <div class="grid gap-2" :class="clubs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
@@ -210,10 +210,10 @@ onMounted(() => { load(); detectCountry() })
               </div>
               <div v-if="topClubs.find(tc => tc.id === c.club_id)" class="flex gap-3">
                 <span class="text-[10px] text-neon font-bold">
-                  Score {{ topClubs.find(tc => tc.id === c.club_id)?.club_score ?? '–' }}
+                  Score {{ topClubs.find(tc => tc.id === c.club_id)?.club_score ?? 'â€“' }}
                 </span>
                 <span class="text-[10px] text-slate-500">
-                  Rank #{{ topClubs.find(tc => tc.id === c.club_id)?.club_rank ?? '–' }}
+                  Rank #{{ topClubs.find(tc => tc.id === c.club_id)?.club_rank ?? 'â€“' }}
                 </span>
               </div>
             </button>
@@ -221,16 +221,16 @@ onMounted(() => { load(); detectCountry() })
         </div>
       </template>
 
-      <!-- ══════════════ LOGGED-OUT LANDING ══════════════ -->
+      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGGED-OUT LANDING â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
       <template v-if="!user">
 
         <!-- 1. Join CTA -->
         <div class="card-neon p-5 mb-8 fade-up">
           <div class="text-center">
-            <div class="text-3xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🏸</div>
+            <div class="text-3xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">ðŸ¸</div>
             <p class="font-bold gradient-text text-lg mb-1">Join your badminton team</p>
-            <p class="text-slate-400 text-sm mb-4">Free Elo rankings, match history, and club stats for every court — anywhere in the world.</p>
-            <RouterLink to="/login" class="btn-primary px-8">Sign in with Google — Free</RouterLink>
+            <p class="text-slate-400 text-sm mb-4">Free Elo rankings, match history, and club stats for every court â€” anywhere in the world.</p>
+            <RouterLink to="/login" class="btn-primary px-8">Sign in with Google â€” Free</RouterLink>
           </div>
         </div>
 
@@ -270,7 +270,7 @@ onMounted(() => { load(); detectCountry() })
                     {{ s.tag }}
                   </span>
                   <span class="text-[10px] text-neon opacity-0 group-hover:opacity-100 transition-opacity">
-                    Start free →
+                    Start free â†’
                   </span>
                 </div>
               </div>
@@ -280,21 +280,21 @@ onMounted(() => { load(); detectCountry() })
           <!-- Story finale CTA -->
           <div class="card-violet p-5 text-center mt-6 fade-up">
             <p class="font-display font-extrabold text-slate-100 text-base mb-1">
-              The whole game. The whole club. One app. 360°.
+              The whole game. The whole club. One app. 360Â°.
             </p>
             <p class="text-xs text-slate-400 mb-4">No downloads, no fees, no spreadsheets. Just badminton.</p>
-            <RouterLink to="/login" class="btn-primary px-8">Get Started — It's Free</RouterLink>
+            <RouterLink to="/login" class="btn-primary px-8">Get Started â€” It's Free</RouterLink>
           </div>
         </div>
       </template>
 
-      <!-- ══════════════ LOGGED-IN CONTENT ══════════════ -->
+      <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGGED-IN CONTENT â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
       <template v-if="user">
-        <!-- ── Top Clubs ── -->
+        <!-- â”€â”€ Top Clubs â”€â”€ -->
         <div class="mb-5 fade-up">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Top Clubs</h2>
-            <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">See All →</RouterLink>
+            <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">See All â†’</RouterLink>
           </div>
           <div v-if="loading" class="grid grid-cols-2 gap-2">
             <div v-for="i in 4" :key="i" class="h-20 shimmer rounded-2xl"/>
@@ -308,24 +308,24 @@ onMounted(() => { load(); detectCountry() })
               :class="myClubsWithScore.some(m => m.id === c.id) ? 'card-neon' : ''">
               <div class="flex items-start justify-between mb-1">
                 <span class="text-sm font-black" :class="i < 3 ? 'text-gold' : 'text-slate-500'">
-                  {{ ['🥇','🥈','🥉'][i] ?? ('#' + (i+1)) }}
+                  {{ ['ðŸ¥‡','ðŸ¥ˆ','ðŸ¥‰'][i] ?? ('#' + (i+1)) }}
                 </span>
                 <span v-if="c.emirates" class="text-[9px] text-slate-600">{{ c.emirates }}</span>
               </div>
               <div class="text-xs font-bold text-slate-100 truncate mb-1">{{ c.name }}</div>
               <div class="flex items-center gap-2">
                 <span class="text-[10px] text-neon font-bold">{{ c.club_score }}</span>
-                <span class="text-[10px] text-slate-600">{{ c.total_members }}👥</span>
+                <span class="text-[10px] text-slate-600">{{ c.total_members }}ðŸ‘¥</span>
               </div>
             </RouterLink>
           </div>
         </div>
 
-        <!-- ── Top Players ── -->
+        <!-- â”€â”€ Top Players â”€â”€ -->
         <div class="mb-5 fade-up">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Top Players</h2>
-            <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">See All →</RouterLink>
+            <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">See All â†’</RouterLink>
           </div>
           <div v-if="loading" class="space-y-2">
             <div v-for="i in 4" :key="i" class="h-11 shimmer rounded-xl"/>
@@ -337,12 +337,12 @@ onMounted(() => { load(); detectCountry() })
                      hover:bg-[rgba(15,23,42,0.02)] transition-colors">
               <span class="text-sm w-6 shrink-0 font-bold"
                 :class="i < 3 ? 'text-gold' : 'text-slate-600'">
-                {{ ['🥇','🥈','🥉'][i] ?? (i + 1) }}
+                {{ ['ðŸ¥‡','ðŸ¥ˆ','ðŸ¥‰'][i] ?? (i + 1) }}
               </span>
               <Avatar :name="p.public_name" :src="avatarMap[p.user_id]" :size="32" />
               <div class="flex-1 min-w-0 ml-1">
                 <div class="text-sm font-semibold text-slate-100 truncate">{{ p.public_name }}</div>
-                <div class="text-[10px] text-slate-500 truncate">{{ p.club_name }}{{ p.emirates ? ' · ' + p.emirates : '' }}</div>
+                <div class="text-[10px] text-slate-500 truncate">{{ p.club_name }}{{ p.emirates ? ' Â· ' + p.emirates : '' }}</div>
               </div>
               <div class="text-right shrink-0">
                 <div class="text-sm font-extrabold text-neon">{{ p.elo }}</div>
@@ -352,27 +352,27 @@ onMounted(() => { load(); detectCountry() })
           </div>
         </div>
 
-        <!-- ── Explore CTAs ── -->
+        <!-- â”€â”€ Explore CTAs â”€â”€ -->
         <div class="grid grid-cols-2 gap-2 mb-5 fade-up">
           <RouterLink to="/explore?tab=facilities"
             class="card p-4 flex flex-col items-center text-center hover:border-[rgba(15,23,42,0.20)] transition-all duration-200">
-            <span class="text-2xl mb-1.5">🏟️</span>
+            <span class="text-2xl mb-1.5">ðŸŸï¸</span>
             <div class="text-xs font-bold text-slate-200">Find a Facility</div>
             <div class="text-[10px] text-slate-500 mt-0.5">Courts near you</div>
           </RouterLink>
           <RouterLink to="/explore"
             class="card p-4 flex flex-col items-center text-center hover:border-[rgba(15,23,42,0.20)] transition-all duration-200">
-            <span class="text-2xl mb-1.5">🌍</span>
+            <span class="text-2xl mb-1.5">ðŸŒ</span>
             <div class="text-xs font-bold text-slate-200">Explore Clubs</div>
             <div class="text-[10px] text-slate-500 mt-0.5">Join a team</div>
           </RouterLink>
         </div>
       </template>
 
-      <!-- ── Install App — kept at the bottom (native iOS/Android apps coming soon) ── -->
+      <!-- â”€â”€ Install App â€” kept at the bottom (native iOS/Android apps coming soon) â”€â”€ -->
       <div v-if="!isInstalled" class="mb-2 fade-up">
         <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
-          📲 Get the App — No App Store Needed
+          ðŸ“² Get the App â€” No App Store Needed
         </h2>
         <div class="grid grid-cols-2 gap-2">
 
@@ -383,7 +383,7 @@ onMounted(() => { load(); detectCountry() })
             :class="canInstall ? 'card-neon hover:border-cyan-400/40' : 'hover:border-[rgba(15,23,42,0.20)]'"
             @click="canInstall ? promptInstall() : (showAndroidGuide = true)">
             <div class="flex items-center justify-between">
-              <span class="text-2xl">🤖</span>
+              <span class="text-2xl">ðŸ¤–</span>
               <span class="text-[9px] font-bold uppercase tracking-wide"
                 :class="canInstall ? 'text-neon' : 'text-slate-500'">
                 {{ canInstall ? 'Tap to Install' : 'Tap for Guide' }}
@@ -391,13 +391,13 @@ onMounted(() => { load(); detectCountry() })
             </div>
             <div class="text-xs font-bold text-slate-100">Android</div>
             <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
-              {{ canInstall ? 'Works offline · No Play Store needed' : 'Open in Chrome on Android to install' }}
+              {{ canInstall ? 'Works offline Â· No Play Store needed' : 'Open in Chrome on Android to install' }}
             </p>
             <div class="text-xs text-center py-1.5 border rounded-xl mt-auto transition-colors"
               :class="canInstall
                 ? 'btn-primary border-transparent'
                 : 'border-[rgba(15,23,42,0.15)] text-slate-400 hover:text-neon hover:border-neon/30'">
-              {{ canInstall ? 'Install Now →' : 'Show me how →' }}
+              {{ canInstall ? 'Install Now â†’' : 'Show me how â†’' }}
             </div>
           </button>
 
@@ -407,26 +407,26 @@ onMounted(() => { load(); detectCountry() })
             :class="isIOS ? 'card-violet' : 'opacity-70'"
             @click="showIOSGuide = true">
             <div class="flex items-center justify-between">
-              <span class="text-2xl">🍎</span>
+              <span class="text-2xl">ðŸŽ</span>
               <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Tap for Guide</span>
             </div>
             <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
             <p class="text-[10px] text-slate-400 leading-relaxed">
-              Add via Safari's Share menu — no App Store needed.
+              Add via Safari's Share menu â€” no App Store needed.
             </p>
             <div class="text-[10px] text-center text-violet py-1.5 border border-violet/30
                         rounded-xl mt-auto bg-violet/5">
-              Show me how →
+              Show me how â†’
             </div>
           </button>
 
         </div>
         <p class="text-[10px] text-slate-600 text-center mt-2">
-          Native iOS &amp; Android apps are on the way 🚀
+          Native iOS &amp; Android apps are on the way ðŸš€
         </p>
       </div>
 
-      <!-- ── Android Install Guide ── -->
+      <!-- â”€â”€ Android Install Guide â”€â”€ -->
       <Teleport to="body">
         <div v-if="showAndroidGuide"
           class="fixed inset-0 z-50 flex items-end"
@@ -437,52 +437,52 @@ onMounted(() => { load(); detectCountry() })
                    box-shadow:0 -8px 40px rgba(0,229,255,.12);">
             <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
             <div class="text-center mb-6">
-              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🤖</div>
+              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">ðŸ¤–</div>
               <h3 class="font-display text-lg font-bold text-slate-100">Add to Android Home Screen</h3>
               <p class="text-[11px] text-slate-400 mt-1">Follow these steps in Chrome on Android</p>
             </div>
             <div class="space-y-3 mb-6">
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">🌐</div>
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">ðŸŒ</div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">Open in Chrome</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Must be Chrome browser — not Samsung Internet or Firefox</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Must be Chrome browser â€” not Samsung Internet or Firefox</div>
                 </div>
               </div>
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">⋮</div>
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">â‹®</div>
                 <div>
-                  <div class="text-sm font-semibold text-slate-100">Tap ⋮ (three-dot menu)</div>
+                  <div class="text-sm font-semibold text-slate-100">Tap â‹® (three-dot menu)</div>
                   <div class="text-[11px] text-slate-400 mt-0.5">Top-right corner of Chrome</div>
                 </div>
               </div>
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">➕</div>
+                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">âž•</div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">"Add to Home screen"</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Or "Install app" — scroll down in the menu to find it</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Or "Install app" â€” scroll down in the menu to find it</div>
                 </div>
               </div>
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.25)">✓</div>
+                  style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.25)">âœ“</div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">Tap Add to confirm</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Badminton 360 appears on your home screen — tap to launch the app</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Badminton 360 appears on your home screen â€” tap to launch the app</div>
                 </div>
               </div>
             </div>
             <button class="btn-ghost w-full py-3 text-sm" @click="showAndroidGuide = false">
-              Got it — close
+              Got it â€” close
             </button>
           </div>
         </div>
       </Teleport>
 
-      <!-- ── iOS Install Guide (bottom sheet) ── -->
+      <!-- â”€â”€ iOS Install Guide (bottom sheet) â”€â”€ -->
       <Teleport to="body">
         <div v-if="showIOSGuide"
           class="fixed inset-0 z-50 flex items-end"
@@ -496,7 +496,7 @@ onMounted(() => { load(); detectCountry() })
             <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
 
             <div class="text-center mb-6">
-              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(168,85,247,.5))">🍎</div>
+              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(168,85,247,.5))">ðŸŽ</div>
               <h3 class="font-display text-lg font-bold text-slate-100">Add to iPhone / iPad</h3>
               <p class="text-[11px] text-slate-400 mt-1">Follow these 3 steps in Safari</p>
             </div>
@@ -506,12 +506,12 @@ onMounted(() => { load(); detectCountry() })
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
                   style="background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3)">
-                  ↑
+                  â†‘
                 </div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">Tap the Share button</div>
                   <div class="text-[11px] text-slate-400 mt-0.5">
-                    The <strong class="text-slate-300">↑</strong> icon at the bottom of Safari
+                    The <strong class="text-slate-300">â†‘</strong> icon at the bottom of Safari
                     (iPad: top-right toolbar)
                   </div>
                 </div>
@@ -521,7 +521,7 @@ onMounted(() => { load(); detectCountry() })
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
                   style="background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3)">
-                  ➕
+                  âž•
                 </div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">"Add to Home Screen"</div>
@@ -535,19 +535,19 @@ onMounted(() => { load(); detectCountry() })
               <div class="flex items-center gap-4 card p-3.5">
                 <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-2xl shrink-0"
                   style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.3)">
-                  ✓
+                  âœ“
                 </div>
                 <div>
                   <div class="text-sm font-semibold text-slate-100">Tap Add</div>
                   <div class="text-[11px] text-slate-400 mt-0.5">
-                    Badminton 360 appears on your home screen — tap it to open the app
+                    Badminton 360 appears on your home screen â€” tap it to open the app
                   </div>
                 </div>
               </div>
             </div>
 
             <button class="btn-ghost w-full py-3 text-sm" @click="showIOSGuide = false">
-              Got it — close
+              Got it â€” close
             </button>
           </div>
         </div>
