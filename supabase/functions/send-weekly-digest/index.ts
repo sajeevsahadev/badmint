@@ -31,98 +31,131 @@ function nowInTz(tz: string): { dow: number; hour: number } {
   return { dow: dowMap[wd] ?? 0, hour }
 }
 
+const esc = (s: string) =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
 interface LeaderboardRow {
-  id: string
   display_name: string
   elo: number
   games: number
   wins: number
   win_pct: number
-  club_rank: number
+  club_rank: number | null
+}
+interface WeeklyRow {
+  display_name: string
+  games: number
+  wins: number
+  losses: number
+  elo_delta: number
 }
 
-const esc = (s: string) =>
-  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+// Colored initials "avatar" — data-URI photos are stripped by Gmail, so we
+// render a reliable initials circle instead (renders in every mail client).
+const AVATAR_COLORS = ["#00b4d8", "#a855f7", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#ec4899", "#14b8a6"]
+function initials(name: string): string {
+  return (name || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()
+}
+function colorFor(name: string): string {
+  let h = 0
+  for (const c of (name || "?")) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+function avatarCell(name: string, size = 34): string {
+  const fs = Math.round(size * 0.4)
+  return `<table cellpadding="0" cellspacing="0" style="display:inline-table;"><tr>
+    <td width="${size}" height="${size}" align="center" valign="middle"
+      style="width:${size}px;height:${size}px;border-radius:${size}px;background:${colorFor(name)};
+             color:#fff;font-weight:700;font-size:${fs}px;text-align:center;">${esc(initials(name))}</td>
+  </tr></table>`
+}
 
-// Build the "story of the week" — a short narrative celebrating the winners.
-function winnersStory(club_name: string, top5: LeaderboardRow[]): string {
-  const champ = top5[0]
-  const second = top5[1]
-  const third = top5[2]
-  if (!champ) return ""
+const medalFor = (rank: number) =>
+  rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`
 
-  const champName = esc(champ.display_name)
-  let story = `<strong style="color:#0f172a;">${champName}</strong> tops <strong>${esc(club_name)}</strong> this week `
-  story += `with <strong>${Math.round(champ.elo)} Elo</strong>`
-  if (champ.games > 0) story += ` and a ${Number(champ.win_pct).toFixed(0)}% win rate across ${champ.games} game${champ.games === 1 ? "" : "s"}`
-  story += ". "
-
-  if (second) {
-    const gap = Math.round(champ.elo - second.elo)
-    story += `${esc(second.display_name)} is in second`
-    if (third) story += `, ${esc(third.display_name)} takes third`
-    story += "."
-    if (gap >= 0) {
-      story += gap <= 15
-        ? ` The gap at the top is just <strong>${gap} Elo</strong> — next week is anyone's game. 🔥`
-        : ` The lead is <strong>${gap} Elo</strong> — can anyone close it? 🎯`
-    }
-  } else {
-    story += "Get more matches recorded to fill out the podium!"
-  }
-  return story
+const eloChip = (delta: number) => {
+  const up = delta >= 0
+  const color = up ? "#059669" : "#dc2626"
+  const bg = up ? "#ecfdf5" : "#fef2f2"
+  const sign = up ? "▲ +" : "▼ "
+  return `<span style="display:inline-block;background:${bg};color:${color};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">${sign}${Math.abs(delta)}</span>`
 }
 
 function buildDigestHtml(opts: {
   club_name: string
   nickname: string
   top5: LeaderboardRow[]
+  weekly: WeeklyRow[]
 }): string {
-  const { club_name, nickname, top5 } = opts
-  const champ = top5[0]
+  const { club_name, nickname, top5, weekly } = opts
+  const mvp = weekly[0]
+  const greeting = nickname ? `Hi ${esc(nickname)},` : "Hi,"
 
-  const medalFor = (rank: number) =>
-    rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`
+  // Weekly narrative
+  let story = ""
+  if (mvp) {
+    const climber = [...weekly].sort((a, b) => b.elo_delta - a.elo_delta)[0]
+    story = `<strong style="color:#0f172a;">${esc(mvp.display_name)}</strong> led <strong>${esc(club_name)}</strong> this week with <strong>${mvp.wins} win${mvp.wins === 1 ? "" : "s"}</strong>`
+    if (climber && climber.elo_delta > 0 && climber.display_name !== mvp.display_name) {
+      story += `, and <strong style="color:#0f172a;">${esc(climber.display_name)}</strong> was the biggest climber (+${climber.elo_delta} Elo)`
+    }
+    story += ". Here's the full week 👇"
+  } else {
+    story = `No matches were recorded in <strong>${esc(club_name)}</strong> this week — get on court and make next week's highlights! 🏸`
+  }
 
-  // Podium (top 3) as a celebratory row of cards
-  const podium = top5.slice(0, 3).map(p => {
-    const medal = medalFor(p.club_rank)
-    const isChamp = p.club_rank === 1
-    const bg = isChamp ? "#fffbea" : "#f8fafc"
-    const border = isChamp ? "#fcd34d" : "#e2e8f0"
-    return `
-      <td width="33%" valign="top" style="padding:4px;">
-        <div style="background:${bg};border:1px solid ${border};border-radius:12px;padding:14px 8px;text-align:center;">
-          <div style="font-size:26px;line-height:1;margin-bottom:6px;">${medal}</div>
-          <div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:2px;">${esc(p.display_name)}</div>
-          <div style="font-size:12px;font-weight:700;color:#0099b8;">${Math.round(p.elo)} Elo</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">${p.wins}W / ${p.games - p.wins}L</div>
-        </div>
-      </td>`
-  }).join("")
+  // ── Section 1: This week's champions ──
+  const weeklyRows = weekly.slice(0, 6).map((p, i) => `
+    <tr style="${i === 0 ? "background:#fffbea;" : ""}border-bottom:1px solid #f1f5f9;">
+      <td style="padding:10px 10px 10px 14px;width:34px;">${avatarCell(p.display_name)}</td>
+      <td style="padding:10px 4px;font-weight:${i === 0 ? 800 : 600};color:#0f172a;font-size:14px;">
+        ${esc(p.display_name)}${i === 0 ? ' <span style="font-size:11px;color:#d97706;font-weight:700;">MVP</span>' : ""}
+      </td>
+      <td style="padding:10px 8px;text-align:right;color:#475569;font-size:13px;white-space:nowrap;">${p.wins}W / ${p.losses}L</td>
+      <td style="padding:10px 14px;text-align:right;white-space:nowrap;">${eloChip(p.elo_delta)}</td>
+    </tr>`).join("")
 
-  const rows = top5.map(p => {
+  const weeklySection = weekly.length ? `
+    <div style="font-size:13px;font-weight:800;color:#0f172a;margin:4px 0 10px;">🔥 This Week's Champions</div>
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:26px;">
+      <thead><tr style="background:#f8fafc;">
+        <th colspan="2" style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Player</th>
+        <th style="padding:9px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">This week</th>
+        <th style="padding:9px 14px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Elo Δ</th>
+      </tr></thead>
+      <tbody>${weeklyRows}</tbody>
+    </table>` : `
+    <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;color:#64748b;font-size:13px;margin-bottom:26px;">
+      No matches recorded this week — get on court! 🏸
+    </div>`
+
+  // ── Section 2: Full (all-time) standings ──
+  const standingRows = top5.map(p => {
     const isFirst = p.club_rank === 1
-    const rowBg   = isFirst ? "background:#fffbea;" : ""
-    const rankCell = isFirst
-      ? `<td style="padding:12px 14px;font-weight:800;color:#d97706;font-size:15px;">${medalFor(p.club_rank)}</td>`
-      : `<td style="padding:12px 14px;color:#64748b;font-size:13px;">${medalFor(p.club_rank)}</td>`
-    const nameSt = isFirst
-      ? `font-weight:800;color:#92400e;font-size:14px;`
-      : `font-weight:600;color:#0f172a;font-size:13px;`
-
     return `
-    <tr style="${rowBg}border-bottom:1px solid #f1f5f9;">
-      ${rankCell}
-      <td style="padding:12px 4px;${nameSt}">${esc(p.display_name)}</td>
-      <td style="padding:12px 8px;text-align:right;font-weight:700;color:#0099b8;font-size:13px;">${Math.round(p.elo)}</td>
-      <td style="padding:12px 8px;text-align:right;color:#475569;font-size:13px;">${p.wins}W / ${p.games - p.wins}L</td>
-      <td style="padding:12px 14px;text-align:right;color:#475569;font-size:12px;">${Number(p.win_pct).toFixed(0)}%</td>
+    <tr style="${isFirst ? "background:#fffbea;" : ""}border-bottom:1px solid #f1f5f9;">
+      <td style="padding:10px 6px 10px 14px;width:26px;font-weight:${isFirst ? 800 : 400};color:${isFirst ? "#d97706" : "#64748b"};font-size:13px;">${medalFor(p.club_rank ?? 0)}</td>
+      <td style="padding:10px 8px;width:34px;">${avatarCell(p.display_name)}</td>
+      <td style="padding:10px 4px;font-weight:${isFirst ? 800 : 600};color:#0f172a;font-size:13px;">${esc(p.display_name)}</td>
+      <td style="padding:10px 8px;text-align:right;font-weight:700;color:#0099b8;font-size:13px;">${Math.round(p.elo)}</td>
+      <td style="padding:10px 8px;text-align:right;color:#475569;font-size:12px;white-space:nowrap;">${p.wins}W / ${p.games - p.wins}L</td>
+      <td style="padding:10px 14px;text-align:right;color:#475569;font-size:12px;">${Number(p.win_pct).toFixed(0)}%</td>
     </tr>`
   }).join("")
 
-  const greeting = nickname ? `Hi ${esc(nickname)},` : "Hi,"
-  const story = winnersStory(club_name, top5)
+  const standingsSection = top5.length ? `
+    <div style="font-size:13px;font-weight:800;color:#0f172a;margin:4px 0 10px;">🏆 Overall Standings</div>
+    <table width="100%" cellpadding="0" cellspacing="0"
+      style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <thead><tr style="background:#f8fafc;">
+        <th colspan="3" style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Player</th>
+        <th style="padding:9px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Elo</th>
+        <th style="padding:9px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">W / L</th>
+        <th style="padding:9px 14px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Win%</th>
+      </tr></thead>
+      <tbody>${standingRows}</tbody>
+    </table>` : ""
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -134,43 +167,24 @@ function buildDigestHtml(opts: {
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
 <tr><td align="center">
-<table width="100%" style="max-width:520px;" cellpadding="0" cellspacing="0">
+<table width="100%" style="max-width:540px;" cellpadding="0" cellspacing="0">
 
   <!-- Header -->
   <tr><td style="background:linear-gradient(135deg,#050d1a,#0d1f3a);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
     <div style="font-size:12px;font-weight:600;color:rgba(0,180,216,.75);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">This week in ${esc(club_name)}</div>
-    <div style="font-size:24px;font-weight:800;color:#00b4d8;letter-spacing:-0.5px;">🏆 Champion of the Week</div>
-    ${champ ? `<div style="font-size:16px;font-weight:800;color:#fff;margin-top:8px;">${esc(champ.display_name)}</div>` : ""}
+    <div style="font-size:24px;font-weight:800;color:#00b4d8;letter-spacing:-0.5px;">${mvp ? "🏆 MVP of the Week" : "📊 Weekly Rankings"}</div>
+    ${mvp ? `<div style="font-size:17px;font-weight:800;color:#fff;margin-top:8px;">${esc(mvp.display_name)}</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px;">${mvp.wins}W / ${mvp.losses}L this week${mvp.elo_delta >= 0 ? ` · +${mvp.elo_delta} Elo` : ` · ${mvp.elo_delta} Elo`}</div>` : ""}
   </td></tr>
 
   <!-- Body -->
   <tr><td style="background:#ffffff;padding:26px 32px 8px;border-radius:0 0 16px 16px;">
 
     <p style="margin:0 0 16px;font-size:14px;color:#334155;line-height:1.65;">${greeting}</p>
+    <p style="margin:0 0 24px;font-size:14px;color:#334155;line-height:1.7;">${story}</p>
 
-    <!-- Winners story -->
-    <p style="margin:0 0 22px;font-size:14px;color:#334155;line-height:1.7;">${story}</p>
-
-    <!-- Podium -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>${podium}</tr>
-    </table>
-
-    <!-- Full top 5 -->
-    <div style="font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Full standings</div>
-    <table width="100%" cellpadding="0" cellspacing="0"
-      style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-      <thead>
-        <tr style="background:#f8fafc;">
-          <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Rank</th>
-          <th style="padding:10px 4px;text-align:left;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Player</th>
-          <th style="padding:10px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Elo</th>
-          <th style="padding:10px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">W / L</th>
-          <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;">Win%</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${weeklySection}
+    ${standingsSection}
 
     <!-- CTA -->
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 8px;">
@@ -202,6 +216,28 @@ function buildDigestHtml(opts: {
 </html>`
 }
 
+// Fetch both leaderboards for a club. Returns null when there's nothing to show.
+async function getClubData(admin: ReturnType<typeof createClient>, clubId: string) {
+  const { data: lb } = await admin.rpc("get_club_leaderboard", { p_club_id: clubId })
+  const top5: LeaderboardRow[] = (lb ?? [])
+    .filter((r: LeaderboardRow) => r.club_rank != null && r.games > 0)
+    .slice(0, 5)
+  const { data: wk } = await admin.rpc("get_club_weekly_summary", { p_club_id: clubId, p_days: 7 })
+  const weekly: WeeklyRow[] = (wk ?? []).slice(0, 6)
+  if (!top5.length && !weekly.length) return null
+  return { top5, weekly }
+}
+
+async function sendEmail(RESEND_API_KEY: string, to: string, subject: string, html: string): Promise<string | null> {
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: "Badminton 360 <noreply@badminton360.app>", to: [to], subject, html }),
+  })
+  if (resp.ok) return null
+  return await resp.text()
+}
+
 // ── handler ────────────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -215,9 +251,8 @@ serve(async (req: Request) => {
     const RESEND_API_KEY       = Deno.env.get("RESEND_API_KEY")!
     const CRON_SECRET          = Deno.env.get("WEEKLY_DIGEST_SECRET") ?? ""
 
-    // Auth: this function runs with verify_jwt=false so pg_cron can call it,
-    // but it must present the shared secret (also allow the service-role key
-    // as a bearer for manual/admin triggers).
+    // Auth: verify_jwt=false so pg_cron can call it; must present the shared
+    // secret (or the service-role key as bearer for manual/admin triggers).
     const secretHeader = req.headers.get("x-cron-secret") ?? ""
     const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")
     const authorised =
@@ -225,30 +260,45 @@ serve(async (req: Request) => {
       (SUPABASE_SERVICE_KEY && bearer === SUPABASE_SERVICE_KEY)
     if (!authorised) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
-    // Optional body: { force?: bool, club_id?: uuid }
-    //  - force  → ignore each club's schedule and send now (manual trigger)
-    //  - club_id → restrict to a single club (used by the "Send test now" button)
-    const body = await req.json().catch(() => ({})) as { force?: boolean; club_id?: string }
+    // Body: { force?, club_id?, test_email? }
+    //  - test_email → send exactly ONE preview email to that address
+    //  - force      → ignore each club's schedule and send now
+    //  - club_id    → restrict to a single club
+    const body = await req.json().catch(() => ({})) as { force?: boolean; club_id?: string; test_email?: string }
     const force = body?.force === true
     const onlyClubId = body?.club_id ?? null
+    const testEmail = typeof body?.test_email === "string" ? body.test_email.trim() : null
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    // 1. Get all clubs (+ per-club schedule)
     const { data: clubs, error: clubsErr } = await admin
       .from("clubs")
       .select("id, name, digest_dow, digest_hour, digest_tz, digest_enabled")
-
     if (clubsErr) throw new Error(`clubs fetch: ${clubsErr.message}`)
 
-    // Decide which clubs are due right now (or all, when force-triggering).
-    // Doing this BEFORE listUsers avoids that expensive call in the 167/168
-    // hours per week when nothing is scheduled.
+    // ── Test mode: one preview email to a single address ──
+    if (testEmail) {
+      const candidates = (clubs ?? []).filter(c => !onlyClubId || c.id === onlyClubId)
+      for (const club of candidates) {
+        const cd = await getClubData(admin, club.id)
+        if (!cd) continue
+        const html = buildDigestHtml({ club_name: club.name, nickname: "", top5: cd.top5, weekly: cd.weekly })
+        const mvpName = cd.weekly[0]?.display_name ?? cd.top5[0]?.display_name ?? club.name
+        const err = await sendEmail(RESEND_API_KEY, testEmail, `🏆 Weekly Rankings — ${club.name} (preview)`, html)
+        return new Response(JSON.stringify({ ok: !err, test: testEmail, club: club.name, mvp: mvpName, error: err }), {
+          status: err ? 502 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+      return new Response(JSON.stringify({ ok: false, test: testEmail, error: "No club with data to preview" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    // ── Which clubs are due right now (or all, when force) ──
     const dueClubs = (clubs ?? []).filter(club => {
       if (onlyClubId && club.id !== onlyClubId) return false
       if (force) return true
@@ -256,104 +306,52 @@ serve(async (req: Request) => {
       const { dow, hour } = nowInTz(club.digest_tz || "Asia/Dubai")
       return dow === club.digest_dow && hour === club.digest_hour
     })
-
     if (!dueClubs.length) {
       return new Response(JSON.stringify({ ok: true, sent: 0, clubs: 0, due: 0 }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
 
-    // Get all auth users once (to map user_id → email)
+    // Map user_id → email once
     const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 })
     const emailMap = new Map<string, string>()
-    for (const u of authData?.users ?? []) {
-      if (u.email) emailMap.set(u.id, u.email)
-    }
+    for (const u of authData?.users ?? []) if (u.email) emailMap.set(u.id, u.email)
 
     let totalSent = 0
     const allErrors: string[] = []
     let batchCount = 0
 
     for (const club of dueClubs) {
-      // 2. Get top 5 from leaderboard RPC
-      const { data: leaderboard, error: lbErr } = await admin.rpc("get_club_leaderboard", {
-        p_club_id: club.id,
-      })
-      if (lbErr) {
-        allErrors.push(`leaderboard(${club.id}): ${lbErr.message}`)
-        continue
-      }
-      // Only ranked players (games>0) — unplayed members have null club_rank
-      const ranked: LeaderboardRow[] = (leaderboard ?? []).filter((r: LeaderboardRow) => r.club_rank != null && r.games > 0)
-      const top5 = ranked.slice(0, 5)
-      if (!top5.length) continue
+      const cd = await getClubData(admin, club.id)
+      if (!cd) continue
 
-      // 3. Get all club members
-      const { data: members } = await admin
-        .from("club_members")
-        .select("user_id")
-        .eq("club_id", club.id)
-
+      const { data: members } = await admin.from("club_members").select("user_id").eq("club_id", club.id)
       if (!members?.length) continue
 
       const userIds = members.map((m: { user_id: string }) => m.user_id)
-
-      // 4. Get profiles for weekly_digest preference + nickname
       const { data: profiles } = await admin
-        .from("user_profiles")
-        .select("user_id, nickname, email_prefs")
-        .in("user_id", userIds)
-
+        .from("user_profiles").select("user_id, nickname, email_prefs").in("user_id", userIds)
       const profileMap = new Map<string, { nickname: string | null; email_prefs: Record<string, unknown> | null }>()
-      for (const p of profiles ?? []) {
-        profileMap.set(p.user_id, { nickname: p.nickname, email_prefs: p.email_prefs })
-      }
+      for (const p of profiles ?? []) profileMap.set(p.user_id, { nickname: p.nickname, email_prefs: p.email_prefs })
 
-      // 5. Filter opted-in members (default = true when key missing)
+      const mvpName = cd.weekly[0]?.display_name ?? cd.top5[0]?.display_name ?? club.name
+
       for (const uid of userIds) {
         const email = emailMap.get(uid)
         if (!email) continue
-
         const profile = profileMap.get(uid)
         const prefs   = profile?.email_prefs ?? null
-        const wantsDigest =
-          !prefs ||
-          (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
-
+        const wantsDigest = !prefs || (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
         if (!wantsDigest) continue
 
-        const nickname = profile?.nickname ?? ""
-        const html = buildDigestHtml({ club_name: club.name, nickname, top5 })
+        const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly })
+        const err = await sendEmail(RESEND_API_KEY, email, `🏆 ${mvpName} tops ${club.name} — Weekly Rankings`, html)
+        if (err) allErrors.push(`${email}(${club.name}): ${err}`)
+        else totalSent++
 
-        // 6. Send via Resend
-        const resp = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${RESEND_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "Badminton 360 <noreply@badminton360.app>",
-            to: [email],
-            subject: `🏆 ${top5[0].display_name} tops ${club.name} — Weekly Rankings`,
-            html,
-          }),
-        })
-
-        if (resp.ok) {
-          totalSent++
-        } else {
-          const txt = await resp.text()
-          allErrors.push(`${email}(${club.name}): ${txt}`)
-        }
-
-        // Resend free tier allows only 2 requests/second — pause after
-        // every 2 sends to stay safely under the limit (~1.8/s).
+        // Resend free tier = 2 requests/second — pause after every 2 sends.
         batchCount++
-        if (batchCount % 2 === 0) {
-          await sleep(1100)
-        }
+        if (batchCount % 2 === 0) await sleep(1100)
       }
     }
 
@@ -364,8 +362,7 @@ serve(async (req: Request) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
   }
 })
