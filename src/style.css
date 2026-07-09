@@ -20,6 +20,31 @@ body {
     radial-gradient(ellipse 600px  400px at 50%  115%, rgba(217,119,6,.09), transparent);
 }
 
+/* ── Native-app feel ─────────────────────────────────────────────────────────
+   Make the PWA behave like an installed app rather than a web page:
+   - block pinch- and double-tap zoom (Android Chrome ignores the viewport
+     user-scalable flag, but honours touch-action)
+   - no rubber-band / pull-to-refresh overscroll
+   - no blue tap-highlight flash or long-press callout menu
+   - text not selectable by default (form fields + .select-all stay usable) */
+html {
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+html, body { overscroll-behavior: none; }
+body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, select, [contenteditable="true"], .select-all {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+.select-all { -webkit-user-select: all; user-select: all; }
+
 .font-display { font-family: 'Bricolage Grotesque', sans-serif; }
 
 /* ── Cards ── */
