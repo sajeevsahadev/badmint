@@ -61,15 +61,46 @@ function closeWizard() {
 
 // ── PWA update detection ──────────────────────────────────────────────────────
 // If a new SW is already waiting when the app opens (during loading screen),
-// apply it silently — user sees the loading screen for ~1 extra second.
-// If detected while the app is running, show the update banner instead.
-const { needRefresh, updateServiceWorker } = useRegisterSW({ immediate: true })
+// apply it silently. If a new version ships while the app is already open, we
+// show an "Update available" popup (see template).
+//
+// Why some users never saw updates before: the browser only checks for a new
+// service worker at page load. A PWA left open on the home screen (common on
+// mobile) can go days without a fresh load, so it never noticed a new build.
+// Below we actively poll for updates on an interval AND whenever the app comes
+// back to the foreground, so the popup reliably appears within minutes.
+const dismissedUpdate = ref(false)
+const UPDATE_POLL_MS = 15 * 60 * 1000   // re-check every 15 minutes
+
+const { needRefresh, updateServiceWorker } = useRegisterSW({
+  immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    if (!registration) return
+    const check = () => { registration.update().catch(() => {}) }
+    setInterval(check, UPDATE_POLL_MS)
+    // Foreground return / tab focus — cheap, and catches the common case of a
+    // resident PWA the user reopens after a new build shipped.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check()
+    })
+    window.addEventListener('focus', check)
+  },
+})
+
 watch(needRefresh, (yes) => {
-  if (yes && !ready.value) {
+  if (!yes) return
+  if (!ready.value) {
     updating.value = true
-    updateServiceWorker(true)   // skip-waiting + reload
+    updateServiceWorker(true)   // cold start: skip-waiting + reload silently
+  } else {
+    dismissedUpdate.value = false   // app already open: surface the popup
   }
 })
+
+function applyUpdate() {
+  updating.value = true
+  updateServiceWorker(true)   // activates the waiting SW and reloads the page
+}
 
 // ── Hamburger menu sections ──────────────────────────────────────────────────
 const menuSections = [
@@ -223,28 +254,30 @@ const needsClub = computed(() =>
       </div>
     </Teleport>
 
-    <!-- ── PWA update banner ──────────────────────────────────────────────────
-         Shown when a new SW is waiting but the app was already past the loading
-         screen (so auto-reload didn't fire). User taps Update to reload. -->
+    <!-- ── PWA update popup ───────────────────────────────────────────────────
+         Shown when a new version ships while the app is already open. Prominent
+         center modal so it isn't missed; "Update Now" activates the new SW and
+         reloads. "Later" dismisses until the next detected build. -->
     <Teleport to="body">
-      <Transition name="update-slide">
-        <div v-if="needRefresh"
-          class="fixed top-0 inset-x-0 z-[90] flex items-center justify-between gap-3 px-4 py-2.5"
-          style="background:linear-gradient(90deg,#0077a8,#0099b8);
-                 box-shadow:0 2px 12px rgba(0,119,168,.3);">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-base shrink-0">🔄</span>
-            <div class="min-w-0">
-              <div class="text-xs font-semibold text-white leading-tight">New version available</div>
-              <div class="text-xs text-white/70 leading-tight">Tap to get the latest Badminton 360</div>
-            </div>
+      <Transition name="update-pop">
+        <div v-if="needRefresh && !dismissedUpdate && !updating"
+          class="fixed inset-0 z-[300] flex items-center justify-center px-6"
+          style="background:rgba(5,13,26,.55); backdrop-filter:blur(4px);">
+          <div class="w-full max-w-xs rounded-2xl bg-white p-6 text-center"
+            style="box-shadow:0 24px 64px rgba(0,0,0,.3);">
+            <div class="text-4xl mb-3">🔄</div>
+            <h2 class="font-display text-lg font-extrabold gradient-text mb-1">Update available</h2>
+            <p class="text-sm text-slate-500 mb-5 leading-relaxed">
+              A new version of Badminton 360 is ready. Please update to get the latest features and fixes.
+            </p>
+            <button class="btn-primary w-full py-3 mb-2" @click="applyUpdate">
+              Update Now
+            </button>
+            <button class="text-xs text-slate-400 hover:text-slate-600 transition py-1"
+              @click="dismissedUpdate = true">
+              Later
+            </button>
           </div>
-          <button @click="updateServiceWorker(true)"
-            class="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-opacity hover:opacity-80"
-            style="background:rgba(255,255,255,.25); color:#fff;
-                   border:1px solid rgba(255,255,255,.35);">
-            Update
-          </button>
         </div>
       </Transition>
     </Teleport>
@@ -501,8 +534,8 @@ const needsClub = computed(() =>
 .menu-fade-leave-active .menu-panel { transition: transform 0.2s ease; }
 .menu-fade-enter-from .menu-panel, .menu-fade-leave-to .menu-panel { transform: translateX(-100%); }
 
-/* Update banner slides down from top */
-.update-slide-enter-active { transition: transform 0.3s ease, opacity 0.3s ease; }
-.update-slide-leave-active { transition: transform 0.2s ease, opacity 0.2s ease; }
-.update-slide-enter-from, .update-slide-leave-to { transform: translateY(-100%); opacity: 0; }
+/* Update popup — fade + gentle scale */
+.update-pop-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.update-pop-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.update-pop-enter-from, .update-pop-leave-to { opacity: 0; transform: scale(0.94); }
 </style>
