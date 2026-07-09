@@ -1,5 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { aed, fmtExpMonth, fmtExpDay, parseLocalDate, timeAgo, deviceIcon } from '../utils/formatters'
+import { aed, fmtExpMonth, fmtExpDay, fmtDMY, parseLocalDate, timeAgo, deviceIcon } from '../utils/formatters'
+
+describe('fmtDMY()', () => {
+  it('converts YYYY-MM-DD to dd-MM-yyyy', () => {
+    expect(fmtDMY('2026-09-07')).toBe('07-09-2026')
+    expect(fmtDMY('2026-01-31')).toBe('31-01-2026')
+  })
+  it('returns empty string for blank/invalid input', () => {
+    expect(fmtDMY('')).toBe('')
+    expect(fmtDMY(null)).toBe('')
+    expect(fmtDMY(undefined)).toBe('')
+    expect(fmtDMY('not-a-date')).toBe('')
+    expect(fmtDMY('07/09/2026')).toBe('')
+  })
+})
 
 // ── aed() ─────────────────────────────────────────────────────────────────────
 

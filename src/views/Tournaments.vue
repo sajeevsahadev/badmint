@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
+import DateField from '../components/DateField.vue'
 
 const router = useRouter()
 const { user } = useAuth()
@@ -259,11 +260,11 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="label">Reg. Closes</label>
-              <input v-model="form.registration_end" type="date" class="input" />
+              <DateField v-model="form.registration_end" />
             </div>
             <div>
               <label class="label">Start Date</label>
-              <input v-model="form.start_date" type="date" class="input" />
+              <DateField v-model="form.start_date" />
             </div>
           </div>
 

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import DateField from '../components/DateField.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -475,17 +476,17 @@ async function deleteTournament() {
             </div>
             <div>
               <label class="label">Reg. Closes</label>
-              <input v-model="settings.registration_end" type="date" class="input" />
+              <DateField v-model="settings.registration_end" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="label">Start Date</label>
-              <input v-model="settings.start_date" type="date" class="input" />
+              <DateField v-model="settings.start_date" />
             </div>
             <div>
               <label class="label">End Date</label>
-              <input v-model="settings.end_date" type="date" class="input" />
+              <DateField v-model="settings.end_date" />
             </div>
           </div>
           <div>

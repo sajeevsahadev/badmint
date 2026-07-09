@@ -8,6 +8,7 @@ import { computeSettledEdges } from '../utils/settle-up'
 import { fmtExpMonth, fmtExpDay, timeAgo } from '../utils/formatters'
 import { formatMoney } from '../utils/currency'
 import PageHeader from '../components/PageHeader.vue'
+import DateField from '../components/DateField.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -1744,7 +1745,7 @@ const categoryBreakdown = computed(() => {
               </div>
               <div>
                 <label class="label">Date</label>
-                <input v-model="form.expense_date" type="date" class="input" />
+                <DateField v-model="form.expense_date" />
               </div>
             </div>
 

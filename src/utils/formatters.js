@@ -18,6 +18,12 @@ export const fmtExpMonth = d =>
 export const fmtExpDay = d =>
   d ? String(parseLocalDate(d).getDate()).padStart(2, '0') : '—'
 
+/** YYYY-MM-DD → dd-MM-yyyy (the app's display date format). '' if not a date. */
+export const fmtDMY = d => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || '')
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : ''
+}
+
 /**
  * Relative time label: "just now", "5m ago", "3h ago", "2d ago", or short date.
  * @param {string|Date} ts  ISO timestamp

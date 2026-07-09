@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
+import DateField from '../components/DateField.vue'
 
 const router = useRouter()
 const { user } = useAuth()
@@ -191,7 +192,7 @@ const weekdaySlots = computed(() => {
 
           <div>
             <label class="label">Preferred Date</label>
-            <input v-model="bookForm.date" type="date" class="input" />
+            <DateField v-model="bookForm.date" />
           </div>
           <div>
             <label class="label">Number of Courts</label>

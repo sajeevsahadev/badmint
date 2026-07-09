@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import Avatar from '../components/Avatar.vue'
+import DateField from '../components/DateField.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -268,7 +269,7 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
     <div class="grid grid-cols-2 gap-3 mb-4">
       <div>
         <label class="label">Match Date</label>
-        <input v-model="playedOn" type="date" class="input" />
+        <DateField v-model="playedOn" />
       </div>
       <div>
         <label class="label">Match Name <span class="text-slate-600">(optional)</span></label>
