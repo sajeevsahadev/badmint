@@ -59,6 +59,8 @@ const newFac         = ref({ name:'', address:'', emirate:'', maps_url:'', image
 const newFacNote     = ref(null)
 
 const pendingRequests = computed(() => requests.value.filter(r => r.status === 'pending'))
+const historyRequests = computed(() => requests.value.filter(r => r.status !== 'pending'))
+const showRequestHistory = ref(false)
 
 async function load() {
   if (!currentClub.value) return
@@ -497,34 +499,52 @@ async function leaveClub(clubId) {
       <span v-if="pendingRequests.length" class="badge-dot">{{ pendingRequests.length }}</span>
     </div>
 
-    <div class="space-y-2">
-      <div v-for="r in requests" :key="r.id"
+    <!-- Pending (actionable) requests -->
+    <div v-if="pendingRequests.length" class="space-y-2">
+      <div v-for="r in pendingRequests" :key="r.id"
         class="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-[rgba(15,23,42,0.03)] border border-[rgba(15,23,42,0.06)]">
-        <!-- Avatar initial -->
         <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
           style="background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(0,229,255,.2));">
           {{ (r.user_name || '?').charAt(0).toUpperCase() }}
         </div>
-        <!-- Info -->
         <div class="flex-1 min-w-0">
           <div class="text-sm font-semibold text-slate-100 truncate">{{ r.user_name }}</div>
           <div class="text-[10px] text-slate-500 truncate">{{ r.user_email }}</div>
         </div>
-        <!-- Status / actions -->
         <div class="shrink-0 flex items-center gap-1.5">
-          <template v-if="r.status !== 'pending'">
-            <span :class="r.status === 'approved' ? 'badge-approved' : 'badge-rejected'">
-              {{ r.status }}
-            </span>
+          <button class="btn-success text-xs px-2.5 py-1" @click="approveRequest(r.id)">Approve</button>
+          <button class="btn-danger text-xs px-2.5 py-1" @click="rejectRequest(r.id)">Decline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- No pending: minimized -->
+    <p v-else class="text-xs text-slate-500">✓ No pending requests to approve.</p>
+
+    <!-- Past requests (approved/rejected) — collapsed by default -->
+    <div v-if="historyRequests.length" class="mt-2">
+      <button class="text-[11px] text-slate-500 hover:text-neon transition"
+        @click="showRequestHistory = !showRequestHistory">
+        {{ showRequestHistory ? '▾ Hide' : '▸ Show' }} past requests ({{ historyRequests.length }})
+      </button>
+      <div v-if="showRequestHistory" class="space-y-2 mt-2 fade-up">
+        <div v-for="r in historyRequests" :key="r.id"
+          class="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-[rgba(15,23,42,0.03)] border border-[rgba(15,23,42,0.06)]">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            style="background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(0,229,255,.2));">
+            {{ (r.user_name || '?').charAt(0).toUpperCase() }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-semibold text-slate-100 truncate">{{ r.user_name }}</div>
+            <div class="text-[10px] text-slate-500 truncate">{{ r.user_email }}</div>
+          </div>
+          <div class="shrink-0 flex items-center gap-1.5">
+            <span :class="r.status === 'approved' ? 'badge-approved' : 'badge-rejected'">{{ r.status }}</span>
             <button v-if="r.status === 'rejected'"
               class="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
               title="Delete request"
               @click="confirmDelReqId = r.id">🗑</button>
-          </template>
-          <template v-else>
-            <button class="btn-success text-xs px-2.5 py-1" @click="approveRequest(r.id)">Approve</button>
-            <button class="btn-danger text-xs px-2.5 py-1" @click="rejectRequest(r.id)">Decline</button>
-          </template>
+          </div>
         </div>
       </div>
     </div>

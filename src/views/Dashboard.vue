@@ -22,7 +22,6 @@ const weeklyDelta     = ref(null)
 const allTournaments  = ref([])   // every tournament returned (for club-own section)
 const openTournaments = ref([])
 const liveTournaments = ref([])
-const facilities      = ref([])
 const loading         = ref(true)
 
 // ── Time-of-day greeting ──────────────────────────────────────────────
@@ -38,7 +37,7 @@ let _loadKey = 0
 async function load() {
   const key = ++_loadKey
   loading.value = true
-  await Promise.all([loadProfile(), loadClubData(), loadTournaments(), loadFacilities()])
+  await Promise.all([loadProfile(), loadClubData(), loadTournaments()])
   if (key !== _loadKey) return
   loading.value = false
 }
@@ -101,10 +100,6 @@ async function loadTournaments() {
   liveTournaments.value = all.filter(t => t.status === 'live').slice(0, 3)
 }
 
-async function loadFacilities() {
-  const { data } = await supabase.rpc('get_facilities', { p_emirate: null, p_search: null })
-  facilities.value = (data ?? []).slice(0, 3)
-}
 
 onMounted(load)
 watch(currentClub, load)
@@ -224,6 +219,22 @@ const fmtDate = d => d
             <p class="text-xs text-slate-400">Log a doubles result</p>
           </div>
         </button>
+        <button class="card p-4 flex items-center gap-3 hover:border-violet-400/50 transition-all active:scale-[0.97]"
+          @click="router.push('/matches')">
+          <span class="text-2xl">📋</span>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Matches</p>
+            <p class="text-xs text-slate-400">Match history</p>
+          </div>
+        </button>
+        <button class="card p-4 flex items-center gap-3 hover:border-emerald-400/50 transition-all active:scale-[0.97]"
+          @click="router.push('/splits?tab=balance')">
+          <span class="text-2xl">💰</span>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Split Pay</p>
+            <p class="text-xs text-slate-400">Your balance</p>
+          </div>
+        </button>
         <button class="card p-4 flex items-center gap-3 hover:border-amber-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/schedule')">
           <span class="text-2xl">📅</span>
@@ -303,31 +314,6 @@ const fmtDate = d => d
       </div>
     </div>
 
-    <!-- ── 6. Courts Near You ────────────────────────────────────────── -->
-    <div v-if="facilities.length">
-      <div class="flex items-center justify-between mb-2">
-        <p class="label">🏢 Courts Near You</p>
-        <RouterLink to="/explore" class="text-xs text-neon hover:opacity-75 transition">
-          Browse All →
-        </RouterLink>
-      </div>
-      <div class="space-y-2">
-        <div v-for="f in facilities" :key="f.id"
-          class="card p-4 flex items-center gap-3 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
-          @click="router.push('/facility/' + f.id)">
-          <div class="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center text-xl shrink-0">🏢</div>
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-slate-800 text-sm truncate">{{ f.name }}</p>
-            <p class="text-xs text-slate-400 truncate">
-              <span v-if="f.emirate">{{ f.emirate }}</span>
-              <span v-if="f.courts_count"> · {{ f.courts_count }} courts</span>
-            </p>
-          </div>
-          <span class="text-slate-300 text-sm shrink-0">→</span>
-        </div>
-      </div>
-    </div>
-
     <!-- ── 7. Your Clubs ────────────────────────────────────────────── -->
     <div>
       <div class="flex items-center justify-between mb-2">
@@ -360,31 +346,6 @@ const fmtDate = d => d
           <span v-if="currentClub?.club_id === c.club_id"
             class="shrink-0 text-xs font-bold text-cyan-600">Active</span>
           <span v-else class="shrink-0 text-slate-300 text-sm">→</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Coming Soon ───────────────────────────────────────────────── -->
-    <div>
-      <p class="label mb-2">🚀 Coming Soon</p>
-      <div class="card overflow-hidden">
-        <div class="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100">
-          <span class="text-2xl shrink-0">🏆</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-slate-800">Tournaments</p>
-            <p class="text-xs text-slate-400 mt-0.5">Club &amp; regional badminton events</p>
-          </div>
-          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
-            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
-        </div>
-        <div class="flex items-center gap-3 px-4 py-3.5">
-          <span class="text-2xl shrink-0">🏟️</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-bold text-slate-800">Court Booking</p>
-            <p class="text-xs text-slate-400 mt-0.5">Reserve your court in advance</p>
-          </div>
-          <span class="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full"
-            style="background:#fef3c7; color:#92400e; border:1px solid #fde68a">Soon</span>
         </div>
       </div>
     </div>
