@@ -51,3 +51,22 @@ export function deviceIcon(ua) {
   if (/Mac/i.test(ua))        return '💻'
   return '🌐'
 }
+
+/** Human-readable "OS · Browser" label from a User-Agent string. */
+export function deviceName(ua) {
+  if (!ua || ua === 'unknown') return 'Unknown device'
+  let os = 'Unknown'
+  if (/iPhone/i.test(ua)) os = 'iPhone'
+  else if (/iPad/i.test(ua)) os = 'iPad'
+  else if (/Android/i.test(ua)) os = 'Android'
+  else if (/Windows/i.test(ua)) os = 'Windows'
+  else if (/Mac OS X|Macintosh/i.test(ua)) os = 'Mac'
+  else if (/Linux/i.test(ua)) os = 'Linux'
+  let browser = ''
+  if (/Edg\//i.test(ua)) browser = 'Edge'
+  else if (/OPR\/|Opera/i.test(ua)) browser = 'Opera'
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome'
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox'
+  else if (/Safari\//i.test(ua)) browser = 'Safari'
+  return browser ? `${os} · ${browser}` : os
+}

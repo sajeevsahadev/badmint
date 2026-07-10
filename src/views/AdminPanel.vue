@@ -3,14 +3,17 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
-import { deviceIcon } from '../utils/formatters'
+import { deviceIcon, deviceName } from '../utils/formatters'
 
 const router = useRouter()
 const { user } = useAuth()
 
 // ── Tab state ──
 const tab = ref('stats')
-function switchTab(t) { tab.value = t; err.value = '' }
+function switchTab(t) {
+  tab.value = t; err.value = ''
+  if (t === 'security' && !sessions.value.length) loadSessions()
+}
 
 const TABS = [
   { v: 'stats',       l: '📊 Stats' },
@@ -20,6 +23,7 @@ const TABS = [
   { v: 'tournaments', l: '🏆 Tournaments' },
   { v: 'roles',       l: '🎖️ Roles' },
   { v: 'announcements', l: '📢 Announcements' },
+  { v: 'security',    l: '🔐 Security' },
 ]
 
 // ── Data ──
@@ -28,6 +32,8 @@ const clubs       = ref([])
 const facilities  = ref([])
 const tournaments = ref([])
 const stats       = ref(null)
+const sessions    = ref([])
+const sessionsLoading = ref(false)
 const search      = ref('')
 const loading     = ref(true)
 const err         = ref('')
@@ -83,6 +89,14 @@ async function loadUsers() {
   })
   if (error) { err.value = error.message; return }
   users.value = data ?? []
+}
+
+async function loadSessions() {
+  sessionsLoading.value = true; err.value = ''
+  const { data, error } = await supabase.rpc('admin_get_sessions', { p_limit: 300 })
+  sessionsLoading.value = false
+  if (error) { err.value = error.message; return }
+  sessions.value = data ?? []
 }
 
 async function loadStats() {
@@ -278,6 +292,8 @@ const statusChip = s => ({
 }[s] ?? 'bg-slate-100 text-slate-500')
 
 const fmtDate  = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+const fmtDateTime = d => d ? new Date(d).toLocaleString('en-AE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+const sessionLocation = s => [s.city, s.region, s.country].filter(Boolean).join(', ') || '—'
 const fmtShort = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' }) : '—'
 
 const statItems = computed(() => !stats.value ? [] : [
@@ -616,6 +632,60 @@ const statItems = computed(() => !stats.value ? [] : [
             No directors yet.
           </p>
         </div>
+      </div>
+
+      <!-- ── Security / Login Audit ─────────────────────────────────── -->
+      <div v-if="tab === 'security'" class="space-y-3 fade-up">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-bold text-slate-800">Login Audit</p>
+            <p class="text-[11px] text-slate-500">Newest first · {{ sessions.length }} logins</p>
+          </div>
+          <button class="btn-ghost text-xs px-3 py-1.5" :disabled="sessionsLoading" @click="loadSessions">
+            {{ sessionsLoading ? '…' : '↻ Refresh' }}
+          </button>
+        </div>
+
+        <div v-if="sessionsLoading" class="card p-8 text-center text-sm text-slate-400">Loading logins…</div>
+        <div v-else-if="!sessions.length" class="card p-8 text-center text-sm text-slate-400">No logins recorded yet.</div>
+
+        <div v-else class="card overflow-x-auto">
+          <table class="w-full text-xs min-w-[720px]">
+            <thead>
+              <tr class="text-left text-slate-500 border-b border-slate-100">
+                <th class="py-2.5 px-3 font-semibold">User</th>
+                <th class="py-2.5 px-3 font-semibold">Contact</th>
+                <th class="py-2.5 px-3 font-semibold">IP address</th>
+                <th class="py-2.5 px-3 font-semibold">Device</th>
+                <th class="py-2.5 px-3 font-semibold">Location</th>
+                <th class="py-2.5 px-3 font-semibold">Club</th>
+                <th class="py-2.5 px-3 font-semibold text-right">Logged in</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in sessions" :key="s.session_id" class="border-b border-slate-50 last:border-0 align-top">
+                <td class="py-2.5 px-3">
+                  <div class="font-semibold text-slate-800 whitespace-nowrap">{{ s.full_name || '—' }}</div>
+                  <span v-if="s.is_active" class="inline-block mt-0.5 text-[9px] font-bold text-emerald-600">● active</span>
+                </td>
+                <td class="py-2.5 px-3">
+                  <div class="text-slate-600 truncate max-w-[180px]">{{ s.email || '—' }}</div>
+                  <div class="text-slate-400">{{ s.phone || '—' }}</div>
+                </td>
+                <td class="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">{{ s.ip_address || '—' }}</td>
+                <td class="py-2.5 px-3 whitespace-nowrap">
+                  <span class="mr-1">{{ deviceIcon(s.user_agent) }}</span>{{ deviceName(s.user_agent) }}
+                </td>
+                <td class="py-2.5 px-3 text-slate-600">{{ sessionLocation(s) }}</td>
+                <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">{{ s.club_name || '—' }}</td>
+                <td class="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">{{ fmtDateTime(s.logged_in_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-[10px] text-slate-400 px-1">
+          IP location is approximate (from the device's network at login) and for security review only.
+        </p>
       </div>
 
     </template>

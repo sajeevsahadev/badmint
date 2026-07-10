@@ -1,5 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { aed, fmtExpMonth, fmtExpDay, fmtDMY, parseLocalDate, timeAgo, deviceIcon } from '../utils/formatters'
+import { aed, fmtExpMonth, fmtExpDay, fmtDMY, parseLocalDate, timeAgo, deviceIcon, deviceName } from '../utils/formatters'
+
+describe('deviceName()', () => {
+  it('parses common OS + browser combos', () => {
+    expect(deviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605 Safari/604')).toBe('iPhone · Safari')
+    expect(deviceName('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537 Chrome/120 Mobile Safari/537')).toBe('Android · Chrome')
+    expect(deviceName('Mozilla/5.0 (Windows NT 10.0; Win64) AppleWebKit/537 Chrome/120 Safari/537 Edg/120')).toBe('Windows · Edge')
+  })
+  it('handles missing/unknown UA', () => {
+    expect(deviceName('')).toBe('Unknown device')
+    expect(deviceName('unknown')).toBe('Unknown device')
+  })
+})
 
 describe('fmtDMY()', () => {
   it('converts YYYY-MM-DD to dd-MM-yyyy', () => {

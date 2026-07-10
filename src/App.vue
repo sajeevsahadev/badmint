@@ -156,7 +156,7 @@ async function init() {
     showWizard.value = true
   }
   // Non-blocking: session + admin check don't need to hold up club/page loading
-  startSession().catch(() => {})
+  startSession(currentClub.value?.club_id).catch(() => {})
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   }).catch(() => {})
