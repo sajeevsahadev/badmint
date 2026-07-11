@@ -41,11 +41,46 @@ export default defineConfig({
         ],
         screenshots: [
           {
-            src: 'icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
+            src: 'screenshots/screenshot-1.jpeg',
+            sizes: '738x1477',
+            type: 'image/jpeg',
             form_factor: 'narrow',
-            label: 'Badminton 360 – Club Leaderboard & Match Tracker'
+            label: 'Club leaderboard — Elo ratings, win %, and days played, ranked live'
+          },
+          {
+            src: 'screenshots/screenshot-2.jpeg',
+            sizes: '738x1477',
+            type: 'image/jpeg',
+            form_factor: 'narrow',
+            label: 'Match history — every doubles result, newest first'
+          },
+          {
+            src: 'screenshots/screenshot-3.jpeg',
+            sizes: '738x1475',
+            type: 'image/jpeg',
+            form_factor: 'narrow',
+            label: 'Schedule — plan match days and see who\'s coming'
+          },
+          {
+            src: 'screenshots/screenshot-4.jpeg',
+            sizes: '738x1474',
+            type: 'image/jpeg',
+            form_factor: 'narrow',
+            label: 'Split Pay — track and split court costs equally among players'
+          },
+          {
+            src: 'screenshots/screenshot-5.jpeg',
+            sizes: '738x1476',
+            type: 'image/jpeg',
+            form_factor: 'narrow',
+            label: 'Shared wallet — pre-fund court fees and settle up automatically'
+          },
+          {
+            src: 'screenshots/screenshot-6.jpeg',
+            sizes: '738x1480',
+            type: 'image/jpeg',
+            form_factor: 'narrow',
+            label: 'Add an expense and split it across the players who played'
           }
         ],
         related_applications: [
