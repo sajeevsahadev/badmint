@@ -1262,7 +1262,7 @@ const categoryBreakdown = computed(() => {
 
         <div v-if="showLedger" class="px-4 pb-4 fade-up">
           <p class="text-[11px] text-slate-400 mb-2 leading-relaxed">
-            All amounts in AED. Impact = what you paid (or your wallet money the pool spent) − your share;
+            All amounts in {{ clubCurrency }}. Impact = what you paid (or your wallet money the pool spent) − your share;
             below it, <span class="font-semibold">=</span> is your running balance.
             Wallet top-ups are not debts; they're credited back as the pool spends them.
           </p>
@@ -1737,9 +1737,9 @@ const categoryBreakdown = computed(() => {
             <!-- Amount + Date -->
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="label">Amount (AED)</label>
+                <label class="label">Amount ({{ clubCurrency }})</label>
                 <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 pointer-events-none">AED</span>
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 pointer-events-none">{{ clubCurrency }}</span>
                   <input v-model="form.amount" type="number" min="0.01" step="0.01" class="input pl-12 text-right font-semibold" placeholder="0.00" />
                 </div>
               </div>
@@ -1828,7 +1828,7 @@ const categoryBreakdown = computed(() => {
                     </span>
                     <!-- Amount input -->
                     <div class="flex items-center gap-1 shrink-0">
-                      <span class="text-xs text-slate-400 font-medium">AED</span>
+                      <span class="text-xs text-slate-400 font-medium">{{ clubCurrency }}</span>
                       <input
                         :value="form.payers.find(x => x.player_id === p.id)?.amount || ''"
                         @input="e => {
@@ -1887,7 +1887,7 @@ const categoryBreakdown = computed(() => {
 
               <div v-if="perShare && form.participant_ids.length"
                 class="text-[11px] font-semibold mb-2" style="color:#0077a0">
-                AED {{ perShare }} per person ({{ form.participant_ids.length }} selected)
+                {{ clubCurrency }} {{ perShare }} per person ({{ form.participant_ids.length }} selected)
               </div>
 
               <div class="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
@@ -1955,7 +1955,7 @@ const categoryBreakdown = computed(() => {
 
             <!-- Amount -->
             <div>
-              <label class="label">Amount (AED)</label>
+              <label class="label">Amount ({{ clubCurrency }})</label>
               <input v-model="walletForm.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
             </div>
 
@@ -2044,7 +2044,7 @@ const categoryBreakdown = computed(() => {
 
             <!-- Amount -->
             <div>
-              <label class="label">Amount (AED)</label>
+              <label class="label">Amount ({{ clubCurrency }})</label>
               <input v-model="obForm.amount" type="number" min="0.01" step="0.01" class="input" placeholder="0.00" />
             </div>
 
