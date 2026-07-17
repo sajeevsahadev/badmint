@@ -12,8 +12,8 @@ const showHelp = ref(false)
 <template>
   <div class="mb-4">
     <div class="flex items-start justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="text-2xl">{{ icon }}</span>
+      <div class="flex items-center gap-3">
+        <div class="icon-tile icon-tile-cyan w-11 h-11 text-xl">{{ icon }}</div>
         <div>
           <h2 class="font-display text-xl font-bold tracking-tight leading-tight">{{ title }}</h2>
           <p class="text-xs text-slate-400">{{ subtitle }}</p>

@@ -207,13 +207,51 @@ const fmtDate = d => d
       </div>
     </div>
 
+    <!-- ── 2. Getting Started — shown until this club has its first match ──
+         Directly addresses "where do I start" confusion after login: a clear,
+         prioritized 3-step path instead of a flat grid of equal-weight actions.
+         Disappears on its own once board.length > 0 (first match recorded). -->
+    <div v-if="currentClub && !board.length" class="card-neon p-4 fade-up">
+      <p class="text-sm font-bold text-slate-800 mb-0.5">👋 New here? Start with these steps</p>
+      <p class="text-xs text-slate-400 mb-3">This card goes away once your club's first match is recorded.</p>
+      <div class="space-y-1">
+        <RouterLink to="/players"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-cyan-50/60 transition-colors">
+          <div class="icon-tile icon-tile-cyan w-9 h-9 text-sm font-extrabold text-cyan-700">1</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-slate-800">Add your players</p>
+            <p class="text-xs text-slate-400">Roster + invite teammates by email</p>
+          </div>
+          <span class="text-slate-300 shrink-0">→</span>
+        </RouterLink>
+        <RouterLink to="/match"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-violet-50/60 transition-colors">
+          <div class="icon-tile icon-tile-violet w-9 h-9 text-sm font-extrabold text-violet-700">2</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-slate-800">Record your first match</p>
+            <p class="text-xs text-slate-400">Pick 4 players, enter the score — Elo updates instantly</p>
+          </div>
+          <span class="text-slate-300 shrink-0">→</span>
+        </RouterLink>
+        <RouterLink to="/splits"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+          <div class="icon-tile icon-tile-emerald w-9 h-9 text-sm font-extrabold text-emerald-700">3</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-slate-800">Split court costs</p>
+            <p class="text-xs text-slate-400">Track expenses fairly with Split Pay</p>
+          </div>
+          <span class="text-slate-300 shrink-0">→</span>
+        </RouterLink>
+      </div>
+    </div>
+
     <!-- ── 3. Quick Actions ──────────────────────────────────────────── -->
     <div>
       <p class="label mb-2">⚡ Quick Actions</p>
       <div class="grid grid-cols-2 gap-2">
         <button class="card p-4 flex items-center gap-3 hover:border-cyan-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/match')">
-          <span class="text-2xl">➕</span>
+          <div class="icon-tile icon-tile-cyan w-11 h-11 text-xl">➕</div>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Record Match</p>
             <p class="text-xs text-slate-400">Log a doubles result</p>
@@ -221,7 +259,7 @@ const fmtDate = d => d
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-violet-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/matches')">
-          <span class="text-2xl">📋</span>
+          <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">📋</div>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Matches</p>
             <p class="text-xs text-slate-400">Match history</p>
@@ -229,7 +267,7 @@ const fmtDate = d => d
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-emerald-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/splits?tab=balance')">
-          <span class="text-2xl">💰</span>
+          <div class="icon-tile icon-tile-emerald w-11 h-11 text-xl">💰</div>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Split Pay</p>
             <p class="text-xs text-slate-400">Your balance</p>
@@ -237,7 +275,7 @@ const fmtDate = d => d
         </button>
         <button class="card p-4 flex items-center gap-3 hover:border-amber-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/schedule')">
-          <span class="text-2xl">📅</span>
+          <div class="icon-tile icon-tile-amber w-11 h-11 text-xl">📅</div>
           <div class="text-left min-w-0">
             <p class="text-sm font-bold text-slate-800 truncate">Who's Playing?</p>
             <p class="text-xs text-slate-400">Match day attendance poll</p>
