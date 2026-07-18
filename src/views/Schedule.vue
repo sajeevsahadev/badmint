@@ -122,6 +122,7 @@ const allPlayers     = ref([])
 const attendeeIds    = ref(new Set())
 const savingAttendees = ref(false)
 const attendeesDirty  = ref(false)
+const savedAttendeeCount = ref(0)   // persisted attendees — gates "Cancel this event"
 
 // ── Invite ──
 const showInvitePanel = ref(false)
@@ -270,6 +271,7 @@ async function loadVotesAndAttendees(scheduleId) {
   ])
   await loadVotes(scheduleId)
   attendeeIds.value  = new Set((aRes.data ?? []).map(a => a.player_id))
+  savedAttendeeCount.value = attendeeIds.value.size
   allPlayers.value   = await withNicknames(pRes.data ?? [])
   attendeesDirty.value = false
 }
@@ -423,6 +425,7 @@ async function saveAttendees() {
   })
   savingAttendees.value = false
   attendeesDirty.value = false
+  savedAttendeeCount.value = attendeeIds.value.size
 }
 
 // ── Share ──
@@ -679,7 +682,9 @@ watch(currentClub, async () => {
                   </button>
                   <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
                 </div>
-                <div v-if="isManager()" class="mt-2">
+                <!-- Cancel is hidden once attendance is recorded — the event has
+                     effectively happened, and cancelling would wipe those attendees. -->
+                <div v-if="isManager() && savedAttendeeCount === 0" class="mt-2">
                   <button class="w-full text-xs text-rose-500 hover:text-rose-700 py-1.5 rounded-lg hover:bg-rose-50 transition"
                           @click="showCancelEventConfirm = true">
                     🗑 Cancel this event

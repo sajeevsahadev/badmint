@@ -37,7 +37,7 @@ async function load() {
   const [{ data: lb }, { data: bp }] = await Promise.all([
     supabase.from('v_leaderboard').select('*').eq('club_id', cid).gt('games', 0).order('club_rank'),
     supabase.from('v_best_pairs').select('*').eq('club_id', cid)
-      .order('win_pct', { ascending: false }).order('games', { ascending: false }).limit(3),
+      .order('win_pct', { ascending: false }).order('games', { ascending: false }).limit(5),
   ])
   if (key !== _loadKey) return
   board.value     = lb ?? []
@@ -201,13 +201,14 @@ const rest     = computed(() => board.value.slice(3))
 
       <!-- ── Best Pairs ────────────────────────────────────────────────── -->
       <div v-if="bestPairs.length" class="card overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-          <span class="text-xs font-bold text-slate-600">🏅 Best Pairs</span>
-          <InfoTip text="Ranked by win % across all doubles matches played together (min 1 game)." />
+        <div class="px-4 py-3 border-b border-slate-100">
+          <div class="text-xs font-bold text-slate-600">🏅 Best Pairs</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Top duos by win % (min 1 game played together)</div>
         </div>
         <div v-for="(pair, i) in bestPairs" :key="pair.p1 + pair.p2"
           class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0">
-          <span class="text-lg shrink-0 w-6 text-center">{{ medals[i] }}</span>
+          <span class="text-lg shrink-0 w-6 text-center font-bold text-slate-400"
+            :class="i < 3 ? '' : 'text-sm'">{{ medals[i] ?? `#${i + 1}` }}</span>
           <div class="flex -space-x-2 shrink-0">
             <Avatar :name="pair.p1_name" :src="avatarMap[pair.p1_user_id]" :size="28" class="ring-2 ring-white" />
             <Avatar :name="pair.p2_name" :src="avatarMap[pair.p2_user_id]" :size="28" class="ring-2 ring-white" />

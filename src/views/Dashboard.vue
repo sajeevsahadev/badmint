@@ -48,6 +48,29 @@ async function load() {
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+// Parse a YYYY-MM-DD as LOCAL date (not UTC) for the date badge.
+const parseYmd = s => new Date(s + 'T00:00:00')
+const dayNum   = s => parseYmd(s).getDate()
+const monthAbbr = s => parseYmd(s).toLocaleDateString('en', { month: 'short' }).toUpperCase()
+
+// Per-date "hide" for the who's-playing cards, persisted so a card the user
+// dismisses (e.g. after today's game is done) stays hidden for that date.
+// Keyed by scheduled_date; old entries (< today) are pruned so it never grows.
+const HIDDEN_KEY = 'b360_hidden_schedules'
+function loadHidden() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]')
+    const today = localDateStr(new Date())
+    const kept = (Array.isArray(raw) ? raw : []).filter(d => d >= today)
+    if (kept.length !== raw.length) localStorage.setItem(HIDDEN_KEY, JSON.stringify(kept))
+    return new Set(kept)
+  } catch { return new Set() }
+}
+const hiddenDates = ref(loadHidden())
+function hideSchedule(date) {
+  hiddenDates.value = new Set([...hiddenDates.value, date])
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenDates.value]))
+}
 async function loadTodayTomorrow() {
   todayTomorrowSchedule.value = []
   if (!currentClub.value) return
@@ -160,10 +183,12 @@ const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 // Today/tomorrow schedule entries, labelled — powers the Dashboard quick link
 const todayStr = localDateStr(new Date())
 const upcomingSchedule = computed(() =>
-  todayTomorrowSchedule.value.map(s => ({
-    ...s,
-    label: s.scheduled_date === todayStr ? 'today' : 'tomorrow',
-  }))
+  todayTomorrowSchedule.value
+    .filter(s => !hiddenDates.value.has(s.scheduled_date))
+    .map(s => ({
+      ...s,
+      label: s.scheduled_date === todayStr ? 'today' : 'tomorrow',
+    }))
 )
 
 const fmtDate = d => d
@@ -240,12 +265,19 @@ const fmtDate = d => d
     <RouterLink v-for="s in upcomingSchedule" :key="s.id"
       :to="`/schedule?date=${s.scheduled_date}`"
       class="card-amber p-4 flex items-center gap-3 fade-up">
-      <div class="icon-tile icon-tile-amber w-11 h-11 text-xl">📅</div>
+      <!-- Real date badge (day + month) instead of a static calendar emoji -->
+      <div class="icon-tile icon-tile-amber w-11 h-11 flex-col leading-none">
+        <span class="text-base font-extrabold text-amber-700">{{ dayNum(s.scheduled_date) }}</span>
+        <span class="text-[8px] font-bold text-amber-600 tracking-wide">{{ monthAbbr(s.scheduled_date) }}</span>
+      </div>
       <div class="flex-1 min-w-0">
         <p class="text-sm font-bold text-slate-800">See who's playing {{ s.label }}</p>
         <p class="text-xs text-slate-400">Tap to view or cast your attendance vote</p>
       </div>
-      <span class="text-slate-300 shrink-0">→</span>
+      <button class="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300
+                     hover:text-rose-500 hover:bg-rose-50 transition"
+        title="Hide this" aria-label="Hide"
+        @click.stop.prevent="hideSchedule(s.scheduled_date)">✕</button>
     </RouterLink>
 
     <!-- ── 2. Getting Started — shown until this club has its first match ──
