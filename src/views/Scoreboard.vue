@@ -115,11 +115,11 @@ const rest     = computed(() => board.value.slice(3))
             {{ p.display_name }}
           </RouterLink>
 
-          <!-- Points -->
+          <!-- Elo — the app's single ranking metric -->
           <div class="text-sm font-extrabold" :style="`color:${medalColor(i)}`">
-            {{ p.composite }} pts
+            {{ p.elo }} <span class="text-[10px] font-semibold text-slate-400">Elo</span>
           </div>
-          <div class="text-[10px] text-slate-400 mt-0.5">Elo {{ p.elo }}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">{{ p.win_pct }}% win</div>
         </div>
       </div>
 
@@ -127,7 +127,7 @@ const rest     = computed(() => board.value.slice(3))
       <div class="card overflow-hidden">
         <div class="px-4 py-3 flex items-center justify-between border-b border-slate-100">
           <span class="text-xs font-bold text-slate-600 tracking-wide">Full Leaderboard</span>
-          <InfoTip text="Ranked by composite score = Skill Elo (70%) + Attendance (30%), normalised 0–100 within your club." />
+          <InfoTip text="Ranked by Elo rating — updated after every match. Win against stronger players to climb faster." />
         </div>
 
         <div class="overflow-x-auto">
