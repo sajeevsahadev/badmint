@@ -23,6 +23,7 @@ const allTournaments  = ref([])   // every tournament returned (for club-own sec
 const openTournaments = ref([])
 const liveTournaments = ref([])
 const loading         = ref(true)
+const todayTomorrowSchedule = ref([])   // club_schedule rows for today/tomorrow — quick poll link
 
 // ── Time-of-day greeting ──────────────────────────────────────────────
 const h = new Date().getHours()
@@ -37,9 +38,28 @@ let _loadKey = 0
 async function load() {
   const key = ++_loadKey
   loading.value = true
-  await Promise.all([loadProfile(), loadClubData(), loadTournaments()])
+  await Promise.all([loadProfile(), loadClubData(), loadTournaments(), loadTodayTomorrow()])
   if (key !== _loadKey) return
   loading.value = false
+}
+
+// "Who's playing today/tomorrow?" quick link — points straight at the
+// existing poll for that date instead of making the user dig through Schedule.
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+async function loadTodayTomorrow() {
+  todayTomorrowSchedule.value = []
+  if (!currentClub.value) return
+  const today    = new Date()
+  const tomorrow = new Date(Date.now() + 86400000)
+  const { data } = await supabase
+    .from('club_schedule')
+    .select('id, scheduled_date')
+    .eq('club_id', currentClub.value.club_id)
+    .in('scheduled_date', [localDateStr(today), localDateStr(tomorrow)])
+    .order('scheduled_date')
+  todayTomorrowSchedule.value = data ?? []
 }
 
 async function loadProfile() {
@@ -137,6 +157,15 @@ const myClubTournaments = computed(() =>
 
 const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 
+// Today/tomorrow schedule entries, labelled — powers the Dashboard quick link
+const todayStr = localDateStr(new Date())
+const upcomingSchedule = computed(() =>
+  todayTomorrowSchedule.value.map(s => ({
+    ...s,
+    label: s.scheduled_date === todayStr ? 'today' : 'tomorrow',
+  }))
+)
+
 const fmtDate = d => d
   ? new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short' })
   : '—'
@@ -206,6 +235,18 @@ const fmtDate = d => d
         </RouterLink>
       </div>
     </div>
+
+    <!-- ── 1b. Who's playing today/tomorrow? — quick link straight to the poll ── -->
+    <RouterLink v-for="s in upcomingSchedule" :key="s.id"
+      :to="`/schedule?date=${s.scheduled_date}`"
+      class="card-amber p-4 flex items-center gap-3 fade-up">
+      <div class="icon-tile icon-tile-amber w-11 h-11 text-xl">📅</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-slate-800">See who's playing {{ s.label }}</p>
+        <p class="text-xs text-slate-400">Tap to view or cast your attendance vote</p>
+      </div>
+      <span class="text-slate-300 shrink-0">→</span>
+    </RouterLink>
 
     <!-- ── 2. Getting Started — shown until this club has its first match ──
          Directly addresses "where do I start" confusion after login: a clear,

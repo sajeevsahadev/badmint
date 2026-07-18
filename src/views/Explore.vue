@@ -1,13 +1,16 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
+import { useGeo } from '../composables/useGeo'
+import { countryName } from '../utils/countries'
 
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub } = useClub()
+const { countryCode, flagEmoji, detectCountry } = useGeo()
 
 // ── Data ──
 const allClubs      = ref([])
@@ -19,6 +22,16 @@ const loadingFac    = ref(true)
 // ── Filters ──
 const searchQ   = ref('')
 const activeTab = ref('clubs')   // 'clubs' | 'facilities'
+
+// Country filter — defaults to the visitor's IP-detected country (server-side
+// filtered via get_public_clubs(p_country_code); see JoinClub.vue for the
+// same pattern and the scale rationale).
+const countryFilter  = ref(countryCode.value || '')
+const countryOptions = ref([])
+async function loadCountryOptions() {
+  const { data } = await supabase.rpc('get_club_countries')
+  countryOptions.value = data ?? []
+}
 
 // ── Computed ──
 const myClubIds = computed(() => clubs.value.map(c => c.club_id))
@@ -66,7 +79,7 @@ const filteredFacilities = computed(() => {
 async function loadData() {
   loadingClubs.value = true; loadingFac.value = true
   const tasks = [
-    supabase.rpc('get_public_clubs'),
+    supabase.rpc('get_public_clubs', { p_country_code: countryFilter.value || null }),
     supabase.rpc('get_facilities'),
   ]
   if (user.value) tasks.push(supabase.from('join_requests').select('club_id, status'))
@@ -77,7 +90,13 @@ async function loadData() {
   loadingClubs.value = false; loadingFac.value = false
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  loadCountryOptions()
+  await detectCountry()
+  if (!countryFilter.value && countryCode.value) countryFilter.value = countryCode.value
+  await loadData()
+})
+watch(countryFilter, loadData)
 
 // ── Actions ──
 const busy        = ref(false)
@@ -157,13 +176,19 @@ const activityColor = (m30) =>
 </script>
 
 <template>
-  <!-- Search bar -->
-  <div class="mb-4 fade-up">
-    <div class="relative">
+  <!-- Search bar + country filter (clubs only) -->
+  <div class="flex gap-2 mb-4 fade-up">
+    <div class="relative flex-1">
       <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none select-none leading-none">🔍</span>
       <input v-model="searchQ" class="input pl-11"
         placeholder="Search clubs and facilities…" />
     </div>
+    <select v-if="activeTab === 'clubs'" v-model="countryFilter" class="input w-auto shrink-0" style="max-width:9.5rem">
+      <option value="">🌍 All Countries</option>
+      <option v-for="c in countryOptions" :key="c.country_code" :value="c.country_code">
+        {{ flagEmoji(c.country_code) }} {{ countryName(c.country_code) }}
+      </option>
+    </select>
   </div>
 
   <!-- Tab switcher -->
@@ -198,7 +223,7 @@ const activityColor = (m30) =>
     <div v-else-if="!filteredClubs.length" class="card p-8 text-center">
       <div class="text-3xl mb-3">🏸</div>
       <p class="text-slate-400 text-sm">No clubs found. Be the first to create one!</p>
-      <button class="btn-primary mt-4 px-6" @click="router.push('/manage')">Create a Club</button>
+      <button class="btn-primary mt-4 px-6" @click="router.push('/create-club')">Create a Club</button>
     </div>
 
     <div v-for="(club, i) in filteredClubs" :key="club.id"
@@ -217,6 +242,7 @@ const activityColor = (m30) =>
             <div class="text-[11px] text-slate-500 truncate">
               {{ [club.facility_name, club.emirates].filter(Boolean).join(' · ') || 'No facility info' }}
             </div>
+            <div v-if="!club.is_public" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
           </div>
         </div>
         <!-- Action button -->
@@ -224,6 +250,7 @@ const activityColor = (m30) =>
           <span v-if="requestMap[club.id] === 'member'" class="badge-member">✓ My Club</span>
           <span v-else-if="requestMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
           <span v-else-if="requestMap[club.id] === 'approved'" class="badge-approved">Approved</span>
+          <span v-else-if="!club.is_public" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
             @click="confirmJoin(club)">
             Join

@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabase'
 
+// VAPID public key — not secret by design (that's the point of public-key
+// crypto for Web Push). Hardcoded as the default so delivery works out of
+// the box regardless of whether VITE_VAPID_PUBLIC_KEY is set in the hosting
+// dashboard; an env var, if present, still overrides it.
+// Matching private key lives ONLY in the send-push Edge Function's secrets.
+const DEFAULT_VAPID_PUBLIC_KEY = 'BFXI6DZ2xlvyg6UgtVvgs1WrRY7dbHAFBm5xje4RGvAXEStHaP-cLNDwuiwK07-df8K0J2j0aFHWGkjfyE0KAjk'
+
 export function usePushNotifications() {
   const isSupported = typeof window !== 'undefined' && 'PushManager' in window && 'serviceWorker' in navigator
 
@@ -16,8 +23,7 @@ export function usePushNotifications() {
   }
 
   async function subscribe() {
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
-    if (!vapidKey) throw new Error('VITE_VAPID_PUBLIC_KEY not set — see push notification setup guide.')
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY
 
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') throw new Error('Notification permission denied.')

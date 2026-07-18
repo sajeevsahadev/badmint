@@ -8,6 +8,10 @@ import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { CURRENCIES } from '../utils/currency'
 import { DAYS, HOURS, TIMEZONES, describeSchedule } from '../utils/schedule'
+import { useGeo } from '../composables/useGeo'
+import { COUNTRIES, countryName } from '../utils/countries'
+
+const { flagEmoji } = useGeo()
 
 const { clubs, currentClub, loadClubs, isManager } = useClub()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -39,6 +43,31 @@ const guestInviteBusy  = ref(false)
 const clubCurrency = ref('AED')
 const currencyBusy = ref(false)
 const currencyNote = ref(null)
+
+// Club country + public/closed visibility
+const clubCountryCode = ref('AE')
+const clubIsPublic    = ref(true)
+const countryBusy     = ref(false)
+const countryNote     = ref(null)
+const visibilityBusy  = ref(false)
+const visibilityNote  = ref(null)
+
+// Shareable club join link — admin distributes this so members request to
+// join THIS specific club directly, without searching among every club.
+const joinLinkCopied = ref(false)
+const joinLink = computed(() =>
+  currentClub.value ? `${window.location.origin}/join/${currentClub.value.club_id}` : '')
+
+function copyJoinLink() {
+  navigator.clipboard.writeText(joinLink.value)
+  joinLinkCopied.value = true
+  setTimeout(() => { joinLinkCopied.value = false }, 2000)
+}
+function shareJoinLinkWhatsApp() {
+  const clubName = currentClub.value?.clubs?.name ?? 'our club'
+  const msg = `🏸 Join ${clubName} on Badminton 360!\n\nTap this link to request to join — no searching needed:\n${joinLink.value}\n\nYour request goes straight to the club admin for approval.`
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+}
 
 // Weekly digest schedule (per club)
 const digest      = ref({ dow: 0, hour: 21, tz: 'Asia/Dubai', enabled: true })
@@ -102,10 +131,12 @@ async function load() {
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
-    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled')
+    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public')
     .eq('id', cid).single()
   if (clubInfo) {
     clubCurrency.value              = clubInfo.currency          ?? 'AED'
+    clubCountryCode.value           = clubInfo.country_code      ?? 'AE'
+    clubIsPublic.value              = clubInfo.is_public          ?? true
     digest.value = {
       dow:     clubInfo.digest_dow     ?? 0,
       hour:    clubInfo.digest_hour    ?? 21,
@@ -298,6 +329,34 @@ async function saveCurrency() {
   if (currentClub.value?.clubs) currentClub.value.clubs.currency = clubCurrency.value
   await loadClubs()
   currencyNote.value = { ok: true, t: '✅ Currency updated.' }
+}
+
+// ── Save club country ──
+async function saveCountry() {
+  countryBusy.value = true; countryNote.value = null
+  const { error } = await supabase.rpc('set_club_country', {
+    p_club_id:     currentClub.value.club_id,
+    p_country_code: clubCountryCode.value,
+  })
+  countryBusy.value = false
+  countryNote.value = error
+    ? { ok: false, t: error.message }
+    : { ok: true, t: '✅ Country updated.' }
+}
+
+// ── Toggle public (discoverable) vs closed (invite-link only) ──
+async function toggleVisibility(nextValue) {
+  visibilityBusy.value = true; visibilityNote.value = null
+  const { error } = await supabase.rpc('set_club_visibility', {
+    p_club_id:  currentClub.value.club_id,
+    p_is_public: nextValue,
+  })
+  visibilityBusy.value = false
+  if (error) { visibilityNote.value = { ok: false, t: error.message }; return }
+  clubIsPublic.value = nextValue
+  visibilityNote.value = { ok: true, t: nextValue
+    ? '✅ Public — anyone can find this club and request to join.'
+    : '✅ Closed — only people with your join link can request to join.' }
 }
 
 // ── Weekly digest schedule ──
@@ -738,6 +797,76 @@ async function leaveClub(clubId) {
     <p v-if="currencyNote" class="mt-2 text-xs" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">
       {{ currencyNote.t }}
     </p>
+  </div>
+
+  <!-- ── Club Join Link ── -->
+  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
+    <div class="label">Club Join Link — {{ currentClub.clubs?.name }}</div>
+    <p class="text-[11px] text-slate-500 mb-3">
+      Share this in your WhatsApp group. Anyone who taps it requests to join
+      <strong>this club specifically</strong> — no searching among other clubs.
+      Their request still needs your approval below.
+    </p>
+    <div class="text-xs text-slate-400 break-all font-mono mb-3 bg-[rgba(15,23,42,0.04)] rounded-lg p-2 select-all">
+      {{ joinLink }}
+    </div>
+    <div class="flex gap-2">
+      <button class="flex-1 btn-ghost text-xs py-2" @click="copyJoinLink">
+        {{ joinLinkCopied ? '✅ Copied!' : '📋 Copy Link' }}
+      </button>
+      <button class="flex-1 text-xs py-2 rounded-xl font-semibold transition"
+        style="background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.3); color:#25d366"
+        @click="shareJoinLinkWhatsApp">
+        💬 Share on WhatsApp
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Club Visibility & Country ── -->
+  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
+    <div class="label">Visibility &amp; Country — {{ currentClub.clubs?.name }}</div>
+
+    <p class="text-[11px] text-slate-500 mb-2">
+      Controls whether this club shows a "Request to Join" button when people
+      search or browse Explore/Join. Your join link above always works either way.
+    </p>
+    <div class="flex gap-2 mb-1">
+      <button class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition"
+        :class="clubIsPublic ? 'text-slate-950' : 'text-slate-500 border border-[rgba(15,23,42,0.15)]'"
+        :style="clubIsPublic ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''"
+        :disabled="visibilityBusy" @click="toggleVisibility(true)">
+        🌍 Public
+      </button>
+      <button class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition"
+        :class="!clubIsPublic ? 'text-white' : 'text-slate-500 border border-[rgba(15,23,42,0.15)]'"
+        :style="!clubIsPublic ? 'background:linear-gradient(135deg,#64748b,#475569)' : ''"
+        :disabled="visibilityBusy" @click="toggleVisibility(false)">
+        🔒 Closed — invite only
+      </button>
+    </div>
+    <p v-if="visibilityNote" class="mt-1 mb-3 text-xs" :class="visibilityNote.ok ? 'text-emerald-500' : 'text-rose-400'">
+      {{ visibilityNote.t }}
+    </p>
+
+    <div class="border-t border-[rgba(15,23,42,0.06)] pt-3 mt-1">
+      <label class="label">Country</label>
+      <div class="flex gap-2">
+        <select v-model="clubCountryCode" class="input flex-1">
+          <option v-for="code in COUNTRIES" :key="code" :value="code">
+            {{ flagEmoji(code) }} {{ countryName(code) }}
+          </option>
+        </select>
+        <button class="btn-primary px-4 shrink-0" :disabled="countryBusy" @click="saveCountry">
+          {{ countryBusy ? '…' : 'Save' }}
+        </button>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-2">
+        Used for the country filter on Explore &amp; Join pages.
+      </p>
+      <p v-if="countryNote" class="mt-2 text-xs" :class="countryNote.ok ? 'text-emerald-500' : 'text-rose-400'">
+        {{ countryNote.t }}
+      </p>
+    </div>
   </div>
 
   <!-- ── Weekly Ranking Digest ── -->

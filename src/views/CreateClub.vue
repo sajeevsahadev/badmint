@@ -25,7 +25,7 @@ async function submit() {
   if (!name.value.trim()) return
   busy.value = true; error.value = null
   try {
-    await createClub(name.value.trim(), currency.value)
+    await createClub(name.value.trim(), currency.value, countryCode.value || 'AE')
     await loadClubs()
     router.push('/dashboard')
   } catch (e) {

@@ -39,8 +39,10 @@ export function useClub() {
     localStorage.setItem('clubId', c.club_id)
   }
 
-  async function createClub(name, currency = 'AED') {
-    const { data, error } = await supabase.rpc('create_club', { p_name: name, p_currency: currency })
+  async function createClub(name, currency = 'AED', countryCode = 'AE') {
+    const { data, error } = await supabase.rpc('create_club', {
+      p_name: name, p_currency: currency, p_country_code: countryCode,
+    })
     if (error) throw error
     await loadClubs()
     const found = clubs.value.find(c => c.club_id === data)

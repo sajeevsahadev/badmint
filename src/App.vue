@@ -209,10 +209,14 @@ const nav = computed(() => [
 const clubFreeRoutes = [
   '/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin',
   '/settings/email', '/settings/notifications', '/settings/security', '/settings/appearance',
+  '/create-club',
 ]
 const needsClub = computed(() =>
   !currentClub.value &&
-  !clubFreeRoutes.includes(route.path)
+  !clubFreeRoutes.includes(route.path) &&
+  // /join/:clubId (direct club join link) must render even with zero clubs —
+  // matched by prefix since it carries a dynamic :clubId segment.
+  !route.path.startsWith('/join/')
 )
 </script>
 
@@ -397,7 +401,7 @@ const needsClub = computed(() =>
         <div class="flex flex-col gap-3">
           <RouterLink to="/explore" class="btn-primary w-full py-3 text-sm">🌍 Browse &amp; Join a Club</RouterLink>
           <RouterLink to="/join"    class="btn-ghost  w-full py-3 text-sm">🔗 Have an Invite Link?</RouterLink>
-          <RouterLink to="/manage"  class="btn-ghost  w-full py-3 text-sm">➕ Create My Own Club</RouterLink>
+          <RouterLink to="/create-club" class="btn-ghost w-full py-3 text-sm">➕ Create My Own Club</RouterLink>
         </div>
       </div>
 

@@ -1,16 +1,17 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import { useGeo } from '../composables/useGeo'
+import { countryName } from '../utils/countries'
 
 const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, loadClubs, selectClub } = useClub()
-const { country, detectCountry } = useGeo()
+const { country, countryCode, flagEmoji, detectCountry } = useGeo()
 
 // ── State ──
 const allClubs     = ref([])
@@ -29,6 +30,56 @@ const form = ref({ fullName: '', nickname: '', phone: '', emirate: '', country: 
 const formErrors = ref({})
 const search = ref('')
 
+// ── Country filter — defaults to the visitor's own IP-detected country so a
+// UAE-based user isn't shown clubs from every other country by default; "All
+// Countries" always remains selectable. Filtering happens server-side
+// (get_public_clubs(p_country_code)) rather than client-side, since fetching
+// every club worldwide just to filter in JS would not scale as clubs grow
+// internationally. ──
+const countryFilter  = ref(countryCode.value || '')  // '' = All Countries
+const countryOptions = ref([])   // [{ country_code, club_count }]
+
+async function loadCountryOptions() {
+  const { data } = await supabase.rpc('get_club_countries')
+  countryOptions.value = data ?? []
+}
+
+// ── Direct club-join link ("/join/:clubId") — shared by an admin so a
+// specific member can request to join THAT club without searching among
+// potentially hundreds of clubs. Works even for a closed (non-public) club:
+// the admin explicitly distributed this link, which is the sanctioned entry
+// channel for closed clubs (see v57 migration notes on is_public). ──
+const directClub  = ref(null)
+const directStep  = ref(null)  // null | 'loading' | 'found' | 'member' | 'pending' | 'requested' | 'error'
+const directError = ref('')
+
+async function loadDirectClub(clubId) {
+  directStep.value = 'loading'
+  const { data, error } = await supabase.rpc('get_public_club_by_id', { p_club_id: clubId })
+  if (error || !data?.length) {
+    directStep.value = 'error'
+    directError.value = 'This club link is invalid or the club no longer exists.'
+    return
+  }
+  directClub.value = data[0]
+
+  await loadClubs()
+  if (clubs.value.some(c => c.club_id === clubId)) { directStep.value = 'member'; return }
+
+  const { data: reqRow } = await supabase
+    .from('join_requests').select('status')
+    .eq('club_id', clubId).eq('user_id', user.value.id).maybeSingle()
+  directStep.value = reqRow?.status === 'pending' ? 'pending' : 'found'
+}
+
+async function requestJoinDirect() {
+  busy.value = true
+  const { error } = await supabase.rpc('request_join', { p_club_id: directClub.value.id })
+  busy.value = false
+  if (error) { directError.value = error.message; directStep.value = 'error'; return }
+  directStep.value = 'requested'
+}
+
 // ── Status map ──
 const statusMap = computed(() => {
   const map = {}
@@ -45,13 +96,17 @@ const filtered = computed(() => {
 // ── Load ──
 async function load() {
   loading.value = true
-  const tasks = [supabase.rpc('get_public_clubs')]
+  const tasks = [supabase.rpc('get_public_clubs', { p_country_code: countryFilter.value || null })]
   if (user.value) tasks.push(supabase.from('join_requests').select('club_id, status'))
   const [clubsRes, reqsRes] = await Promise.all(tasks)
   allClubs.value   = clubsRes.data   ?? []
   myRequests.value = reqsRes?.data   ?? []
   loading.value    = false
 }
+
+// Re-fetch (server-side filter) whenever the country changes — but only once
+// we're actually on the browse view (route.params.clubId path never calls load()).
+watch(countryFilter, () => { if (!route.params.clubId) load() })
 
 // ── Invite token flow ──
 async function handleToken(token) {
@@ -156,6 +211,14 @@ async function revokeRequest(clubId) {
 
 onMounted(async () => {
   await loadClubs()
+  loadCountryOptions()
+  await detectCountry()
+  if (!countryFilter.value && countryCode.value) countryFilter.value = countryCode.value
+
+  if (route.params.clubId) {
+    await loadDirectClub(route.params.clubId)
+    return
+  }
   await load()
   if (route.query.token) handleToken(route.query.token)
 })
@@ -163,8 +226,57 @@ onMounted(async () => {
 
 <template>
 
+  <!-- ══ DIRECT CLUB JOIN LINK ("/join/:clubId") ══
+       Shared by an admin so people go straight to "Request to join THIS club"
+       instead of searching among every club on the platform. -->
+  <template v-if="route.params.clubId">
+
+    <div v-if="directStep === 'loading' || directStep === null" class="card p-8 text-center fade-up">
+      <div class="text-3xl mb-3 animate-pulse">🏸</div>
+      <p class="text-slate-400 text-sm">Loading club…</p>
+    </div>
+
+    <div v-else-if="directStep === 'error'" class="card p-8 text-center fade-up" style="border-color:rgba(244,63,94,.3)">
+      <div class="text-4xl mb-3">❌</div>
+      <p class="text-rose-400 font-semibold mb-1">{{ directError }}</p>
+      <RouterLink to="/join" class="text-neon text-xs underline mt-2 inline-block">Browse all clubs instead →</RouterLink>
+    </div>
+
+    <div v-else class="max-w-sm mx-auto pt-6 fade-up">
+      <div class="card-neon p-6 text-center">
+        <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-2xl font-black text-slate-950 overflow-hidden"
+          style="background:linear-gradient(135deg,#00e5ff,#a855f7)">
+          <img v-if="directClub.logo_url" :src="directClub.logo_url" alt="" class="w-full h-full object-cover" />
+          <template v-else>{{ (directClub.name || '?').slice(0,2).toUpperCase() }}</template>
+        </div>
+        <h2 class="font-display text-xl font-bold gradient-text mb-1">{{ directClub.name }}</h2>
+        <p class="text-sm text-slate-400 mb-1">
+          👥 {{ directClub.member_count }} member{{ directClub.member_count !== 1 ? 's' : '' }}
+          <span v-if="directClub.facility_name"> · {{ directClub.facility_name }}</span>
+        </p>
+        <p v-if="!directClub.is_public" class="text-xs text-amber-500 mb-4">🔒 Closed club — you were sent a direct invite link</p>
+        <p v-else class="mb-4"></p>
+
+        <div v-if="directStep === 'member'" class="rounded-xl px-4 py-3 text-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+          ✓ You're already a member of this club.
+        </div>
+        <div v-else-if="directStep === 'pending'" class="rounded-xl px-4 py-3 text-sm bg-amber-500/15 text-amber-300 border border-amber-500/20">
+          ⏳ Your join request is pending approval.
+        </div>
+        <div v-else-if="directStep === 'requested'" class="rounded-xl px-4 py-3 text-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+          ✓ Request sent! The club manager will review it shortly.
+        </div>
+        <button v-else class="btn-primary w-full py-3 text-sm" :disabled="busy" @click="requestJoinDirect">
+          {{ busy ? 'Sending…' : 'Request to Join' }}
+        </button>
+
+        <RouterLink v-if="directStep === 'member'" to="/dashboard" class="btn-ghost w-full py-3 text-sm mt-3 block">Go to Dashboard →</RouterLink>
+      </div>
+    </div>
+  </template>
+
   <!-- ══ INVITE TOKEN FLOW ══ -->
-  <template v-if="route.query.token">
+  <template v-else-if="route.query.token">
 
     <!-- Accepting spinner -->
     <div v-if="inviteStep === 'accepting'" class="card-neon p-8 text-center fade-up">
@@ -276,10 +388,18 @@ onMounted(async () => {
       <p class="text-slate-400 text-sm mt-0.5">Browse clubs and request to join</p>
     </div>
 
-    <!-- Search -->
-    <div class="relative mb-4 fade-up">
-      <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
-      <input v-model="search" class="input pl-10" placeholder="Search clubs…" />
+    <!-- Search + Country filter -->
+    <div class="flex gap-2 mb-4 fade-up">
+      <div class="relative flex-1">
+        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+        <input v-model="search" class="input pl-10" placeholder="Search clubs…" />
+      </div>
+      <select v-model="countryFilter" class="input w-auto shrink-0" style="max-width:9.5rem">
+        <option value="">🌍 All Countries</option>
+        <option v-for="c in countryOptions" :key="c.country_code" :value="c.country_code">
+          {{ flagEmoji(c.country_code) }} {{ countryName(c.country_code) }}
+        </option>
+      </select>
     </div>
 
     <!-- Note -->
@@ -311,12 +431,14 @@ onMounted(async () => {
             👥 {{ club.member_count }} member{{ club.member_count !== 1 ? 's' : '' }}
             <span v-if="club.emirates"> · {{ club.emirates }}</span>
           </div>
+          <div v-if="!club.is_public" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
         </div>
         <div class="shrink-0 flex flex-col items-end gap-1">
           <span v-if="statusMap[club.id] === 'member'"   class="badge-member">✓ Joined</span>
           <span v-else-if="statusMap[club.id] === 'approved'" class="badge-approved">Approved</span>
           <span v-else-if="statusMap[club.id] === 'rejected'" class="badge-rejected">Declined</span>
           <span v-else-if="statusMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
+          <span v-else-if="!club.is_public" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
             @click="confirmJoin(club)">
             Request to Join

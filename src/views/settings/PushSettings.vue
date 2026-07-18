@@ -16,7 +16,6 @@ const saved         = ref(false)
 const subscribed    = ref(false)
 const subscribing   = ref(false)
 const subscribeErr  = ref('')
-const vapidMissing  = ref(!import.meta.env.VITE_VAPID_PUBLIC_KEY)
 
 const prefs = ref({
   invites: true,
@@ -78,12 +77,7 @@ async function save() {
 
     <div v-else class="space-y-4">
 
-      <div v-if="vapidMissing" class="rounded-2xl px-4 py-3 text-xs text-slate-500 leading-relaxed" style="background:rgba(217,119,6,.07); border:1px solid rgba(217,119,6,.2)">
-        🚧 Push delivery is still being wired up on our end — your preferences below are saved
-        and ready, but notifications won't actually arrive on this device yet.
-      </div>
-
-      <div v-else-if="!isSupported" class="rounded-2xl px-4 py-3 text-xs text-slate-500 leading-relaxed" style="background:rgba(15,23,42,.05); border:1px solid rgba(15,23,42,.1)">
+      <div v-if="!isSupported" class="rounded-2xl px-4 py-3 text-xs text-slate-500 leading-relaxed" style="background:rgba(15,23,42,.05); border:1px solid rgba(15,23,42,.1)">
         This browser doesn't support push notifications.
       </div>
 

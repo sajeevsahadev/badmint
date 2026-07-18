@@ -91,7 +91,9 @@ async function doCreateClub() {
   clubErr.value = ''
   creating.value = true
   const suggested = suggestCurrency(geoCurrency.value, countryCode.value)
-  const { data, error } = await supabase.rpc('create_club', { p_name: name, p_currency: suggested })
+  const { data, error } = await supabase.rpc('create_club', {
+    p_name: name, p_currency: suggested, p_country_code: countryCode.value || 'AE',
+  })
   creating.value = false
   if (error) { clubErr.value = error.message; return }
   newClubId.value   = data

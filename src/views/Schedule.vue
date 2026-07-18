@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
@@ -11,6 +11,7 @@ import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const router = useRouter()
+const route  = useRoute()
 const { currentClub, isManager } = useClub()
 const { user } = useAuth()
 const { isSupported: pushSupported, subscribe: subscribePush, isSubscribed, getPermission } = usePushNotifications()
@@ -437,6 +438,24 @@ function shareWhatsApp() {
   window.open(`https://wa.me/?text=${msg}`, '_blank')
 }
 
+// Nudge subscribed in-app users when a manager taps Invite on an existing
+// poll (not just at creation) — same mechanism as the on-creation push.
+const pushSentNote = ref('')
+function sendInvitePush() {
+  const schedId = selectedSchedule.value?.id
+  if (!schedId) return
+  supabase.functions.invoke('send-push', {
+    body: {
+      schedule_id: schedId,
+      title: '🏸 Match Day Reminder',
+      body: `${scheduleHeader.value} — vote now!`,
+      url: `${window.location.origin}/poll/${schedId}`,
+    },
+  }).catch(() => null)
+  pushSentNote.value = '🔔 Notified subscribed members'
+  setTimeout(() => { pushSentNote.value = '' }, 2500)
+}
+
 // ── Push notifications ──
 async function checkPushStatus() {
   if (!pushSupported) return
@@ -497,9 +516,22 @@ function scheduleBg(schedule) {
 
 // ── Init ──
 onMounted(async () => {
+  // Deep-link support: /schedule?date=YYYY-MM-DD (used by the Dashboard's
+  // "Who's playing today/tomorrow?" quick link). Set the viewed month FIRST
+  // so a date that crosses a month boundary (e.g. "tomorrow" = 1st of next
+  // month) still has its schedule loaded before we try to open it.
+  const linkedDate = /^\d{4}-\d{2}-\d{2}$/.test(route.query.date) ? route.query.date : null
+  if (linkedDate) {
+    const [y, m] = linkedDate.split('-').map(Number)
+    viewYear.value  = y
+    viewMonth.value = m
+  }
+
   await loadMonthSchedules()
   await loadClubFacilityIds()
   await checkPushStatus()
+
+  if (linkedDate) selectDate(linkedDate)
 })
 
 watch(currentClub, async () => {
@@ -669,6 +701,12 @@ watch(currentClub, async () => {
                     @click="shareWhatsApp">
                     💬 Share via WhatsApp
                   </button>
+                  <button class="w-full rounded-xl py-2.5 text-sm font-medium transition"
+                    style="background:rgba(0,180,216,.12); border:1px solid rgba(0,180,216,.3); color:#0099b8"
+                    @click="sendInvitePush">
+                    🔔 Notify Subscribed Members
+                  </button>
+                  <p v-if="pushSentNote" class="text-xs text-emerald-500 text-center">{{ pushSentNote }}</p>
                 </div>
               </div>
 
