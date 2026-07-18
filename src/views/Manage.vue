@@ -10,13 +10,13 @@ import { CURRENCIES } from '../utils/currency'
 import { DAYS, HOURS, TIMEZONES, describeSchedule } from '../utils/schedule'
 import { useGeo } from '../composables/useGeo'
 import { COUNTRIES, countryName } from '../utils/countries'
+import { subdivisionsFor, regionLabelFor } from '../utils/regions'
 
 const { flagEmoji } = useGeo()
 
 const { clubs, currentClub, loadClubs, isManager } = useClub()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
 
-const EMIRATES = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
 const cfg          = ref(null)
 const members      = ref([])
@@ -49,6 +49,11 @@ const clubCountryCode = ref('AE')
 const clubIsPublic    = ref(true)
 const countryBusy     = ref(false)
 const countryNote     = ref(null)
+
+// Region picker adapts to the club's country (emirates for UAE, states for
+// India, …); countries without a subdivision list fall back to free text.
+const regionInfo  = computed(() => subdivisionsFor(clubCountryCode.value))
+const regionLabel = computed(() => regionLabelFor(clubCountryCode.value))
 const visibilityBusy  = ref(false)
 const visibilityNote  = ref(null)
 
@@ -925,11 +930,14 @@ async function leaveClub(clubId) {
     </p>
     <div class="space-y-3">
       <div>
-        <label class="label">Emirates</label>
-        <select v-model="facility.emirates" class="input">
-          <option value="">— Select Emirates —</option>
-          <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
+        <label class="label">{{ regionLabel }}</label>
+        <select v-if="regionInfo" v-model="facility.emirates" class="input">
+          <option value="">— Select {{ regionInfo.label }} —</option>
+          <option v-for="e in regionInfo.options" :key="e" :value="e">{{ e }}</option>
         </select>
+        <input v-else v-model="facility.emirates" class="input" maxlength="60"
+          :placeholder="`e.g. your ${regionLabel.toLowerCase()}`" />
+        <p class="text-[10px] text-slate-400 mt-1">Based on the club's country (set above).</p>
       </div>
       <div>
         <label class="label">Facility / Academy Name</label>
@@ -1011,10 +1019,12 @@ async function leaveClub(clubId) {
       <div class="mt-3 space-y-2">
         <input v-model="newFac.name" class="input text-sm" placeholder="Facility name *" />
         <input v-model="newFac.address" class="input text-sm" placeholder="Address" />
-        <select v-model="newFac.emirate" class="input text-sm">
-          <option value="">— Emirates —</option>
-          <option v-for="e in EMIRATES" :key="e" :value="e">{{ e }}</option>
+        <select v-if="regionInfo" v-model="newFac.emirate" class="input text-sm">
+          <option value="">— {{ regionInfo.label }} —</option>
+          <option v-for="e in regionInfo.options" :key="e" :value="e">{{ e }}</option>
         </select>
+        <input v-else v-model="newFac.emirate" class="input text-sm" maxlength="60"
+          :placeholder="regionLabel" />
         <input v-model="newFac.maps_url" class="input text-sm" placeholder="Google Maps URL" />
         <input v-model="newFac.image_url" class="input text-sm" placeholder="Facility photo URL (paste image link)" />
         <input v-model="newFac.phone" class="input text-sm" placeholder="Phone" />
