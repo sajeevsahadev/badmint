@@ -349,6 +349,16 @@ function closeReactionPicker() { reactionPickerFor.value = null }
 function onPressStart(m) { clearTimeout(pressTimer); pressTimer = setTimeout(() => openActionMenu(m), 400) }
 function cancelPress() { clearTimeout(pressTimer) }
 
+// Touch devices (phones/tablets): Enter should insert a newline, and the send
+// button posts — like WhatsApp. Desktop: Enter sends, Shift+Enter = newline.
+const isTouch = typeof window !== 'undefined'
+  && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
+function onEnterKey(e) {
+  if (isTouch || e.shiftKey || e.isComposing) return   // allow the default newline
+  e.preventDefault()
+  send()
+}
+
 // When the textarea gains focus the keyboard animates in (~250ms); snap the
 // latest messages back into view once it settles so nothing is hidden.
 function onInputFocus() {
@@ -561,7 +571,7 @@ onBeforeUnmount(() => {
         class="input flex-1 min-w-0 resize-none max-h-28 py-2.5"
         @input="autoGrow"
         @focus="onInputFocus"
-        @keydown.enter.exact.prevent="send" />
+        @keydown.enter="onEnterKey" />
       <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white transition active:scale-95 disabled:opacity-40"
         style="background:linear-gradient(135deg,#00b4d8,#0088b3);"
         :disabled="!draft.trim() || sending" aria-label="Send" @click="send">
