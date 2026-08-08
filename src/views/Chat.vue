@@ -25,6 +25,9 @@ const inputEl  = ref(null)
 // (like WhatsApp). Fixed 100vh containers don't shrink when the keyboard opens,
 // which pushes the textarea off-screen — this pins the shell to the visible area.
 const viewportStyle = ref({ top: '0px', height: '100dvh' })
+// Randomised, very-light badminton doodle backdrop — regenerated every time the
+// chat opens so it's never the same twice. Fixed behind the scrolling messages.
+const bgStyle = ref({ backgroundColor: '#eef4ff' })
 let channel = null
 const senderCache = new Map()       // user_id → { sender_name, avatar_url }
 let myProfile = { sender_name: 'You', avatar_url: null }
@@ -48,6 +51,46 @@ function showDaySep(i) {
   if (i === 0) return true
   return new Date(messages.value[i].created_at).toDateString()
        !== new Date(messages.value[i - 1].created_at).toDateString()
+}
+
+// ── Randomised badminton doodle background ──────────────────────────────
+const rnd  = (a, b) => Math.random() * (b - a) + a
+const pick = arr => arr[Math.floor(Math.random() * arr.length)]
+
+// A shuttlecock drawn in local coords (~-20..20), stroke-only doodle.
+const SHUTTLE = `
+  <circle cx='0' cy='16' r='4.5' fill='COL' fill-opacity='OP' stroke='none'/>
+  <path d='M0 12 L-14 -18 M0 12 L-7 -20 M0 12 L0 -21 M0 12 L7 -20 M0 12 L14 -18'/>
+  <path d='M-14 -18 Q0 -11 14 -18'/>
+  <path d='M-9 -3 Q0 1 9 -3'/>`
+// A racket drawn in local coords.
+const RACKET = `
+  <ellipse cx='0' cy='-8' rx='12' ry='15'/>
+  <path d='M-5 6 L0 9 L5 6 M0 9 L0 24'/>
+  <path d='M-7 -19 L-7 3 M0 -22 L0 6 M7 -19 L7 3'/>
+  <path d='M-10 -14 L10 -14 M-11 -8 L11 -8 M-10 -2 L10 -2'/>`
+
+function makeChatBackground() {
+  const col  = `hsl(${Math.round(rnd(0, 360))},58%,${Math.round(rnd(64, 74))}%)`
+  const op   = rnd(0.30, 0.42).toFixed(2)
+  const size = Math.round(rnd(150, 205))
+  const paint = s => s.replaceAll('COL', col).replaceAll('OP', op)
+  // Randomise which corner each motif sits in + its rotation, so no two opens match.
+  const spots = [[52, 52], [168, 60], [58, 165], [165, 168]]
+  const [a, b] = (() => { const s = [...spots].sort(() => Math.random() - 0.5); return [s[0], s[1]] })()
+  const motifs = Math.random() < 0.5 ? [SHUTTLE, RACKET] : [RACKET, SHUTTLE]
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'>`
+    + `<g stroke='${col}' stroke-opacity='${op}' fill='none' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>`
+    + `<g transform='translate(${a[0]},${a[1]}) rotate(${Math.round(rnd(0, 360))}) scale(1.15)'>${paint(motifs[0])}</g>`
+    + `<g transform='translate(${b[0]},${b[1]}) rotate(${Math.round(rnd(0, 360))}) scale(1.15)'>${paint(motifs[1])}</g>`
+    + `<circle cx='${Math.round(rnd(95,125))}' cy='${Math.round(rnd(20,40))}' r='2' fill='${col}' fill-opacity='${op}' stroke='none'/>`
+    + `<circle cx='${Math.round(rnd(20,40))}' cy='${Math.round(rnd(95,125))}' r='2' fill='${col}' fill-opacity='${op}' stroke='none'/>`
+    + `</g></svg>`
+  bgStyle.value = {
+    backgroundColor: '#eef4ff',
+    backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
+    backgroundSize: `${size}px ${size}px`,
+  }
 }
 
 async function scrollToBottom(smooth = false) {
@@ -233,6 +276,7 @@ function syncViewport() {
 }
 
 onMounted(() => {
+  makeChatBackground()
   load()
   syncViewport()
   window.visualViewport?.addEventListener('resize', syncViewport)
@@ -248,7 +292,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="fixed left-0 right-0 flex flex-col overflow-hidden" :style="{ ...viewportStyle, background:'#eef4ff' }">
+  <div class="fixed left-0 right-0 flex flex-col overflow-hidden" :style="{ ...viewportStyle, ...bgStyle }">
     <!-- Header -->
     <header class="shrink-0 flex items-center gap-3 px-3 py-2.5"
       style="background:#ffffff; border-bottom:1px solid rgba(15,23,42,.08); box-shadow:0 1px 6px rgba(0,0,0,.05);">
