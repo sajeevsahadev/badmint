@@ -117,6 +117,11 @@ async function doSendEmail() {
     })
     if (error) throw new Error(error.message)
 
+    // Fire-and-forget push to the invitee if they already have a B360 account
+    supabase.functions.invoke('notify-invite', {
+      body: { club_id: newClubId.value, email }
+    }).catch(() => {})
+
     const { data: { session } } = await supabase.auth.getSession()
     const resp = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-invite-email`,
@@ -161,6 +166,10 @@ async function doWhatsApp() {
       p_email:   email,
     })
     token = t
+    // Fire-and-forget push to the invitee if they already have a B360 account
+    supabase.functions.invoke('notify-invite', {
+      body: { club_id: newClubId.value, email }
+    }).catch(() => {})
   }
 
   const club = newClubName.value || 'our club'

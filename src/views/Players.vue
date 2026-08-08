@@ -52,6 +52,10 @@ async function add() {
         name:  newName.value.trim(),
         club:  currentClub.value.clubs?.name ?? 'the club'
       }
+      // Fire-and-forget push to the invitee if they already have a B360 account
+      supabase.functions.invoke('notify-invite', {
+        body: { club_id: currentClub.value.club_id, email: newEmail.value.trim() }
+      }).catch(() => {})
     }
   }
 

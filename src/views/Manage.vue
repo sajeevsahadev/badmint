@@ -223,6 +223,10 @@ async function generateInvite() {
   } else {
     inviteLink.value = `${window.location.origin}/join?token=${data}`
     inviteNote.value = { ok: true, t: 'Invite link generated! Share it with the player.' }
+    // Fire-and-forget push to the invitee if they already have a B360 account
+    supabase.functions.invoke('notify-invite', {
+      body: { club_id: currentClub.value.club_id, email: inviteEmail.value.trim() }
+    }).catch(() => {})
   }
 }
 

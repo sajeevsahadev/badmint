@@ -194,16 +194,27 @@ async function doSubmit() {
         p_bench_ids:    []
       }).then(undefined, () => {})
 
+      const matchLabel = matchName.value.trim() || autoMatchName.value || `Match #${matchData?.match_number ?? ''}`
+
       // Fire-and-forget: notify club members via email (non-blocking)
       supabase.functions.invoke('send-match-email', {
         body: {
           club_id:      currentClub.value.club_id,
-          match_name:   matchName.value.trim() || autoMatchName.value || `Match #${matchData?.match_number ?? ''}`,
+          match_name:   matchLabel,
           played_on:    playedOn.value,
           side_a_names: sideA.value.map(id => nameOf(id) ?? id),
           side_b_names: sideB.value.map(id => nameOf(id) ?? id),
           score_a:      Number(scoreA.value),
           score_b:      Number(scoreB.value),
+        }
+      }).catch(() => {})
+
+      // Fire-and-forget: push notification to club members (respects push_prefs.match_recorded)
+      supabase.functions.invoke('notify-match', {
+        body: {
+          club_id:    currentClub.value.club_id,
+          match_name: matchLabel,
+          summary:    `${sideA.value.map(id => nameOf(id) ?? id).join(' & ')} ${Number(scoreA.value)}–${Number(scoreB.value)} ${sideB.value.map(id => nameOf(id) ?? id).join(' & ')}`,
         }
       }).catch(() => {})
     }
