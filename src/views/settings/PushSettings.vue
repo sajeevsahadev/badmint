@@ -18,6 +18,7 @@ const subscribing   = ref(false)
 const subscribeErr  = ref('')
 
 const prefs = ref({
+  chat_messages: true,
   invites: true,
   match_recorded: true,
   schedule_polls: true,
@@ -25,6 +26,7 @@ const prefs = ref({
 })
 
 const ITEMS = [
+  { key: 'chat_messages',     label: 'Club chat messages' },
   { key: 'invites',           label: 'Club invites' },
   { key: 'match_recorded',    label: 'Match recorded' },
   { key: 'schedule_polls',    label: "Who's Playing? poll reminders" },

@@ -50,7 +50,19 @@ serve(async (req) => {
     const senderName = profile?.nickname || profile?.full_name || 'Someone'
     const clubName   = club?.name || 'Your club'
     // Notify everyone except the sender
-    const recipientIds = (members ?? []).map((m: { user_id: string }) => m.user_id).filter((id: string) => id !== user.id)
+    let recipientIds = (members ?? []).map((m: { user_id: string }) => m.user_id).filter((id: string) => id !== user.id)
+    if (!recipientIds.length) return json({ sent: 0 })
+
+    // Respect the per-user "Club chat messages" push preference. push_prefs is
+    // a jsonb column; treat a missing key as opted-in, only skip explicit false.
+    const { data: prefRows } = await admin
+      .from('user_profiles').select('user_id, push_prefs').in('user_id', recipientIds)
+    const optedOut = new Set(
+      (prefRows ?? [])
+        .filter((r: { push_prefs: Record<string, unknown> | null }) => r.push_prefs?.chat_messages === false)
+        .map((r: { user_id: string }) => r.user_id),
+    )
+    recipientIds = recipientIds.filter((id: string) => !optedOut.has(id))
     if (!recipientIds.length) return json({ sent: 0 })
 
     const { data: subs } = await admin
@@ -64,15 +76,31 @@ serve(async (req) => {
       tag: `chat-${club_id}`,   // collapse repeated chat pushes for the same club
     })
 
+    const dead: string[] = []
     const results = await Promise.allSettled(
-      (subs ?? []).map(s =>
-        webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } },
-          payload,
-        ).catch(() => null),
-      ),
+      (subs ?? []).map(async s => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } },
+            payload,
+          )
+          return true
+        } catch (e) {
+          const code = (e as { statusCode?: number }).statusCode
+          // 404/410 = subscription gone; 403 = wrong VAPID key. All undeliverable —
+          // remove so the table self-heals and future sends are cheaper.
+          if (code === 404 || code === 410 || code === 403) dead.push(s.endpoint)
+          throw e
+        }
+      }),
     )
-    return json({ sent: results.filter(r => r.status === 'fulfilled').length })
+    if (dead.length) {
+      await admin.from('push_subscriptions').delete().in('endpoint', dead)
+    }
+    return json({
+      sent: results.filter(r => r.status === 'fulfilled').length,
+      pruned: dead.length,
+    })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }

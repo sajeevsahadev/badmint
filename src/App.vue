@@ -9,6 +9,7 @@ import { useInstall } from './composables/useInstall'
 import { useSession } from './composables/useSession'
 import { useTheme } from './composables/useTheme'
 import { useBiometricLock } from './composables/useBiometricLock'
+import { usePushNotifications } from './composables/usePushNotifications'
 import OnboardingGuide  from './components/OnboardingGuide.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
 
@@ -18,6 +19,7 @@ const { clubs, currentClub, loadClubs, selectClub } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 const { startSession, trackPage, endSession } = useSession()
 const { isLocked, armOnBoot, unlock } = useBiometricLock()
+const { resyncIfNeeded } = usePushNotifications()
 const route  = useRoute()
 const router = useRouter()
 
@@ -164,6 +166,10 @@ async function init() {
   supabase.from('user_profiles').select('theme_pref').eq('user_id', user.value.id).maybeSingle()
     .then(({ data }) => { if (data?.theme_pref) syncFromProfile(data.theme_pref) })
     .catch(() => {})
+  // Self-heal push: if this device already granted permission but its
+  // subscription was made with an old VAPID key (undeliverable), silently
+  // re-key it to the current one so notifications actually arrive again.
+  resyncIfNeeded().catch(() => {})
 }
 
 async function refreshPending() {
