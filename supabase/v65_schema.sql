@@ -13,6 +13,9 @@
 CREATE OR REPLACE FUNCTION get_message_info(p_message_id uuid)
 RETURNS TABLE(user_id uuid, name text, avatar_url text, read_at timestamptz, status text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+-- OUT columns (user_id/name/read_at/status) share names with table columns;
+-- prefer the column so references aren't "ambiguous".
+#variable_conflict use_column
 DECLARE v_club uuid; v_author uuid; v_created timestamptz;
 BEGIN
   SELECT club_id, user_id, created_at INTO v_club, v_author, v_created

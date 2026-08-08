@@ -604,26 +604,67 @@ onBeforeUnmount(() => {
 
     <!-- Action sheet (long-press): Reply / React / Forward / Star / Delete -->
     <div v-if="actionMenuFor" class="fixed inset-0 z-40 flex items-end" style="background:rgba(15,23,42,.35);" @click="closeActionMenu">
-      <div class="w-full bg-white rounded-t-2xl p-2 pb-4 safe-area-pb" @click.stop>
-        <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto my-2"></div>
-        <button v-if="isMine(actionMenuFor)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openInfo(actionMenuFor)">
-          <span class="text-xl w-6 text-center">ℹ️</span><span class="text-sm font-medium text-slate-700">Message info</span>
+      <div class="w-full bg-white rounded-t-3xl p-2 pb-4 safe-area-pb" @click.stop>
+        <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto my-2.5"></div>
+
+        <button v-if="isMine(actionMenuFor)" class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openInfo(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 11.4a7.6 7.6 0 0 1-11 6.8L4.5 19.5l1.3-4.2A7.6 7.6 0 1 1 20 11.4Z"/>
+              <path d="M12 11.2v3.4"/><path d="M12 8.2h.01"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-slate-700">Message info</span>
         </button>
-        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startReply(actionMenuFor)">
-          <span class="text-xl w-6 text-center">↩️</span><span class="text-sm font-medium text-slate-700">Reply</span>
+
+        <button class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startReply(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 8 5 12.5 10 17"/><path d="M5 12.5h8a6 6 0 0 1 6 6"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-slate-700">Reply</span>
         </button>
-        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openReactionPicker(actionMenuFor)">
-          <span class="text-xl w-6 text-center">😊</span><span class="text-sm font-medium text-slate-700">React</span>
+
+        <button class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openReactionPicker(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11.3" cy="12.7" r="7"/>
+              <path d="M9 11.7h.01"/><path d="M13.6 11.7h.01"/>
+              <path d="M8.9 15c.7.8 1.5 1.1 2.4 1.1s1.7-.3 2.4-1.1"/>
+              <path d="M18.7 4.6l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7Z" fill="currentColor" stroke="none"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-slate-700">React</span>
         </button>
-        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startForward(actionMenuFor)">
-          <span class="text-xl w-6 text-center">↪️</span><span class="text-sm font-medium text-slate-700">Forward</span>
+
+        <button class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startForward(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 8l5 4.5-5 4.5"/><path d="M19 12.5H11a6 6 0 0 0-6 6"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-slate-700">Forward</span>
         </button>
-        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="toggleStar(actionMenuFor)">
-          <span class="text-xl w-6 text-center">{{ actionMenuFor.starred ? '★' : '☆' }}</span>
-          <span class="text-sm font-medium text-slate-700">{{ actionMenuFor.starred ? 'Unstar' : 'Star' }}</span>
+
+        <button class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="toggleStar(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
+              :fill="actionMenuFor.starred ? 'currentColor' : 'none'">
+              <path d="M12 4.8l2.1 4.3 4.7.7-3.4 3.3.8 4.7L12 15.9 7.8 17.8l.8-4.7-3.4-3.3 4.7-.7Z"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-slate-700">{{ actionMenuFor.starred ? 'Unstar' : 'Star' }}</span>
         </button>
-        <button v-if="canDelete(actionMenuFor)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-rose-50 active:scale-[.99] transition text-left" @click="askDelete(actionMenuFor)">
-          <span class="text-xl w-6 text-center">🗑️</span><span class="text-sm font-medium text-rose-600">Delete</span>
+
+        <button v-if="canDelete(actionMenuFor)" class="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-2xl hover:bg-rose-50 active:scale-[.99] transition text-left" @click="askDelete(actionMenuFor)">
+          <span class="w-9 h-9 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 7h14"/><path d="M10 7V5.6A1.6 1.6 0 0 1 11.6 4h.8A1.6 1.6 0 0 1 14 5.6V7"/>
+              <path d="M7 7l.7 11.1A2 2 0 0 0 9.7 20h4.6a2 2 0 0 0 2-1.9L17 7"/>
+            </svg>
+          </span>
+          <span class="text-[15px] font-medium text-rose-600">Delete</span>
         </button>
       </div>
     </div>
