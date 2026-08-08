@@ -416,8 +416,8 @@ const needsClub = computed(() =>
 
     </div>
 
-    <!-- ── Bottom nav: all logged-in users ─────────────────────────────────── -->
-    <nav v-if="user && route.path !== '/login'"
+    <!-- ── Bottom nav: all logged-in users (hidden on fullscreen views like chat) ── -->
+    <nav v-if="user && route.path !== '/login' && !route.meta.fullscreen"
       class="fixed inset-x-0 bottom-0 z-20 safe-area-pb"
       style="background:rgba(255,255,255,.96); border-top:1px solid rgba(0,0,0,.07);
              backdrop-filter:blur(20px); box-shadow:0 -4px 20px rgba(0,0,0,.06);">

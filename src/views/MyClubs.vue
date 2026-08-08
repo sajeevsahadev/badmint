@@ -13,6 +13,12 @@ function switchTo(c) {
   selectClub(c)
   router.push('/club/' + c.club_id)
 }
+
+// Chat/Matches/Manage act on the *current* club, so switch first, then go.
+function goToClub(c, path) {
+  selectClub(c)
+  router.push(path)
+}
 </script>
 
 <template>
@@ -68,27 +74,34 @@ function switchTo(c) {
         </div>
 
         <!-- Action buttons row -->
-        <div class="border-t border-slate-100 px-4 py-3 grid grid-cols-3 gap-2">
+        <div class="border-t border-slate-100 px-4 py-3 grid grid-cols-4 gap-2">
           <RouterLink :to="'/club/' + c.club_id"
             class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all text-center border
                    border-cyan-200 bg-cyan-50 hover:bg-cyan-100 active:scale-95">
             <span class="text-lg">🏆</span>
-            <span class="text-xs font-semibold text-cyan-700">Club Profile</span>
+            <span class="text-[11px] font-semibold text-cyan-700 leading-tight">Profile</span>
           </RouterLink>
 
-          <RouterLink to="/matches"
+          <button @click="goToClub(c, '/chat')"
+            class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all text-center border
+                   border-violet-200 bg-violet-50 hover:bg-violet-100 active:scale-95">
+            <span class="text-lg">💬</span>
+            <span class="text-[11px] font-semibold text-violet-700 leading-tight">Chat</span>
+          </button>
+
+          <button @click="goToClub(c, '/matches')"
             class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all text-center border
                    border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-95">
             <span class="text-lg">📋</span>
-            <span class="text-xs font-semibold text-slate-600">Matches</span>
-          </RouterLink>
+            <span class="text-[11px] font-semibold text-slate-600 leading-tight">Matches</span>
+          </button>
 
-          <RouterLink to="/manage"
+          <button @click="goToClub(c, '/manage')"
             class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl transition-all text-center border
                    border-slate-200 bg-slate-50 hover:bg-slate-100 active:scale-95">
             <span class="text-lg">⚙️</span>
-            <span class="text-xs font-semibold text-slate-600">Manage</span>
-          </RouterLink>
+            <span class="text-[11px] font-semibold text-slate-600 leading-tight">Manage</span>
+          </button>
         </div>
       </div>
 

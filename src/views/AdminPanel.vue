@@ -24,6 +24,7 @@ const TABS = [
   { v: 'roles',       l: '🎖️ Roles' },
   { v: 'announcements', l: '📢 Announcements' },
   { v: 'security',    l: '🔐 Security' },
+  { v: 'chats',       l: '💬 Chats' },
 ]
 
 // ── Data ──
@@ -34,6 +35,9 @@ const tournaments = ref([])
 const stats       = ref(null)
 const sessions    = ref([])
 const sessionsLoading = ref(false)
+const chatClubId  = ref('')
+const chatMessages = ref([])
+const chatLoading = ref(false)
 const search      = ref('')
 const loading     = ref(true)
 const err         = ref('')
@@ -89,6 +93,15 @@ async function loadUsers() {
   })
   if (error) { err.value = error.message; return }
   users.value = data ?? []
+}
+
+async function loadAdminChat() {
+  if (!chatClubId.value) { chatMessages.value = []; return }
+  chatLoading.value = true; err.value = ''
+  const { data, error } = await supabase.rpc('get_club_messages', { p_club_id: chatClubId.value, p_limit: 100 })
+  chatLoading.value = false
+  if (error) { err.value = error.message; return }
+  chatMessages.value = data ?? []
 }
 
 async function loadSessions() {
@@ -686,6 +699,36 @@ const statItems = computed(() => !stats.value ? [] : [
         <p class="text-[10px] text-slate-400 px-1">
           IP location is approximate (from the device's network at login) and for security review only.
         </p>
+      </div>
+
+      <!-- ── Club Chats (read-only oversight) ──────────────────────────── -->
+      <div v-if="tab === 'chats'" class="space-y-3 fade-up">
+        <div class="card p-4">
+          <label class="label">Club</label>
+          <select v-model="chatClubId" class="input" @change="loadAdminChat">
+            <option value="">— Select a club —</option>
+            <option v-for="c in clubs" :key="c.club_id" :value="c.club_id">{{ c.name }}</option>
+          </select>
+          <p class="text-[11px] text-slate-500 mt-2">Read-only view of a club's chat, for moderation and safety.</p>
+        </div>
+
+        <div v-if="chatLoading" class="card p-8 text-center text-sm text-slate-400">Loading messages…</div>
+        <div v-else-if="chatClubId && !chatMessages.length" class="card p-8 text-center text-sm text-slate-400">No messages in this club yet.</div>
+
+        <div v-else-if="chatMessages.length" class="card p-3 space-y-2 max-h-[60vh] overflow-y-auto">
+          <div v-for="m in chatMessages" :key="m.id" class="flex items-start gap-2">
+            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+              {{ (m.sender_name || '?').charAt(0).toUpperCase() }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold text-slate-700">
+                {{ m.sender_name }}
+                <span class="text-[10px] font-normal text-slate-400 ml-1">{{ fmtDateTime(m.created_at) }}</span>
+              </p>
+              <p class="text-sm text-slate-600 break-words whitespace-pre-wrap">{{ m.body }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
     </template>

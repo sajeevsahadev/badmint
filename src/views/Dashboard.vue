@@ -261,6 +261,17 @@ const fmtDate = d => d
       </div>
     </div>
 
+    <!-- ── 1a. Club chat quick link ─────────────────────────────────────── -->
+    <RouterLink v-if="currentClub" to="/chat"
+      class="card p-4 flex items-center gap-3 fade-up hover:border-violet-400/50 transition-all active:scale-[0.99]">
+      <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">💬</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-slate-800">Club Chat</p>
+        <p class="text-xs text-slate-400">Message your club members</p>
+      </div>
+      <span class="text-slate-300 shrink-0">→</span>
+    </RouterLink>
+
     <!-- ── 1b. Who's playing today/tomorrow? — quick link straight to the poll ── -->
     <RouterLink v-for="s in upcomingSchedule" :key="s.id"
       :to="`/schedule?date=${s.scheduled_date}`"
