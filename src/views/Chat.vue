@@ -26,6 +26,9 @@ const forwardMsg      = ref(null)   // message being forwarded (opens club picke
 const forwarding      = ref(false)
 const deleteMsg       = ref(null)   // message pending delete confirmation
 const showStarredOnly = ref(false)
+const infoFor         = ref(null)   // message whose read-receipt info is open
+const infoRows        = ref([])
+const infoLoading     = ref(false)
 
 const scroller = ref(null)
 const inputEl  = ref(null)
@@ -245,6 +248,23 @@ async function send() {
 // ── Action sheet (long-press) ───────────────────────────────────────────
 function openActionMenu(m) { if (!m.deleted) actionMenuFor.value = m }
 function closeActionMenu() { actionMenuFor.value = null }
+
+// Message info (read receipts) — author only
+const fmtDateTime = ts => new Date(ts).toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const readRows      = computed(() => infoRows.value.filter(r => r.status === 'read'))
+const deliveredRows = computed(() => infoRows.value.filter(r => r.status === 'delivered'))
+const sentRows      = computed(() => infoRows.value.filter(r => r.status === 'sent'))
+async function openInfo(m) {
+  actionMenuFor.value = null
+  infoFor.value = m
+  infoLoading.value = true
+  infoRows.value = []
+  const { data, error } = await supabase.rpc('get_message_info', { p_message_id: m.id })
+  infoLoading.value = false
+  if (error) { errMsg.value = error.message; infoFor.value = null; return }
+  infoRows.value = data ?? []
+}
+function closeInfo() { infoFor.value = null }
 
 // Reply
 function startReply(m) { replyTo.value = m; actionMenuFor.value = null; nextTick(() => inputEl.value?.focus()) }
@@ -586,6 +606,9 @@ onBeforeUnmount(() => {
     <div v-if="actionMenuFor" class="fixed inset-0 z-40 flex items-end" style="background:rgba(15,23,42,.35);" @click="closeActionMenu">
       <div class="w-full bg-white rounded-t-2xl p-2 pb-4 safe-area-pb" @click.stop>
         <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto my-2"></div>
+        <button v-if="isMine(actionMenuFor)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openInfo(actionMenuFor)">
+          <span class="text-xl w-6 text-center">ℹ️</span><span class="text-sm font-medium text-slate-700">Message info</span>
+        </button>
         <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startReply(actionMenuFor)">
           <span class="text-xl w-6 text-center">↩️</span><span class="text-sm font-medium text-slate-700">Reply</span>
         </button>
@@ -619,6 +642,59 @@ onBeforeUnmount(() => {
           <span class="text-sm font-medium text-slate-700 truncate">{{ c.clubs?.name }}</span>
           <span class="ml-auto text-cyan-600 text-lg">↪</span>
         </button>
+      </div>
+    </div>
+
+    <!-- Message info (read receipts) -->
+    <div v-if="infoFor" class="fixed inset-0 z-40 flex items-end" style="background:rgba(15,23,42,.35);" @click="closeInfo">
+      <div class="w-full bg-white rounded-t-2xl pb-6 safe-area-pb max-h-[80vh] flex flex-col" @click.stop>
+        <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto my-2 shrink-0"></div>
+        <div class="px-4 pb-2 shrink-0">
+          <p class="text-sm font-bold text-slate-700 mb-2">Message info</p>
+          <div class="rounded-xl px-3 py-2 text-white text-sm" style="background:linear-gradient(135deg,#00b4d8,#0088b3);">
+            <p class="break-words whitespace-pre-wrap line-clamp-3">{{ infoFor.body }}</p>
+            <p class="text-[9px] text-white/70 text-right mt-0.5">{{ fmtTime(infoFor.created_at) }}</p>
+          </div>
+        </div>
+
+        <div class="overflow-y-auto px-4 pt-2">
+          <div v-if="infoLoading" class="space-y-2 py-2">
+            <div v-for="i in 3" :key="i" class="h-10 shimmer rounded-xl" />
+          </div>
+
+          <template v-else>
+            <!-- Read by -->
+            <div class="mb-3">
+              <p class="text-[11px] font-bold text-cyan-600 flex items-center gap-1 mb-1.5">✓✓ Read by · {{ readRows.length }}</p>
+              <p v-if="!readRows.length" class="text-xs text-slate-400 pl-1 pb-1">No one has read it yet.</p>
+              <div v-for="r in readRows" :key="r.user_id" class="flex items-center gap-2.5 py-1.5">
+                <Avatar :name="r.name" :src="r.avatar_url" :size="30" class="shrink-0" />
+                <span class="text-sm text-slate-700 flex-1 min-w-0 truncate">{{ r.name }}</span>
+                <span class="text-[11px] text-slate-400 shrink-0">{{ fmtDateTime(r.read_at) }}</span>
+              </div>
+            </div>
+
+            <!-- Delivered to -->
+            <div v-if="deliveredRows.length" class="mb-3">
+              <p class="text-[11px] font-bold text-slate-500 flex items-center gap-1 mb-1.5">✓✓ Delivered to · {{ deliveredRows.length }}</p>
+              <div v-for="r in deliveredRows" :key="r.user_id" class="flex items-center gap-2.5 py-1.5">
+                <Avatar :name="r.name" :src="r.avatar_url" :size="30" class="shrink-0" />
+                <span class="text-sm text-slate-700 flex-1 min-w-0 truncate">{{ r.name }}</span>
+              </div>
+            </div>
+
+            <!-- Sent (not yet delivered) -->
+            <div v-if="sentRows.length" class="mb-2">
+              <p class="text-[11px] font-bold text-slate-400 flex items-center gap-1 mb-1.5">✓ Sent · {{ sentRows.length }}</p>
+              <div v-for="r in sentRows" :key="r.user_id" class="flex items-center gap-2.5 py-1.5">
+                <Avatar :name="r.name" :src="r.avatar_url" :size="30" class="shrink-0" />
+                <span class="text-sm text-slate-500 flex-1 min-w-0 truncate">{{ r.name }}</span>
+              </div>
+            </div>
+
+            <p v-if="!infoRows.length" class="text-sm text-slate-400 text-center py-4">You're the only member.</p>
+          </template>
+        </div>
       </div>
     </div>
 
