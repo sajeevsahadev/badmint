@@ -8,7 +8,7 @@ import Avatar from '../components/Avatar.vue'
 
 const router = useRouter()
 const { user } = useAuth()
-const { currentClub } = useClub()
+const { currentClub, clubs, isManager } = useClub()
 
 const messages   = ref([])          // oldest → newest
 const draft      = ref('')
@@ -18,6 +18,14 @@ const loadingMore = ref(false)
 const hasMore    = ref(true)
 const showEmoji  = ref(false)
 const errMsg     = ref('')
+
+// ── Message actions (reply / forward / star / delete) ───────────────────
+const replyTo         = ref(null)   // message being replied to
+const actionMenuFor   = ref(null)   // message whose action sheet is open
+const forwardMsg      = ref(null)   // message being forwarded (opens club picker)
+const forwarding      = ref(false)
+const deleteMsg       = ref(null)   // message pending delete confirmation
+const showStarredOnly = ref(false)
 
 const scroller = ref(null)
 const inputEl  = ref(null)
@@ -46,16 +54,21 @@ let pressTimer = null
 const fmtTime = ts => new Date(ts).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })
 const fmtDay = ts => new Date(ts).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
 const isMine = m => m.user_id === user.value?.id
+const canDelete = m => isMine(m) || isManager()
+
+// The list actually rendered (optionally filtered to starred).
+const visibleMessages = computed(() =>
+  showStarredOnly.value ? messages.value.filter(m => m.starred) : messages.value)
+
 // Show a date separator when the day changes between consecutive messages.
-function showDaySep(i) {
+function showDaySep(list, i) {
   if (i === 0) return true
-  return new Date(messages.value[i].created_at).toDateString()
-       !== new Date(messages.value[i - 1].created_at).toDateString()
+  return new Date(list[i].created_at).toDateString()
+       !== new Date(list[i - 1].created_at).toDateString()
 }
 
 // ── Randomised badminton doodle background ──────────────────────────────
 const rnd  = (a, b) => Math.random() * (b - a) + a
-const pick = arr => arr[Math.floor(Math.random() * arr.length)]
 
 // A shuttlecock drawn in local coords (~-20..20), stroke-only doodle.
 const SHUTTLE = `
@@ -160,8 +173,25 @@ function subscribe() {
         const nearBottom = scroller.value
           ? scroller.value.scrollHeight - scroller.value.scrollTop - scroller.value.clientHeight < 120
           : true
-        messages.value.push({ ...row, sender_name: sender.sender_name, avatar_url: sender.avatar_url })
+        // Resolve the reply preview from a message we already have loaded.
+        const replied = row.reply_to ? messages.value.find(m => m.id === row.reply_to) : null
+        messages.value.push({
+          ...row,
+          sender_name: sender.sender_name, avatar_url: sender.avatar_url,
+          reply_sender: replied ? replied.sender_name : null,
+          reply_body: replied ? (replied.deleted ? 'Deleted message' : replied.body) : null,
+          deleted: false, starred: false,
+        })
         if (nearBottom || isMine(row)) scrollToBottom(true)
+      })
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'club_messages', filter: `club_id=eq.${clubId.value}` },
+      ({ new: row }) => {
+        const idx = messages.value.findIndex(m => m.id === row.id)
+        if (idx !== -1 && row.deleted_at && !messages.value[idx].deleted) {
+          messages.value[idx] = { ...messages.value[idx], deleted: true, body: null }
+          reactions.value = { ...reactions.value, [row.id]: [] }
+        }
       })
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'club_message_reactions', filter: `club_id=eq.${clubId.value}` },
@@ -179,7 +209,11 @@ async function send() {
   draft.value = ''
   showEmoji.value = false
   resetInputHeight()
-  const { data: id, error } = await supabase.rpc('post_club_message', { p_club_id: clubId.value, p_body: body })
+  const replied = replyTo.value
+  replyTo.value = null
+  const { data: id, error } = await supabase.rpc('post_club_message', {
+    p_club_id: clubId.value, p_body: body, p_reply_to: replied?.id ?? null,
+  })
   sending.value = false
   if (error) { errMsg.value = error.message; draft.value = body; return }
   // Optimistic append (realtime echo is deduped by id)
@@ -187,6 +221,10 @@ async function send() {
     messages.value.push({
       id, user_id: user.value.id, body, created_at: new Date().toISOString(),
       sender_name: myProfile.sender_name, avatar_url: myProfile.avatar_url,
+      reply_to: replied?.id ?? null,
+      reply_sender: replied ? (isMine(replied) ? myProfile.sender_name : replied.sender_name) : null,
+      reply_body: replied ? (replied.deleted ? 'Deleted message' : replied.body) : null,
+      is_forwarded: false, deleted: false, starred: false,
     })
     scrollToBottom(true)
   }
@@ -200,6 +238,67 @@ async function send() {
     }).catch(() => {})
   })
   inputEl.value?.focus()
+}
+
+// ── Action sheet (long-press) ───────────────────────────────────────────
+function openActionMenu(m) { if (!m.deleted) actionMenuFor.value = m }
+function closeActionMenu() { actionMenuFor.value = null }
+
+// Reply
+function startReply(m) { replyTo.value = m; actionMenuFor.value = null; nextTick(() => inputEl.value?.focus()) }
+function cancelReply() { replyTo.value = null }
+
+// Star / unstar
+async function toggleStar(m) {
+  actionMenuFor.value = null
+  const { data } = await supabase.rpc('toggle_message_star', { p_message_id: m.id })
+  const idx = messages.value.findIndex(x => x.id === m.id)
+  if (idx !== -1) messages.value[idx] = { ...messages.value[idx], starred: !!data }
+}
+
+// Forward → opens the club picker
+const forwardTargets = computed(() => (clubs.value ?? []).filter(c => c.club_id !== clubId.value))
+function startForward(m) { forwardMsg.value = m; actionMenuFor.value = null }
+function cancelForward() { forwardMsg.value = null }
+async function doForward(targetClubId) {
+  if (forwarding.value || !forwardMsg.value) return
+  forwarding.value = true
+  const body = forwardMsg.value.body
+  const { error } = await supabase.rpc('post_club_message', {
+    p_club_id: targetClubId, p_body: body, p_reply_to: null, p_is_forwarded: true,
+  })
+  forwarding.value = false
+  const target = (clubs.value ?? []).find(c => c.club_id === targetClubId)
+  forwardMsg.value = null
+  if (error) { errMsg.value = error.message; return }
+  // Push to the target club's members
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-chat`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ club_id: targetClubId, body }),
+    }).catch(() => {})
+  })
+  errMsg.value = ''
+  // Brief confirmation
+  const name = target?.clubs?.name ?? 'club'
+  errMsg.value = `↪ Forwarded to ${name}`
+  setTimeout(() => { if (errMsg.value.startsWith('↪')) errMsg.value = '' }, 2500)
+}
+
+// Delete (soft)
+function askDelete(m) { deleteMsg.value = m; actionMenuFor.value = null }
+function cancelDelete() { deleteMsg.value = null }
+async function doDelete() {
+  const m = deleteMsg.value
+  deleteMsg.value = null
+  if (!m) return
+  const { error } = await supabase.rpc('delete_club_message', { p_message_id: m.id })
+  if (error) { errMsg.value = error.message; return }
+  const idx = messages.value.findIndex(x => x.id === m.id)
+  if (idx !== -1) messages.value[idx] = { ...messages.value[idx], deleted: true, body: null }
+  reactions.value = { ...reactions.value, [m.id]: [] }
 }
 
 function addEmoji(e) { draft.value += e; inputEl.value?.focus(); nextTick(autoGrowNow) }
@@ -221,14 +320,26 @@ async function refreshReactionsFor(id) {
 }
 async function react(messageId, emoji) {
   reactionPickerFor.value = null
-  await supabase.rpc('toggle_message_reaction', { p_message_id: messageId, p_emoji: emoji }).then(undefined, () => {})
+  const { data: result } = await supabase.rpc('toggle_message_reaction', { p_message_id: messageId, p_emoji: emoji })
+    .then(r => r, () => ({ data: null }))
   refreshReactionsFor(messageId)   // immediate for the reactor; realtime covers everyone else
+  // Push the message author when a reaction is ADDED/swapped (result = emoji), not removed (null)
+  if (result) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-reaction`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: messageId, emoji: result }),
+      }).catch(() => {})
+    })
+  }
 }
-function openReactionPicker(m) { reactionPickerFor.value = m.id }
+function openReactionPicker(m) { actionMenuFor.value = null; reactionPickerFor.value = m.id }
 function closeReactionPicker() { reactionPickerFor.value = null }
 
-// Long-press (touch + mouse) opens the reaction picker, like WhatsApp.
-function onPressStart(m) { clearTimeout(pressTimer); pressTimer = setTimeout(() => openReactionPicker(m), 400) }
+// Long-press (touch + mouse) opens the message action sheet, like WhatsApp.
+function onPressStart(m) { clearTimeout(pressTimer); pressTimer = setTimeout(() => openActionMenu(m), 400) }
 function cancelPress() { clearTimeout(pressTimer) }
 
 // When the textarea gains focus the keyboard animates in (~250ms); snap the
@@ -240,10 +351,11 @@ function onInputFocus() {
 
 // WhatsApp-style grouping: consecutive messages from the same sender within a
 // few minutes (same day) collapse — one avatar/name for the group.
-function isGrouped(i) {
+function isGrouped(list, i) {
   if (i === 0) return false
-  const cur = messages.value[i], prev = messages.value[i - 1]
+  const cur = list[i], prev = list[i - 1]
   return cur.user_id === prev.user_id
+    && !cur.reply_to                       // replies always show their own header
     && new Date(cur.created_at).toDateString() === new Date(prev.created_at).toDateString()
     && (new Date(cur.created_at) - new Date(prev.created_at)) < 5 * 60 * 1000
 }
@@ -301,8 +413,12 @@ onBeforeUnmount(() => {
       <div class="icon-tile icon-tile-cyan w-9 h-9 text-lg">💬</div>
       <div class="flex-1 min-w-0">
         <p class="font-display font-bold text-slate-800 text-sm leading-tight truncate">{{ clubName }} Chat</p>
-        <p class="text-[11px] text-slate-400 leading-tight">Club members only</p>
+        <p class="text-[11px] text-slate-400 leading-tight">{{ showStarredOnly ? 'Showing starred' : 'Club members only' }}</p>
       </div>
+      <button v-if="clubId" class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 transition"
+        :class="showStarredOnly ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:bg-slate-100'"
+        :aria-label="showStarredOnly ? 'Show all messages' : 'Show starred only'"
+        @click="showStarredOnly = !showStarredOnly">{{ showStarredOnly ? '★' : '☆' }}</button>
     </header>
 
     <!-- No club -->
@@ -329,9 +445,17 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <template v-for="(m, i) in messages" :key="m.id">
+      <div v-else-if="showStarredOnly && !visibleMessages.length" class="h-full grid place-items-center text-center">
+        <div>
+          <div class="text-4xl mb-2">⭐</div>
+          <p class="text-sm font-semibold text-slate-600">No starred messages</p>
+          <p class="text-xs text-slate-400">Long-press a message and tap Star.</p>
+        </div>
+      </div>
+
+      <template v-for="(m, i) in visibleMessages" :key="m.id">
         <!-- Day separator -->
-        <div v-if="showDaySep(i)" class="flex justify-center my-2">
+        <div v-if="showDaySep(visibleMessages, i)" class="flex justify-center my-2">
           <span class="text-[10px] font-semibold text-slate-500 bg-white/80 rounded-full px-3 py-1 border border-slate-200">
             {{ fmtDay(m.created_at) }}
           </span>
@@ -339,14 +463,19 @@ onBeforeUnmount(() => {
 
         <!-- Message row -->
         <div class="flex items-end gap-2"
-          :class="[isMine(m) ? 'flex-row-reverse' : '', isGrouped(i) ? 'mt-0.5' : 'mt-2']">
+          :class="[isMine(m) ? 'flex-row-reverse' : '', isGrouped(visibleMessages, i) ? 'mt-0.5' : 'mt-2']">
           <!-- Avatar once per group (others' messages); spacer keeps grouped bubbles aligned -->
-          <Avatar v-if="!isMine(m) && !isGrouped(i)" :name="m.sender_name" :src="m.avatar_url" :size="26" class="shrink-0 mb-1" />
+          <Avatar v-if="!isMine(m) && !isGrouped(visibleMessages, i)" :name="m.sender_name" :src="m.avatar_url" :size="26" class="shrink-0 mb-1" />
           <div v-else-if="!isMine(m)" class="w-[26px] shrink-0" aria-hidden="true"></div>
 
           <div class="flex flex-col max-w-[78%]" :class="isMine(m) ? 'items-end' : 'items-start'">
-            <!-- Bubble: long-press to react -->
-            <div class="rounded-2xl px-3 py-2 select-none cursor-pointer"
+            <!-- Deleted placeholder -->
+            <div v-if="m.deleted" class="rounded-2xl px-3 py-2 bg-white/70 border border-slate-100 text-slate-400 italic text-sm flex items-center gap-1.5">
+              🚫 This message was deleted
+            </div>
+
+            <!-- Bubble: long-press for actions -->
+            <div v-else class="rounded-2xl px-3 py-2 select-none cursor-pointer"
               :class="isMine(m)
                 ? 'text-white rounded-br-md'
                 : 'bg-white text-slate-800 rounded-bl-md border border-slate-100'"
@@ -355,16 +484,25 @@ onBeforeUnmount(() => {
                 : '-webkit-touch-callout:none;'"
               @touchstart.passive="onPressStart(m)" @touchend="cancelPress" @touchmove="cancelPress"
               @mousedown="onPressStart(m)" @mouseup="cancelPress" @mouseleave="cancelPress"
-              @contextmenu.prevent="openReactionPicker(m)">
-              <p v-if="!isMine(m) && !isGrouped(i)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
+              @contextmenu.prevent="openActionMenu(m)">
+              <p v-if="!isMine(m) && !isGrouped(visibleMessages, i)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
+              <p v-if="m.is_forwarded" class="text-[10px] italic mb-0.5 flex items-center gap-1"
+                 :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">↪ Forwarded</p>
+              <!-- Reply quote -->
+              <div v-if="m.reply_to && m.reply_sender" class="rounded-lg px-2 py-1 mb-1 border-l-2 text-[11px] leading-snug"
+                :class="isMine(m) ? 'bg-white/15 border-white/60' : 'bg-slate-50 border-cyan-400'">
+                <span class="font-bold block" :class="isMine(m) ? 'text-white/90' : 'text-cyan-700'">{{ m.reply_sender }}</span>
+                <span class="line-clamp-2 opacity-80">{{ m.reply_body }}</span>
+              </div>
               <p class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
-              <p class="text-[9px] mt-0.5 text-right" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
+              <p class="text-[9px] mt-0.5 flex items-center gap-1 justify-end" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
+                <span v-if="m.starred" class="text-amber-400">★</span>
                 {{ fmtTime(m.created_at) }}
               </p>
             </div>
 
             <!-- Reaction chips -->
-            <div v-if="reactions[m.id]?.length" class="flex flex-wrap gap-1 mt-1">
+            <div v-if="!m.deleted && reactions[m.id]?.length" class="flex flex-wrap gap-1 mt-1">
               <button v-for="r in reactions[m.id]" :key="r.emoji" @click="react(m.id, r.emoji)"
                 class="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 border transition active:scale-95"
                 :class="r.reacted ? 'bg-cyan-50 border-cyan-300' : 'bg-white border-slate-200'">
@@ -394,6 +532,17 @@ onBeforeUnmount(() => {
       <button v-for="e in EMOJIS" :key="e" class="text-2xl shrink-0 hover:scale-110 transition" @click="addEmoji(e)">{{ e }}</button>
     </div>
 
+    <!-- Reply preview (above input) -->
+    <div v-if="clubId && replyTo" class="shrink-0 flex items-center gap-2 px-3 py-2 bg-white border-t border-slate-200">
+      <div class="w-1 self-stretch rounded-full bg-cyan-400 shrink-0"></div>
+      <div class="flex-1 min-w-0">
+        <p class="text-[11px] font-bold text-cyan-700 leading-tight">Replying to {{ isMine(replyTo) ? 'yourself' : replyTo.sender_name }}</p>
+        <p class="text-xs text-slate-500 truncate">{{ replyTo.body }}</p>
+      </div>
+      <button class="w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 flex items-center justify-center shrink-0"
+        aria-label="Cancel reply" @click="cancelReply">✕</button>
+    </div>
+
     <!-- Input -->
     <div v-if="clubId" class="shrink-0 flex items-end gap-2 px-3 pt-2.5"
       style="background:#ffffff; border-top:1px solid rgba(15,23,42,.08); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);">
@@ -412,6 +561,60 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <p v-if="errMsg" class="shrink-0 text-center text-xs text-rose-500 py-1 bg-white">{{ errMsg }}</p>
+    <p v-if="errMsg" class="shrink-0 text-center text-xs py-1 bg-white"
+       :class="errMsg.startsWith('↪') ? 'text-emerald-600' : 'text-rose-500'">{{ errMsg }}</p>
+
+    <!-- Action sheet (long-press): Reply / React / Forward / Star / Delete -->
+    <div v-if="actionMenuFor" class="fixed inset-0 z-40 flex items-end" style="background:rgba(15,23,42,.35);" @click="closeActionMenu">
+      <div class="w-full bg-white rounded-t-2xl p-2 pb-4 safe-area-pb" @click.stop>
+        <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto my-2"></div>
+        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startReply(actionMenuFor)">
+          <span class="text-xl w-6 text-center">↩️</span><span class="text-sm font-medium text-slate-700">Reply</span>
+        </button>
+        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="openReactionPicker(actionMenuFor)">
+          <span class="text-xl w-6 text-center">😊</span><span class="text-sm font-medium text-slate-700">React</span>
+        </button>
+        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="startForward(actionMenuFor)">
+          <span class="text-xl w-6 text-center">↪️</span><span class="text-sm font-medium text-slate-700">Forward</span>
+        </button>
+        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left" @click="toggleStar(actionMenuFor)">
+          <span class="text-xl w-6 text-center">{{ actionMenuFor.starred ? '★' : '☆' }}</span>
+          <span class="text-sm font-medium text-slate-700">{{ actionMenuFor.starred ? 'Unstar' : 'Star' }}</span>
+        </button>
+        <button v-if="canDelete(actionMenuFor)" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-rose-50 active:scale-[.99] transition text-left" @click="askDelete(actionMenuFor)">
+          <span class="text-xl w-6 text-center">🗑️</span><span class="text-sm font-medium text-rose-600">Delete</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Forward: pick a club -->
+    <div v-if="forwardMsg" class="fixed inset-0 z-40 flex items-end" style="background:rgba(15,23,42,.35);" @click="cancelForward">
+      <div class="w-full bg-white rounded-t-2xl p-4 pb-6 safe-area-pb max-h-[70vh] overflow-y-auto" @click.stop>
+        <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-3"></div>
+        <p class="text-sm font-bold text-slate-700 mb-1">Forward to…</p>
+        <p class="text-xs text-slate-400 mb-3 truncate">“{{ forwardMsg.body }}”</p>
+        <div v-if="!forwardTargets.length" class="text-sm text-slate-400 py-4 text-center">You're only in this one club.</div>
+        <button v-for="c in forwardTargets" :key="c.club_id" :disabled="forwarding"
+          class="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 active:scale-[.99] transition text-left disabled:opacity-50"
+          @click="doForward(c.club_id)">
+          <div class="w-9 h-9 rounded-xl bg-cyan-100 flex items-center justify-center text-lg shrink-0">🏸</div>
+          <span class="text-sm font-medium text-slate-700 truncate">{{ c.clubs?.name }}</span>
+          <span class="ml-auto text-cyan-600 text-lg">↪</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Delete confirmation -->
+    <div v-if="deleteMsg" class="fixed inset-0 z-40 grid place-items-center px-8" style="background:rgba(15,23,42,.45);" @click="cancelDelete">
+      <div class="w-full max-w-xs bg-white rounded-2xl p-5 text-center" @click.stop>
+        <div class="text-3xl mb-2">🗑️</div>
+        <p class="text-sm font-bold text-slate-800 mb-1">Delete message?</p>
+        <p class="text-xs text-slate-500 mb-4">This removes it for everyone in the chat.</p>
+        <div class="flex gap-2">
+          <button class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200" @click="cancelDelete">Cancel</button>
+          <button class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600" @click="doDelete">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
