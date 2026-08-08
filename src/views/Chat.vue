@@ -117,6 +117,7 @@ async function send() {
   sending.value = true
   draft.value = ''
   showEmoji.value = false
+  resetInputHeight()
   const { data: id, error } = await supabase.rpc('post_club_message', { p_club_id: clubId.value, p_body: body })
   sending.value = false
   if (error) { errMsg.value = error.message; draft.value = body; return }
@@ -140,7 +141,27 @@ async function send() {
   inputEl.value?.focus()
 }
 
-function addEmoji(e) { draft.value += e; inputEl.value?.focus() }
+function addEmoji(e) { draft.value += e; inputEl.value?.focus(); nextTick(autoGrowNow) }
+
+// WhatsApp-style grouping: consecutive messages from the same sender within a
+// few minutes (same day) collapse — one avatar/name for the group.
+function isGrouped(i) {
+  if (i === 0) return false
+  const cur = messages.value[i], prev = messages.value[i - 1]
+  return cur.user_id === prev.user_id
+    && new Date(cur.created_at).toDateString() === new Date(prev.created_at).toDateString()
+    && (new Date(cur.created_at) - new Date(prev.created_at)) < 5 * 60 * 1000
+}
+
+// Auto-grow the input like WhatsApp (up to ~5 lines), then it scrolls.
+function autoGrowNow() {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
+function autoGrow() { autoGrowNow() }
+function resetInputHeight() { if (inputEl.value) inputEl.value.style.height = 'auto' }
 
 onMounted(load)
 watch(clubId, load)
@@ -170,7 +191,7 @@ onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
     </div>
 
     <!-- Messages -->
-    <div v-else ref="scroller" class="flex-1 overflow-y-auto px-3 py-3 space-y-1.5" @scroll="onScroll">
+    <div v-else ref="scroller" class="flex-1 overflow-y-auto px-3 py-3" @scroll="onScroll">
       <div v-if="loadingMore" class="text-center text-[11px] text-slate-400 py-1">Loading earlier messages…</div>
 
       <div v-if="loading" class="space-y-2">
@@ -194,14 +215,17 @@ onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
         </div>
 
         <!-- Message row -->
-        <div class="flex items-end gap-2" :class="isMine(m) ? 'flex-row-reverse' : ''">
-          <Avatar v-if="!isMine(m)" :name="m.sender_name" :src="m.avatar_url" :size="26" class="shrink-0 mb-1" />
+        <div class="flex items-end gap-2"
+          :class="[isMine(m) ? 'flex-row-reverse' : '', isGrouped(i) ? 'mt-0.5' : 'mt-2']">
+          <!-- Avatar once per group (others' messages); spacer keeps grouped bubbles aligned -->
+          <Avatar v-if="!isMine(m) && !isGrouped(i)" :name="m.sender_name" :src="m.avatar_url" :size="26" class="shrink-0 mb-1" />
+          <div v-else-if="!isMine(m)" class="w-[26px] shrink-0" aria-hidden="true"></div>
           <div class="max-w-[78%] rounded-2xl px-3 py-2"
             :class="isMine(m)
               ? 'text-white rounded-br-md'
               : 'bg-white text-slate-800 rounded-bl-md border border-slate-100'"
             :style="isMine(m) ? 'background:linear-gradient(135deg,#00b4d8,#0088b3);' : ''">
-            <p v-if="!isMine(m)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
+            <p v-if="!isMine(m) && !isGrouped(i)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
             <p class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
             <p class="text-[9px] mt-0.5 text-right" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
               {{ fmtTime(m.created_at) }}
@@ -224,6 +248,7 @@ onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
       <textarea ref="inputEl" v-model="draft" rows="1" maxlength="2000"
         placeholder="Message…"
         class="input flex-1 resize-none max-h-28 py-2.5"
+        @input="autoGrow"
         @keydown.enter.exact.prevent="send" />
       <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white transition active:scale-95 disabled:opacity-40"
         style="background:linear-gradient(135deg,#00b4d8,#0088b3);"
