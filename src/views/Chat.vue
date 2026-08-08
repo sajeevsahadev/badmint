@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
         aria-label="Emojis" @click="showEmoji = !showEmoji">😊</button>
       <textarea ref="inputEl" v-model="draft" rows="1" maxlength="2000"
         placeholder="Message…"
-        class="input flex-1 resize-none max-h-28 py-2.5"
+        class="input flex-1 min-w-0 resize-none max-h-28 py-2.5"
         @input="autoGrow"
         @focus="onInputFocus"
         @keydown.enter.exact.prevent="send" />
