@@ -21,6 +21,10 @@ const errMsg     = ref('')
 
 const scroller = ref(null)
 const inputEl  = ref(null)
+// Follow the *visible* viewport so the input stays above the on-screen keyboard
+// (like WhatsApp). Fixed 100vh containers don't shrink when the keyboard opens,
+// which pushes the textarea off-screen — this pins the shell to the visible area.
+const viewportStyle = ref({ top: '0px', height: '100dvh' })
 let channel = null
 const senderCache = new Map()       // user_id → { sender_name, avatar_url }
 let myProfile = { sender_name: 'You', avatar_url: null }
@@ -143,6 +147,13 @@ async function send() {
 
 function addEmoji(e) { draft.value += e; inputEl.value?.focus(); nextTick(autoGrowNow) }
 
+// When the textarea gains focus the keyboard animates in (~250ms); snap the
+// latest messages back into view once it settles so nothing is hidden.
+function onInputFocus() {
+  scrollToBottom()
+  setTimeout(() => scrollToBottom(true), 300)
+}
+
 // WhatsApp-style grouping: consecutive messages from the same sender within a
 // few minutes (same day) collapse — one avatar/name for the group.
 function isGrouped(i) {
@@ -163,13 +174,40 @@ function autoGrowNow() {
 function autoGrow() { autoGrowNow() }
 function resetInputHeight() { if (inputEl.value) inputEl.value.style.height = 'auto' }
 
-onMounted(load)
+// ── Keyboard-aware sizing (VisualViewport) ──────────────────────────────
+let vvRaf = 0
+function syncViewport() {
+  const vv = window.visualViewport
+  if (!vv) return
+  cancelAnimationFrame(vvRaf)
+  vvRaf = requestAnimationFrame(() => {
+    const wasNearBottom = scroller.value
+      ? scroller.value.scrollHeight - scroller.value.scrollTop - scroller.value.clientHeight < 160
+      : true
+    viewportStyle.value = { top: `${vv.offsetTop}px`, height: `${vv.height}px` }
+    // Keep the latest messages (and what you're typing) in view when the
+    // keyboard opens and the shell shrinks.
+    if (wasNearBottom) scrollToBottom()
+  })
+}
+
+onMounted(() => {
+  load()
+  syncViewport()
+  window.visualViewport?.addEventListener('resize', syncViewport)
+  window.visualViewport?.addEventListener('scroll', syncViewport)
+})
 watch(clubId, load)
-onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
+onBeforeUnmount(() => {
+  if (channel) supabase.removeChannel(channel)
+  window.visualViewport?.removeEventListener('resize', syncViewport)
+  window.visualViewport?.removeEventListener('scroll', syncViewport)
+  cancelAnimationFrame(vvRaf)
+})
 </script>
 
 <template>
-  <div class="fixed inset-0 flex flex-col" style="background:#eef4ff;">
+  <div class="fixed left-0 right-0 flex flex-col overflow-hidden" :style="{ ...viewportStyle, background:'#eef4ff' }">
     <!-- Header -->
     <header class="shrink-0 flex items-center gap-3 px-3 py-2.5"
       style="background:#ffffff; border-bottom:1px solid rgba(15,23,42,.08); box-shadow:0 1px 6px rgba(0,0,0,.05);">
@@ -249,6 +287,7 @@ onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
         placeholder="Message…"
         class="input flex-1 resize-none max-h-28 py-2.5"
         @input="autoGrow"
+        @focus="onInputFocus"
         @keydown.enter.exact.prevent="send" />
       <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white transition active:scale-95 disabled:opacity-40"
         style="background:linear-gradient(135deg,#00b4d8,#0088b3);"
