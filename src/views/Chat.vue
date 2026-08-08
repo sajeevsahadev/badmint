@@ -34,6 +34,12 @@ const clubName = computed(() => currentClub.value?.clubs?.name ?? 'Club')
 
 const EMOJIS = ['😀','😂','😅','😍','😎','🤝','👍','👏','🙌','💪','🔥','🎉','🏸','⏰','✅','❌','😢','🤔','🙏','❤️']
 
+// ── Message reactions ───────────────────────────────────────────────────
+const reactions = ref({})              // message_id → [{ emoji, cnt, reacted }]
+const reactionPickerFor = ref(null)    // message_id currently choosing a reaction for
+const REACTIONS = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉']
+let pressTimer = null
+
 const fmtTime = ts => new Date(ts).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })
 const fmtDay = ts => new Date(ts).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })
 const isMine = m => m.user_id === user.value?.id
@@ -66,6 +72,7 @@ async function load() {
   messages.value = data ?? []
   hasMore.value = (data?.length ?? 0) === 40
   loading.value = false
+  loadReactions((data ?? []).map(m => m.id))
   subscribe()
   scrollToBottom()
 }
@@ -82,6 +89,7 @@ async function loadMore() {
   const older = data ?? []
   hasMore.value = older.length === 40
   messages.value = [...older, ...messages.value]
+  loadReactions(older.map(m => m.id))
   await nextTick()
   // Keep the viewport anchored where the user was after prepending older msgs
   if (el) el.scrollTop = el.scrollHeight - prevHeight
@@ -111,6 +119,12 @@ function subscribe() {
           : true
         messages.value.push({ ...row, sender_name: sender.sender_name, avatar_url: sender.avatar_url })
         if (nearBottom || isMine(row)) scrollToBottom(true)
+      })
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'club_message_reactions', filter: `club_id=eq.${clubId.value}` },
+      ({ new: n, old: o }) => {
+        const id = n?.message_id || o?.message_id
+        if (id) refreshReactionsFor(id)
       })
     .subscribe()
 }
@@ -146,6 +160,33 @@ async function send() {
 }
 
 function addEmoji(e) { draft.value += e; inputEl.value?.focus(); nextTick(autoGrowNow) }
+
+// Load aggregated reactions for a batch of message ids.
+async function loadReactions(ids) {
+  if (!ids?.length) return
+  const { data } = await supabase.rpc('get_message_reactions', { p_message_ids: ids })
+  const map = { ...reactions.value }
+  for (const id of ids) map[id] = []
+  for (const r of (data ?? [])) {
+    (map[r.message_id] ||= []).push({ emoji: r.emoji, cnt: r.cnt, reacted: r.reacted })
+  }
+  reactions.value = map
+}
+async function refreshReactionsFor(id) {
+  const { data } = await supabase.rpc('get_message_reactions', { p_message_ids: [id] })
+  reactions.value = { ...reactions.value, [id]: (data ?? []).map(r => ({ emoji: r.emoji, cnt: r.cnt, reacted: r.reacted })) }
+}
+async function react(messageId, emoji) {
+  reactionPickerFor.value = null
+  await supabase.rpc('toggle_message_reaction', { p_message_id: messageId, p_emoji: emoji }).then(undefined, () => {})
+  refreshReactionsFor(messageId)   // immediate for the reactor; realtime covers everyone else
+}
+function openReactionPicker(m) { reactionPickerFor.value = m.id }
+function closeReactionPicker() { reactionPickerFor.value = null }
+
+// Long-press (touch + mouse) opens the reaction picker, like WhatsApp.
+function onPressStart(m) { clearTimeout(pressTimer); pressTimer = setTimeout(() => openReactionPicker(m), 400) }
+function cancelPress() { clearTimeout(pressTimer) }
 
 // When the textarea gains focus the keyboard animates in (~250ms); snap the
 // latest messages back into view once it settles so nothing is hidden.
@@ -258,19 +299,50 @@ onBeforeUnmount(() => {
           <!-- Avatar once per group (others' messages); spacer keeps grouped bubbles aligned -->
           <Avatar v-if="!isMine(m) && !isGrouped(i)" :name="m.sender_name" :src="m.avatar_url" :size="26" class="shrink-0 mb-1" />
           <div v-else-if="!isMine(m)" class="w-[26px] shrink-0" aria-hidden="true"></div>
-          <div class="max-w-[78%] rounded-2xl px-3 py-2"
-            :class="isMine(m)
-              ? 'text-white rounded-br-md'
-              : 'bg-white text-slate-800 rounded-bl-md border border-slate-100'"
-            :style="isMine(m) ? 'background:linear-gradient(135deg,#00b4d8,#0088b3);' : ''">
-            <p v-if="!isMine(m) && !isGrouped(i)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
-            <p class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
-            <p class="text-[9px] mt-0.5 text-right" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
-              {{ fmtTime(m.created_at) }}
-            </p>
+
+          <div class="flex flex-col max-w-[78%]" :class="isMine(m) ? 'items-end' : 'items-start'">
+            <!-- Bubble: long-press to react -->
+            <div class="rounded-2xl px-3 py-2 select-none cursor-pointer"
+              :class="isMine(m)
+                ? 'text-white rounded-br-md'
+                : 'bg-white text-slate-800 rounded-bl-md border border-slate-100'"
+              :style="isMine(m)
+                ? 'background:linear-gradient(135deg,#00b4d8,#0088b3);-webkit-touch-callout:none;'
+                : '-webkit-touch-callout:none;'"
+              @touchstart.passive="onPressStart(m)" @touchend="cancelPress" @touchmove="cancelPress"
+              @mousedown="onPressStart(m)" @mouseup="cancelPress" @mouseleave="cancelPress"
+              @contextmenu.prevent="openReactionPicker(m)">
+              <p v-if="!isMine(m) && !isGrouped(i)" class="text-[11px] font-bold mb-0.5" style="color:#0099b8;">{{ m.sender_name }}</p>
+              <p class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
+              <p class="text-[9px] mt-0.5 text-right" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
+                {{ fmtTime(m.created_at) }}
+              </p>
+            </div>
+
+            <!-- Reaction chips -->
+            <div v-if="reactions[m.id]?.length" class="flex flex-wrap gap-1 mt-1">
+              <button v-for="r in reactions[m.id]" :key="r.emoji" @click="react(m.id, r.emoji)"
+                class="flex items-center gap-0.5 rounded-full px-1.5 py-0.5 border transition active:scale-95"
+                :class="r.reacted ? 'bg-cyan-50 border-cyan-300' : 'bg-white border-slate-200'">
+                <span class="text-sm leading-none">{{ r.emoji }}</span>
+                <span v-if="r.cnt > 1" class="text-[11px] font-semibold" :class="r.reacted ? 'text-cyan-700' : 'text-slate-500'">{{ r.cnt }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- Reaction picker (opens on long-press; sits above the input) -->
+    <div v-if="reactionPickerFor" class="fixed inset-0 z-30" @click="closeReactionPicker"></div>
+    <div v-if="clubId && reactionPickerFor"
+      class="relative z-40 shrink-0 flex items-center gap-1 px-3 py-2 bg-white border-t border-slate-200"
+      style="box-shadow:0 -2px 10px rgba(0,0,0,.06);">
+      <span class="text-[11px] font-semibold text-slate-400 mr-1">React</span>
+      <button v-for="e in REACTIONS" :key="e" class="text-2xl shrink-0 hover:scale-110 active:scale-95 transition"
+        @click="react(reactionPickerFor, e)">{{ e }}</button>
+      <button class="ml-auto w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 flex items-center justify-center shrink-0"
+        aria-label="Close" @click="closeReactionPicker">✕</button>
     </div>
 
     <!-- Emoji quick bar -->
