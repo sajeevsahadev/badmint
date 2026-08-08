@@ -241,8 +241,8 @@ onBeforeUnmount(() => { if (channel) supabase.removeChannel(channel) })
     </div>
 
     <!-- Input -->
-    <div v-if="clubId" class="shrink-0 flex items-end gap-2 px-3 py-2.5 safe-area-pb"
-      style="background:#ffffff; border-top:1px solid rgba(15,23,42,.08);">
+    <div v-if="clubId" class="shrink-0 flex items-end gap-2 px-3 pt-2.5"
+      style="background:#ffffff; border-top:1px solid rgba(15,23,42,.08); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);">
       <button class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0 hover:bg-slate-100 transition"
         aria-label="Emojis" @click="showEmoji = !showEmoji">😊</button>
       <textarea ref="inputEl" v-model="draft" rows="1" maxlength="2000"
