@@ -129,6 +129,7 @@ async function load() {
   hasMore.value = (data?.length ?? 0) === 40
   loading.value = false
   loadReactions((data ?? []).map(m => m.id))
+  markRead()
   subscribe()
   scrollToBottom()
 }
@@ -183,6 +184,7 @@ function subscribe() {
           deleted: false, starred: false,
         })
         if (nearBottom || isMine(row)) scrollToBottom(true)
+        if (!isMine(row)) markRead()   // reading it live keeps unread at 0
       })
     .on('postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'club_messages', filter: `club_id=eq.${clubId.value}` },
@@ -301,6 +303,11 @@ async function doDelete() {
   reactions.value = { ...reactions.value, [m.id]: [] }
 }
 
+// Mark this club's chat as read for the current user (clears the unread badge).
+function markRead() {
+  if (clubId.value) supabase.rpc('mark_chat_read', { p_club_id: clubId.value }).then(undefined, () => {})
+}
+
 function addEmoji(e) { draft.value += e; inputEl.value?.focus(); nextTick(autoGrowNow) }
 
 // Load aggregated reactions for a batch of message ids.
@@ -396,6 +403,7 @@ onMounted(() => {
 })
 watch(clubId, load)
 onBeforeUnmount(() => {
+  markRead()
   if (channel) supabase.removeChannel(channel)
   window.visualViewport?.removeEventListener('resize', syncViewport)
   window.visualViewport?.removeEventListener('scroll', syncViewport)

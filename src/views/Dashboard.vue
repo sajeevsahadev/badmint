@@ -24,6 +24,7 @@ const openTournaments = ref([])
 const liveTournaments = ref([])
 const loading         = ref(true)
 const todayTomorrowSchedule = ref([])   // club_schedule rows for today/tomorrow — quick poll link
+const chatUnread      = ref(0)          // unread club-chat messages for the current club
 
 // ── Time-of-day greeting ──────────────────────────────────────────────
 const h = new Date().getHours()
@@ -38,9 +39,16 @@ let _loadKey = 0
 async function load() {
   const key = ++_loadKey
   loading.value = true
-  await Promise.all([loadProfile(), loadClubData(), loadTournaments(), loadTodayTomorrow()])
+  await Promise.all([loadProfile(), loadClubData(), loadTournaments(), loadTodayTomorrow(), loadChatUnread()])
   if (key !== _loadKey) return
   loading.value = false
+}
+
+async function loadChatUnread() {
+  chatUnread.value = 0
+  if (!currentClub.value) return
+  const { data } = await supabase.rpc('get_chat_unread_count', { p_club_id: currentClub.value.club_id })
+  chatUnread.value = data ?? 0
 }
 
 // "Who's playing today/tomorrow?" quick link — points straight at the
@@ -264,10 +272,18 @@ const fmtDate = d => d
     <!-- ── 1a. Club chat quick link ─────────────────────────────────────── -->
     <RouterLink v-if="currentClub" to="/chat"
       class="card p-4 flex items-center gap-3 fade-up hover:border-violet-400/50 transition-all active:scale-[0.99]">
-      <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">💬</div>
+      <div class="relative shrink-0">
+        <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">💬</div>
+        <span v-if="chatUnread > 0"
+          class="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center ring-2 ring-white">
+          {{ chatUnread > 99 ? '99+' : chatUnread }}
+        </span>
+      </div>
       <div class="flex-1 min-w-0">
         <p class="text-sm font-bold text-slate-800">Club Chat</p>
-        <p class="text-xs text-slate-400">Message your club members</p>
+        <p class="text-xs" :class="chatUnread > 0 ? 'text-rose-500 font-semibold' : 'text-slate-400'">
+          {{ chatUnread > 0 ? `${chatUnread} new message${chatUnread > 1 ? 's' : ''}` : 'Message your club members' }}
+        </p>
       </div>
       <span class="text-slate-300 shrink-0">→</span>
     </RouterLink>
