@@ -385,12 +385,6 @@ const needsClub = computed(() =>
               class="bg-white text-slate-800">{{ c.clubs?.name }}</option>
           </select>
 
-          <RouterLink v-if="currentClub" to="/chat"
-            class="w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0
-                   hover:bg-slate-100 transition" aria-label="Club chat" title="Club chat">
-            💬
-          </RouterLink>
-
           <RouterLink to="/profile" class="w-7 h-7 rounded-full flex items-center justify-center text-xs
             font-bold text-white shrink-0 hover:opacity-80 transition"
             style="background:linear-gradient(135deg,#00b4d8,#9333ea)">
