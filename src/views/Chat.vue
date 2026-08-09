@@ -33,7 +33,9 @@ const fileInput       = ref(null)   // hidden gallery <input type=file>
 const cameraInput     = ref(null)   // hidden camera <input capture>
 const showAttach      = ref(false)  // Camera / Gallery chooser
 const uploadingImage  = ref(false)
-const lightbox        = ref(null)   // full-screen image url
+const lightboxImages  = ref([])     // all full-size image urls in the chat (for swiping)
+const lightboxIdx     = ref(-1)     // -1 = closed
+let lbStartX = 0
 
 const scroller = ref(null)
 const inputEl  = ref(null)
@@ -255,24 +257,30 @@ function fireChatPush(targetClubId, body) {
 }
 
 // ── Image messages (compress → R2 presigned upload → post) ──────────────
-// Shrink to ~1600px WebP so a 4 MB phone photo becomes ~120 KB before upload.
-async function compressImage(file, maxDim = 1600, quality = 0.72) {
-  let bmp = null
-  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }) } catch { /* fallback below */ }
-  const src = bmp || await new Promise((res, rej) => {
-    const img = new Image(); img.onload = () => res(img); img.onerror = rej
-    img.src = URL.createObjectURL(file)
-  })
+// Render a source image to a WebP blob capped at maxDim on the long edge.
+function renderBlob(src, maxDim, quality) {
   let w = src.width, h = src.height
   const scale = Math.min(1, maxDim / Math.max(w, h))
   w = Math.round(w * scale); h = Math.round(h * scale)
   const canvas = document.createElement('canvas')
   canvas.width = w; canvas.height = h
   canvas.getContext('2d').drawImage(src, 0, 0, w, h)
+  return new Promise(res => canvas.toBlob(b => res({ blob: b, width: w, height: h }), 'image/webp', quality))
+}
+// Produce a full image (~1600px, tap-to-view) + a small thumbnail (~480px)
+// for the chat feed so slow connections load the tiny thumb, not the full file.
+async function compressVariants(file) {
+  let bmp = null
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }) } catch { /* fallback below */ }
+  const src = bmp || await new Promise((res, rej) => {
+    const img = new Image(); img.onload = () => res(img); img.onerror = rej
+    img.src = URL.createObjectURL(file)
+  })
+  const full  = await renderBlob(src, 1600, 0.72)
+  const thumb = await renderBlob(src, 480, 0.6)
   bmp?.close?.()
-  const blob = await new Promise(r => canvas.toBlob(r, 'image/webp', quality))
-  if (!blob) throw new Error('Could not process image')
-  return { blob, width: w, height: h }
+  if (!full.blob || !thumb.blob) throw new Error('Could not process image')
+  return { full, thumb }
 }
 
 async function getUploadUrl() {
@@ -289,6 +297,28 @@ async function getUploadUrl() {
 
 function openGallery() { showAttach.value = false; fileInput.value?.click() }
 function openCamera()  { showAttach.value = false; cameraInput.value?.click() }
+
+// ── Full-screen image viewer with swipe between all photos in the chat ───
+function openImage(m) {
+  const list = messages.value.filter(x => x.image_url && !x.deleted).map(x => x.image_url)
+  const idx = list.indexOf(m.image_url)
+  lightboxImages.value = list
+  lightboxIdx.value = idx >= 0 ? idx : 0
+}
+function closeLightbox() { lightboxIdx.value = -1 }
+function nextImg() { const n = lightboxImages.value.length; if (n) lightboxIdx.value = (lightboxIdx.value + 1) % n }
+function prevImg() { const n = lightboxImages.value.length; if (n) lightboxIdx.value = (lightboxIdx.value - 1 + n) % n }
+function lbTouchStart(e) { lbStartX = e.changedTouches[0].clientX }
+function lbTouchEnd(e) {
+  const dx = e.changedTouches[0].clientX - lbStartX
+  if (Math.abs(dx) > 45) (dx < 0 ? nextImg : prevImg)()
+}
+function onLbKey(e) {
+  if (lightboxIdx.value < 0) return
+  if (e.key === 'ArrowRight') nextImg()
+  else if (e.key === 'ArrowLeft') prevImg()
+  else if (e.key === 'Escape') closeLightbox()
+}
 async function onPickImage(e) {
   const file = e.target.files?.[0]
   e.target.value = ''            // allow re-picking the same file
@@ -299,14 +329,17 @@ async function onPickImage(e) {
   errMsg.value = ''
   const replied = replyTo.value
   try {
-    const { blob, width, height } = await compressImage(file)
-    const { uploadUrl, publicUrl } = await getUploadUrl()
-    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: blob })
-    if (!put.ok) throw new Error('Upload failed — please retry')
+    const { full, thumb } = await compressVariants(file)
+    const up = await getUploadUrl()
+    const [putFull, putThumb] = await Promise.all([
+      fetch(up.uploadUrl,      { method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: full.blob }),
+      fetch(up.thumbUploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: thumb.blob }),
+    ])
+    if (!putFull.ok || !putThumb.ok) throw new Error('Upload failed — please retry')
     replyTo.value = null
     const { data: id, error } = await supabase.rpc('post_club_message', {
       p_club_id: clubId.value, p_body: null, p_reply_to: replied?.id ?? null,
-      p_image_url: publicUrl, p_image_w: width, p_image_h: height,
+      p_image_url: up.publicUrl, p_image_w: full.width, p_image_h: full.height, p_thumb_url: up.thumbUrl,
     })
     if (error) throw new Error(error.message)
     if (id && !messages.value.some(m => m.id === id)) {
@@ -317,7 +350,7 @@ async function onPickImage(e) {
         reply_sender: replied ? (isMine(replied) ? myProfile.sender_name : replied.sender_name) : null,
         reply_body: replied ? (replied.deleted ? 'Deleted message' : (replied.body || '📷 Photo')) : null,
         is_forwarded: false, deleted: false, starred: false,
-        image_url: publicUrl, image_w: width, image_h: height,
+        image_url: up.publicUrl, image_w: full.width, image_h: full.height, thumb_url: up.thumbUrl,
       })
       scrollToBottom(true)
     }
@@ -372,6 +405,7 @@ async function doForward(targetClubId) {
   const { error } = await supabase.rpc('post_club_message', {
     p_club_id: targetClubId, p_body: src.body, p_reply_to: null, p_is_forwarded: true,
     p_image_url: src.image_url ?? null, p_image_w: src.image_w ?? null, p_image_h: src.image_h ?? null,
+    p_thumb_url: src.thumb_url ?? null,
   })
   forwarding.value = false
   const target = (clubs.value ?? []).find(c => c.club_id === targetClubId)
@@ -506,6 +540,7 @@ onMounted(() => {
   syncViewport()
   window.visualViewport?.addEventListener('resize', syncViewport)
   window.visualViewport?.addEventListener('scroll', syncViewport)
+  window.addEventListener('keydown', onLbKey)
 })
 watch(clubId, load)
 onBeforeUnmount(() => {
@@ -513,6 +548,7 @@ onBeforeUnmount(() => {
   if (channel) supabase.removeChannel(channel)
   window.visualViewport?.removeEventListener('resize', syncViewport)
   window.visualViewport?.removeEventListener('scroll', syncViewport)
+  window.removeEventListener('keydown', onLbKey)
   cancelAnimationFrame(vvRaf)
 })
 </script>
@@ -608,9 +644,9 @@ onBeforeUnmount(() => {
                 <span class="font-bold block" :class="isMine(m) ? 'text-white/90' : 'text-cyan-700'">{{ m.reply_sender }}</span>
                 <span class="line-clamp-2 opacity-80">{{ m.reply_body }}</span>
               </div>
-              <img v-if="m.image_url" :src="m.image_url" :width="m.image_w" :height="m.image_h"
+              <img v-if="m.image_url" :src="m.thumb_url || m.image_url" :width="m.image_w" :height="m.image_h"
                 class="rounded-xl max-w-[240px] max-h-[320px] w-auto h-auto block cursor-pointer mb-1"
-                loading="lazy" alt="photo" @click.stop="lightbox = m.image_url" />
+                loading="lazy" decoding="async" alt="photo" @click.stop="openImage(m)" />
               <p v-if="m.body" class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
               <p class="text-[9px] mt-0.5 flex items-center gap-1 justify-end" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
                 <span v-if="m.starred" class="text-amber-400">★</span>
@@ -861,10 +897,21 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Full-screen image viewer -->
-    <div v-if="lightbox" class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background:rgba(0,0,0,.92);" @click="lightbox = null">
-      <img :src="lightbox" class="max-w-full max-h-full rounded-lg" alt="photo" @click.stop />
-      <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center" aria-label="Close" @click="lightbox = null">✕</button>
+    <!-- Full-screen image viewer (swipe / arrows to move between photos) -->
+    <div v-if="lightboxIdx >= 0" class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style="background:rgba(0,0,0,.93);" @click="closeLightbox"
+      @touchstart.passive="lbTouchStart" @touchend="lbTouchEnd">
+      <img :src="lightboxImages[lightboxIdx]" class="max-w-full max-h-full rounded-lg select-none" alt="photo" @click.stop />
+
+      <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center" aria-label="Close" @click.stop="closeLightbox">✕</button>
+
+      <template v-if="lightboxImages.length > 1">
+        <button class="absolute left-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 text-white text-2xl flex items-center justify-center active:scale-90" aria-label="Previous" @click.stop="prevImg">‹</button>
+        <button class="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 text-white text-2xl flex items-center justify-center active:scale-90" aria-label="Next" @click.stop="nextImg">›</button>
+        <div class="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/80 text-xs bg-black/40 rounded-full px-3 py-1">
+          {{ lightboxIdx + 1 }} / {{ lightboxImages.length }}
+        </div>
+      </template>
     </div>
 
     <!-- Delete confirmation -->

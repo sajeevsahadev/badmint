@@ -1,0 +1,97 @@
+-- =====================================================================
+-- Badminton 360 v67 — chat image thumbnails (faster load on slow networks)
+-- Run after v66_schema.sql.
+--
+-- Store a small thumbnail alongside the full image; the chat feed shows the
+-- ~20KB thumb, the full-screen viewer loads the full image on demand.
+-- =====================================================================
+
+ALTER TABLE club_messages ADD COLUMN IF NOT EXISTS thumb_url text;
+
+DROP FUNCTION IF EXISTS post_club_message(uuid, text, uuid, boolean, text, int, int);
+CREATE OR REPLACE FUNCTION post_club_message(
+  p_club_id uuid, p_body text, p_reply_to uuid DEFAULT NULL, p_is_forwarded boolean DEFAULT false,
+  p_image_url text DEFAULT NULL, p_image_w int DEFAULT NULL, p_image_h int DEFAULT NULL,
+  p_thumb_url text DEFAULT NULL
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_id uuid; v_body text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM club_members WHERE club_id = p_club_id AND user_id = auth.uid()) THEN
+    RAISE EXCEPTION 'Not a member of this club';
+  END IF;
+  v_body := NULLIF(btrim(coalesce(p_body, '')), '');
+  IF v_body IS NULL AND p_image_url IS NULL THEN
+    RAISE EXCEPTION 'Empty message';
+  END IF;
+  IF p_image_url IS NOT NULL AND p_image_url NOT LIKE 'https://images.badminton360.app/%' THEN
+    RAISE EXCEPTION 'Invalid image URL';
+  END IF;
+  IF p_thumb_url IS NOT NULL AND p_thumb_url NOT LIKE 'https://images.badminton360.app/%' THEN
+    RAISE EXCEPTION 'Invalid thumbnail URL';
+  END IF;
+  IF p_reply_to IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM club_messages WHERE id = p_reply_to AND club_id = p_club_id
+  ) THEN
+    p_reply_to := NULL;
+  END IF;
+  INSERT INTO club_messages (club_id, user_id, body, reply_to, is_forwarded, image_url, image_w, image_h, thumb_url)
+  VALUES (p_club_id, auth.uid(), v_body, p_reply_to, p_is_forwarded, p_image_url, p_image_w, p_image_h, p_thumb_url)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$$;
+
+DROP FUNCTION IF EXISTS get_club_messages(uuid, timestamptz, int);
+CREATE OR REPLACE FUNCTION get_club_messages(p_club_id uuid, p_before timestamptz DEFAULT NULL, p_limit int DEFAULT 40)
+RETURNS TABLE(
+  id uuid, user_id uuid, body text, created_at timestamptz,
+  sender_name text, avatar_url text,
+  reply_to uuid, reply_sender text, reply_body text,
+  is_forwarded boolean, deleted boolean, starred boolean,
+  image_url text, image_w int, image_h int, thumb_url text
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT * FROM (
+    SELECT m.id, m.user_id,
+           CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.body END AS body,
+           m.created_at,
+           COALESCE(NULLIF(up.nickname,''), NULLIF(up.full_name,''),
+                    NULLIF(au.raw_user_meta_data->>'full_name',''),
+                    NULLIF(au.raw_user_meta_data->>'name',''),
+                    NULLIF(split_part(au.email,'@',1),''), 'Player') AS sender_name,
+           COALESCE(up.avatar_url, au.raw_user_meta_data->>'avatar_url', au.raw_user_meta_data->>'picture') AS avatar_url,
+           m.reply_to,
+           CASE WHEN m.reply_to IS NOT NULL THEN chat_display_name(rm.user_id) END AS reply_sender,
+           CASE WHEN m.reply_to IS NOT NULL THEN
+             CASE WHEN rm.deleted_at IS NOT NULL THEN 'Deleted message'
+                  WHEN rm.body IS NOT NULL THEN left(rm.body, 120)
+                  WHEN rm.image_url IS NOT NULL THEN '📷 Photo'
+                  ELSE '' END
+           END AS reply_body,
+           m.is_forwarded,
+           (m.deleted_at IS NOT NULL) AS deleted,
+           (st.user_id IS NOT NULL) AS starred,
+           CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.image_url END AS image_url,
+           m.image_w, m.image_h,
+           CASE WHEN m.deleted_at IS NOT NULL THEN NULL ELSE m.thumb_url END AS thumb_url
+    FROM club_messages m
+    LEFT JOIN user_profiles up ON up.user_id = m.user_id
+    LEFT JOIN auth.users     au ON au.id      = m.user_id
+    LEFT JOIN club_messages  rm ON rm.id      = m.reply_to
+    LEFT JOIN club_message_stars st ON st.message_id = m.id AND st.user_id = auth.uid()
+    WHERE m.club_id = p_club_id
+      AND (EXISTS (SELECT 1 FROM club_members cm
+                   WHERE cm.club_id = p_club_id AND cm.user_id = auth.uid())
+           OR is_app_admin())
+      AND (p_before IS NULL OR m.created_at < p_before)
+    ORDER BY m.created_at DESC
+    LIMIT GREATEST(1, LEAST(p_limit, 100))
+  ) page
+  ORDER BY created_at ASC;
+$$;
+
+REVOKE EXECUTE ON FUNCTION post_club_message(uuid, text, uuid, boolean, text, int, int, text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION get_club_messages(uuid, timestamptz, int)                            FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION post_club_message(uuid, text, uuid, boolean, text, int, int, text)  TO authenticated;
+GRANT  EXECUTE ON FUNCTION get_club_messages(uuid, timestamptz, int)                            TO authenticated;

@@ -2,8 +2,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.20'
 
-// Issues a short-lived presigned R2 PUT URL so the phone uploads a compressed
-// image straight to Cloudflare R2 (bytes never pass through Supabase).
+// Issues short-lived presigned R2 PUT URLs so the phone uploads a compressed
+// image (+ small thumbnail) straight to Cloudflare R2 — bytes never pass
+// through Supabase.
 //
 // Non-secret R2 config is hardcoded on purpose — only the access key + secret
 // live in Edge Function secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY).
@@ -16,7 +17,6 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Readable folder name from the club name; safe URL slug.
 function slugify(name: string): string {
   return (name || '')
     .toLowerCase()
@@ -54,12 +54,21 @@ serve(async (req) => {
     const { data: club } = await admin.from('clubs').select('name').eq('id', club_id).maybeSingle()
     const folder = `${slugify(club?.name ?? '')}-${String(club_id).replace(/-/g, '').slice(0, 8)}`
 
-    const key = `${folder}/${crypto.randomUUID()}.webp`
+    const id = crypto.randomUUID()
+    const key = `${folder}/${id}.webp`
+    const thumbKey = `${folder}/${id}_t.webp`
     const aws = new AwsClient({ accessKeyId: AK, secretAccessKey: SK, service: 's3', region: 'auto' })
-    const endpoint = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${BUCKET}/${key}?X-Amz-Expires=300`
-    const signed = await aws.sign(endpoint, { method: 'PUT', aws: { signQuery: true } })
+    const sign = (k: string) => aws.sign(
+      `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${BUCKET}/${k}?X-Amz-Expires=300`,
+      { method: 'PUT', aws: { signQuery: true } },
+    )
+    const [full, thumb] = await Promise.all([sign(key), sign(thumbKey)])
 
-    return json({ uploadUrl: signed.url, publicUrl: `${PUBLIC_BASE}/${key}`, key })
+    return json({
+      uploadUrl: full.url, publicUrl: `${PUBLIC_BASE}/${key}`,
+      thumbUploadUrl: thumb.url, thumbUrl: `${PUBLIC_BASE}/${thumbKey}`,
+      key,
+    })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
