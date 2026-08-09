@@ -8,7 +8,7 @@ import ToggleSwitch from '../../components/ToggleSwitch.vue'
 
 const router = useRouter()
 const { user } = useAuth()
-const { isSupported, subscribe, isSubscribed } = usePushNotifications()
+const { isSupported, subscribe, isSubscribed, getPermission } = usePushNotifications()
 
 const loading       = ref(true)
 const saving        = ref(false)
@@ -16,6 +16,7 @@ const saved         = ref(false)
 const subscribed    = ref(false)
 const subscribing   = ref(false)
 const subscribeErr  = ref('')
+const permission    = ref('default')   // 'default' | 'granted' | 'denied'
 
 const prefs = ref({
   chat_messages: true,
@@ -42,6 +43,7 @@ onMounted(async () => {
   ])
   if (data?.push_prefs) prefs.value = { ...prefs.value, ...data.push_prefs }
   subscribed.value = subbed
+  if (isSupported) permission.value = await getPermission()
   loading.value = false
 })
 
@@ -54,6 +56,7 @@ async function enablePush() {
   } catch (e) {
     subscribeErr.value = e.message
   }
+  if (isSupported) permission.value = await getPermission()
   subscribing.value = false
 }
 
@@ -99,6 +102,17 @@ async function save() {
           <span v-else class="text-xs font-bold text-emerald-600 shrink-0">✓ On</span>
         </div>
         <p v-if="subscribeErr" class="text-xs text-rose-500 mt-2">⚠ {{ subscribeErr }}</p>
+
+        <!-- Blocked: tell the user exactly how to re-enable it -->
+        <div v-if="permission === 'denied'" class="mt-2 rounded-xl px-3 py-2.5 text-[11px] leading-relaxed text-amber-800"
+          style="background:#fff7ed; border:1px solid #fed7aa;">
+          <p class="font-semibold mb-1">Notifications are blocked for this app.</p>
+          <p>To turn them on:</p>
+          <p class="mt-1">1. Open your phone's <strong>Settings → Apps → Badminton 360 → Notifications</strong></p>
+          <p>2. Turn <strong>Allow notifications</strong> on</p>
+          <p>3. Come back here and tap <strong>Enable</strong> again</p>
+        </div>
+
         <p class="text-[11px] text-slate-400 mt-3 leading-relaxed">
           Notifications work across all your clubs on this device.
         </p>
