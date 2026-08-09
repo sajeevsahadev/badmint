@@ -29,7 +29,9 @@ const showStarredOnly = ref(false)
 const infoFor         = ref(null)   // message whose read-receipt info is open
 const infoRows        = ref([])
 const infoLoading     = ref(false)
-const fileInput       = ref(null)   // hidden <input type=file>
+const fileInput       = ref(null)   // hidden gallery <input type=file>
+const cameraInput     = ref(null)   // hidden camera <input capture>
+const showAttach      = ref(false)  // Camera / Gallery chooser
 const uploadingImage  = ref(false)
 const lightbox        = ref(null)   // full-screen image url
 
@@ -285,7 +287,8 @@ async function getUploadUrl() {
   return await resp.json()
 }
 
-function pickImage() { fileInput.value?.click() }
+function openGallery() { showAttach.value = false; fileInput.value?.click() }
+function openCamera()  { showAttach.value = false; cameraInput.value?.click() }
 async function onPickImage(e) {
   const file = e.target.files?.[0]
   e.target.value = ''            // allow re-picking the same file
@@ -646,10 +649,37 @@ onBeforeUnmount(() => {
       <button v-for="e in EMOJIS" :key="e" class="text-2xl shrink-0 hover:scale-110 transition" @click="addEmoji(e)">{{ e }}</button>
     </div>
 
+    <!-- Attach chooser: Camera / Gallery -->
+    <div v-if="showAttach" class="fixed inset-0 z-30" @click="showAttach = false"></div>
+    <div v-if="clubId && showAttach"
+      class="relative z-40 shrink-0 flex items-center gap-2 px-3 py-2.5 bg-white border-t border-slate-200"
+      style="box-shadow:0 -2px 10px rgba(0,0,0,.06);">
+      <button class="flex items-center gap-2 px-3 py-2 rounded-2xl hover:bg-slate-50 active:scale-95 transition" @click="openCamera">
+        <span class="w-9 h-9 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8.5A2 2 0 0 1 6 6.5h1.4l.9-1.5h5.4l.9 1.5H18a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
+            <circle cx="12" cy="12.5" r="3.2"/>
+          </svg>
+        </span>
+        <span class="text-sm font-medium text-slate-700">Camera</span>
+      </button>
+      <button class="flex items-center gap-2 px-3 py-2 rounded-2xl hover:bg-slate-50 active:scale-95 transition" @click="openGallery">
+        <span class="w-9 h-9 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="5" width="16" height="14" rx="3"/>
+            <circle cx="9" cy="10" r="1.5"/>
+            <path d="M20 15.5 15.5 11 7 19"/>
+          </svg>
+        </span>
+        <span class="text-sm font-medium text-slate-700">Gallery</span>
+      </button>
+      <button class="ml-auto w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 flex items-center justify-center" aria-label="Close" @click="showAttach = false">✕</button>
+    </div>
+
     <!-- Uploading a photo -->
     <div v-if="clubId && uploadingImage" class="shrink-0 flex items-center gap-2 px-3 py-2 bg-white border-t border-slate-100 text-xs text-slate-500">
       <span class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 border-t-cyan-500 animate-spin"></span>
-      Compressing &amp; sending photo…
+      Sending photo…
     </div>
 
     <!-- Reply preview (above input) -->
@@ -667,10 +697,11 @@ onBeforeUnmount(() => {
     <div v-if="clubId" class="shrink-0 flex items-end gap-2 px-3 pt-2.5"
       style="background:#ffffff; border-top:1px solid rgba(15,23,42,.08); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);">
       <button class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0 hover:bg-slate-100 transition"
-        aria-label="Emojis" @click="showEmoji = !showEmoji">😊</button>
+        aria-label="Emojis" @click="showEmoji = !showEmoji; showAttach = false">😊</button>
       <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onPickImage" />
+      <input ref="cameraInput" type="file" accept="image/*" capture="environment" class="hidden" @change="onPickImage" />
       <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 hover:bg-slate-100 transition disabled:opacity-40"
-        aria-label="Add photo" :disabled="uploadingImage" @click="pickImage">
+        aria-label="Add photo" :disabled="uploadingImage" @click="showAttach = !showAttach; showEmoji = false">
         <svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-slate-500" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="16" rx="3.5"/>
           <circle cx="8.5" cy="9.5" r="1.6"/>
