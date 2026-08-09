@@ -319,12 +319,27 @@ function onLbKey(e) {
   else if (e.key === 'ArrowLeft') prevImg()
   else if (e.key === 'Escape') closeLightbox()
 }
-async function onPickImage(e) {
+function onPickImage(e) {
   const file = e.target.files?.[0]
   e.target.value = ''            // allow re-picking the same file
+  uploadImageFile(file)
+}
+// Paste an image straight into the chat (Ctrl/Cmd+V, or mobile keyboard paste).
+function onPasteImage(e) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const it of items) {
+    if (it.type?.startsWith('image/')) {
+      const file = it.getAsFile()
+      if (file) { e.preventDefault(); uploadImageFile(file); return }
+    }
+  }
+}
+async function uploadImageFile(file) {
   if (!file || !clubId.value) return
   if (!file.type.startsWith('image/')) { errMsg.value = 'Only images can be sent.'; return }
   if (file.size > 25 * 1024 * 1024) { errMsg.value = 'Image is too large (max 25 MB).'; return }
+  if (uploadingImage.value) return   // one upload at a time
   uploadingImage.value = true
   errMsg.value = ''
   const replied = replyTo.value
@@ -749,6 +764,7 @@ onBeforeUnmount(() => {
         class="input flex-1 min-w-0 resize-none max-h-28 py-2.5"
         @input="autoGrow"
         @focus="onInputFocus"
+        @paste="onPasteImage"
         @keydown.enter="onEnterKey" />
       <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white transition active:scale-95 disabled:opacity-40"
         style="background:linear-gradient(135deg,#00b4d8,#0088b3);"
