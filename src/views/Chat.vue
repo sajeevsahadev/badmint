@@ -29,6 +29,9 @@ const showStarredOnly = ref(false)
 const infoFor         = ref(null)   // message whose read-receipt info is open
 const infoRows        = ref([])
 const infoLoading     = ref(false)
+const fileInput       = ref(null)   // hidden <input type=file>
+const uploadingImage  = ref(false)
+const lightbox        = ref(null)   // full-screen image url
 
 const scroller = ref(null)
 const inputEl  = ref(null)
@@ -183,7 +186,7 @@ function subscribe() {
           ...row,
           sender_name: sender.sender_name, avatar_url: sender.avatar_url,
           reply_sender: replied ? replied.sender_name : null,
-          reply_body: replied ? (replied.deleted ? 'Deleted message' : replied.body) : null,
+          reply_body: replied ? (replied.deleted ? 'Deleted message' : (replied.body || (replied.image_url ? '📷 Photo' : ''))) : null,
           deleted: false, starred: false,
         })
         if (nearBottom || isMine(row)) scrollToBottom(true)
@@ -233,16 +236,93 @@ async function send() {
     })
     scrollToBottom(true)
   }
-  // Fire push to other members (non-blocking)
+  fireChatPush(clubId.value, body)
+  inputEl.value?.focus()
+}
+
+// Fire a chat push to a club's other members (non-blocking).
+function fireChatPush(targetClubId, body) {
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (!session) return
     fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-chat`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ club_id: clubId.value, body }),
+      body: JSON.stringify({ club_id: targetClubId, body }),
     }).catch(() => {})
   })
-  inputEl.value?.focus()
+}
+
+// ── Image messages (compress → R2 presigned upload → post) ──────────────
+// Shrink to ~1600px WebP so a 4 MB phone photo becomes ~120 KB before upload.
+async function compressImage(file, maxDim = 1600, quality = 0.72) {
+  let bmp = null
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }) } catch { /* fallback below */ }
+  const src = bmp || await new Promise((res, rej) => {
+    const img = new Image(); img.onload = () => res(img); img.onerror = rej
+    img.src = URL.createObjectURL(file)
+  })
+  let w = src.width, h = src.height
+  const scale = Math.min(1, maxDim / Math.max(w, h))
+  w = Math.round(w * scale); h = Math.round(h * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w; canvas.height = h
+  canvas.getContext('2d').drawImage(src, 0, 0, w, h)
+  bmp?.close?.()
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/webp', quality))
+  if (!blob) throw new Error('Could not process image')
+  return { blob, width: w, height: h }
+}
+
+async function getUploadUrl() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not signed in')
+  const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/r2-upload-url`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ club_id: clubId.value }),
+  })
+  if (!resp.ok) throw new Error('Could not start upload')
+  return await resp.json()
+}
+
+function pickImage() { fileInput.value?.click() }
+async function onPickImage(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''            // allow re-picking the same file
+  if (!file || !clubId.value) return
+  if (!file.type.startsWith('image/')) { errMsg.value = 'Only images can be sent.'; return }
+  if (file.size > 25 * 1024 * 1024) { errMsg.value = 'Image is too large (max 25 MB).'; return }
+  uploadingImage.value = true
+  errMsg.value = ''
+  const replied = replyTo.value
+  try {
+    const { blob, width, height } = await compressImage(file)
+    const { uploadUrl, publicUrl } = await getUploadUrl()
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/webp' }, body: blob })
+    if (!put.ok) throw new Error('Upload failed — please retry')
+    replyTo.value = null
+    const { data: id, error } = await supabase.rpc('post_club_message', {
+      p_club_id: clubId.value, p_body: null, p_reply_to: replied?.id ?? null,
+      p_image_url: publicUrl, p_image_w: width, p_image_h: height,
+    })
+    if (error) throw new Error(error.message)
+    if (id && !messages.value.some(m => m.id === id)) {
+      messages.value.push({
+        id, user_id: user.value.id, body: null, created_at: new Date().toISOString(),
+        sender_name: myProfile.sender_name, avatar_url: myProfile.avatar_url,
+        reply_to: replied?.id ?? null,
+        reply_sender: replied ? (isMine(replied) ? myProfile.sender_name : replied.sender_name) : null,
+        reply_body: replied ? (replied.deleted ? 'Deleted message' : (replied.body || '📷 Photo')) : null,
+        is_forwarded: false, deleted: false, starred: false,
+        image_url: publicUrl, image_w: width, image_h: height,
+      })
+      scrollToBottom(true)
+    }
+    fireChatPush(clubId.value, '📷 Photo')
+  } catch (err) {
+    errMsg.value = err.message || 'Could not send image'
+  }
+  uploadingImage.value = false
 }
 
 // ── Action sheet (long-press) ───────────────────────────────────────────
@@ -285,23 +365,16 @@ function cancelForward() { forwardMsg.value = null }
 async function doForward(targetClubId) {
   if (forwarding.value || !forwardMsg.value) return
   forwarding.value = true
-  const body = forwardMsg.value.body
+  const src = forwardMsg.value
   const { error } = await supabase.rpc('post_club_message', {
-    p_club_id: targetClubId, p_body: body, p_reply_to: null, p_is_forwarded: true,
+    p_club_id: targetClubId, p_body: src.body, p_reply_to: null, p_is_forwarded: true,
+    p_image_url: src.image_url ?? null, p_image_w: src.image_w ?? null, p_image_h: src.image_h ?? null,
   })
   forwarding.value = false
   const target = (clubs.value ?? []).find(c => c.club_id === targetClubId)
   forwardMsg.value = null
   if (error) { errMsg.value = error.message; return }
-  // Push to the target club's members
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (!session) return
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-chat`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ club_id: targetClubId, body }),
-    }).catch(() => {})
-  })
+  fireChatPush(targetClubId, src.body || '📷 Photo')
   errMsg.value = ''
   // Brief confirmation
   const name = target?.clubs?.name ?? 'club'
@@ -532,7 +605,10 @@ onBeforeUnmount(() => {
                 <span class="font-bold block" :class="isMine(m) ? 'text-white/90' : 'text-cyan-700'">{{ m.reply_sender }}</span>
                 <span class="line-clamp-2 opacity-80">{{ m.reply_body }}</span>
               </div>
-              <p class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
+              <img v-if="m.image_url" :src="m.image_url" :width="m.image_w" :height="m.image_h"
+                class="rounded-xl max-w-[240px] max-h-[320px] w-auto h-auto block cursor-pointer mb-1"
+                loading="lazy" alt="photo" @click.stop="lightbox = m.image_url" />
+              <p v-if="m.body" class="text-sm leading-snug break-words whitespace-pre-wrap">{{ m.body }}</p>
               <p class="text-[9px] mt-0.5 flex items-center gap-1 justify-end" :class="isMine(m) ? 'text-white/70' : 'text-slate-400'">
                 <span v-if="m.starred" class="text-amber-400">★</span>
                 {{ fmtTime(m.created_at) }}
@@ -570,6 +646,12 @@ onBeforeUnmount(() => {
       <button v-for="e in EMOJIS" :key="e" class="text-2xl shrink-0 hover:scale-110 transition" @click="addEmoji(e)">{{ e }}</button>
     </div>
 
+    <!-- Uploading a photo -->
+    <div v-if="clubId && uploadingImage" class="shrink-0 flex items-center gap-2 px-3 py-2 bg-white border-t border-slate-100 text-xs text-slate-500">
+      <span class="w-3.5 h-3.5 rounded-full border-2 border-slate-300 border-t-cyan-500 animate-spin"></span>
+      Compressing &amp; sending photo…
+    </div>
+
     <!-- Reply preview (above input) -->
     <div v-if="clubId && replyTo" class="shrink-0 flex items-center gap-2 px-3 py-2 bg-white border-t border-slate-200">
       <div class="w-1 self-stretch rounded-full bg-cyan-400 shrink-0"></div>
@@ -586,6 +668,15 @@ onBeforeUnmount(() => {
       style="background:#ffffff; border-top:1px solid rgba(15,23,42,.08); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);">
       <button class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0 hover:bg-slate-100 transition"
         aria-label="Emojis" @click="showEmoji = !showEmoji">😊</button>
+      <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onPickImage" />
+      <button class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 hover:bg-slate-100 transition disabled:opacity-40"
+        aria-label="Add photo" :disabled="uploadingImage" @click="pickImage">
+        <svg viewBox="0 0 24 24" class="w-[22px] h-[22px] text-slate-500" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="3.5"/>
+          <circle cx="8.5" cy="9.5" r="1.6"/>
+          <path d="M20.5 15.5 16 11l-8.5 8.5"/>
+        </svg>
+      </button>
       <textarea ref="inputEl" v-model="draft" rows="1" maxlength="2000"
         placeholder="Message…"
         class="input flex-1 min-w-0 resize-none max-h-28 py-2.5"
@@ -737,6 +828,12 @@ onBeforeUnmount(() => {
           </template>
         </div>
       </div>
+    </div>
+
+    <!-- Full-screen image viewer -->
+    <div v-if="lightbox" class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background:rgba(0,0,0,.92);" @click="lightbox = null">
+      <img :src="lightbox" class="max-w-full max-h-full rounded-lg" alt="photo" @click.stop />
+      <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center" aria-label="Close" @click="lightbox = null">✕</button>
     </div>
 
     <!-- Delete confirmation -->
