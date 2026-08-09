@@ -1,14 +1,27 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import Avatar from '../components/Avatar.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { user } = useAuth()
-const { currentClub, clubs, isManager } = useClub()
+const { currentClub, clubs, selectClub, isManager } = useClub()
+
+// When opened from a push notification (/chat?club=<id>), switch to the club
+// the message came from — not whatever club happens to be selected.
+function applyClubFromQuery() {
+  const cid = route.query.club
+  if (!cid) return
+  const target = (clubs.value ?? []).find(c => c.club_id === cid)
+  if (target) {
+    if (currentClub.value?.club_id !== cid) selectClub(target)
+    router.replace({ query: {} })   // consume it so later manual switches aren't overridden
+  }
+}
 
 const messages   = ref([])          // oldest → newest
 const draft      = ref('')
@@ -551,6 +564,7 @@ function syncViewport() {
 
 onMounted(() => {
   makeChatBackground()
+  applyClubFromQuery()
   load()
   syncViewport()
   window.visualViewport?.addEventListener('resize', syncViewport)
@@ -558,6 +572,10 @@ onMounted(() => {
   window.addEventListener('keydown', onLbKey)
 })
 watch(clubId, load)
+// Cold start from a notification: clubs load after mount → apply then.
+watch(clubs, applyClubFromQuery)
+// App already open and a new /chat?club=<id> notification is tapped (query-only change).
+watch(() => route.query.club, applyClubFromQuery)
 onBeforeUnmount(() => {
   markRead()
   if (channel) supabase.removeChannel(channel)
