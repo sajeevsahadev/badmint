@@ -16,7 +16,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'sw-push.js'],
+      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'badge.png', 'sw-push.js'],
       workbox: {
         clientsClaim: true,
         importScripts: ['sw-push.js']

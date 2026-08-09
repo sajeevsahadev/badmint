@@ -10,7 +10,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title || 'Badminton 360', {
       body:    data.body  || 'You have a new update.',
       icon:    '/icon-192.png',
-      badge:   '/icon-192.png',
+      badge:   '/badge.png',   // monochrome silhouette for the Android status bar
       data:    { url: data.url || '/' },
       tag:     data.tag  || 'b360',
       renotify: true

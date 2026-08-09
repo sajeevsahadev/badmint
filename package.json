@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "generate:icons": "node scripts/generate-icons.js",
+    "generate:badge": "node scripts/generate-badge.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
