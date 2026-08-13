@@ -13,6 +13,56 @@ const tab = ref('stats')
 function switchTab(t) {
   tab.value = t; err.value = ''
   if (t === 'security' && !sessions.value.length) loadSessions()
+  if (t === 'blog' && !blogPosts.value.length) loadBlog()
+}
+
+// ── Blog ──
+const blogPosts   = ref([])
+const blogLoading = ref(false)
+const blogSaving  = ref(false)
+const blogMsg     = ref('')
+const blankPost = () => ({ id: null, slug: '', title: '', excerpt: '', cover_url: '', body: '', meta_description: '', keywords: '', published: true })
+const editingPost = ref(blankPost())
+
+function slugify(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+}
+async function loadBlog() {
+  blogLoading.value = true
+  const { data } = await supabase.from('blog_posts')
+    .select('id, slug, title, excerpt, cover_url, body, meta_description, keywords, published, created_at')
+    .order('created_at', { ascending: false })
+  blogPosts.value = data ?? []
+  blogLoading.value = false
+}
+function newPost()  { editingPost.value = blankPost(); blogMsg.value = '' }
+function editPost(p) { editingPost.value = { ...p }; blogMsg.value = '' }
+async function savePost() {
+  const p = editingPost.value
+  if (!p.title.trim() || !p.body.trim()) { blogMsg.value = 'Title and body are required.'; return }
+  if (!p.slug.trim()) p.slug = slugify(p.title)
+  blogSaving.value = true; blogMsg.value = ''
+  const row = {
+    slug: p.slug.trim(), title: p.title.trim(), excerpt: p.excerpt?.trim() || null,
+    cover_url: p.cover_url?.trim() || null, body: p.body, meta_description: p.meta_description?.trim() || null,
+    keywords: p.keywords?.trim() || null, published: p.published,
+  }
+  const q = p.id
+    ? supabase.from('blog_posts').update(row).eq('id', p.id)
+    : supabase.from('blog_posts').insert(row)
+  const { error } = await q
+  blogSaving.value = false
+  if (error) { blogMsg.value = error.message; return }
+  blogMsg.value = '✅ Saved'
+  await loadBlog()
+  editingPost.value = blankPost()
+}
+async function deletePost(p) {
+  if (!confirm(`Delete "${p.title}"? This cannot be undone.`)) return
+  const { error } = await supabase.from('blog_posts').delete().eq('id', p.id)
+  if (error) { blogMsg.value = error.message; return }
+  await loadBlog()
+  if (editingPost.value.id === p.id) editingPost.value = blankPost()
 }
 
 const TABS = [
@@ -25,6 +75,7 @@ const TABS = [
   { v: 'announcements', l: '📢 Announcements' },
   { v: 'security',    l: '🔐 Security' },
   { v: 'chats',       l: '💬 Chats' },
+  { v: 'blog',        l: '✍️ Blog' },
 ]
 
 // ── Data ──
@@ -727,6 +778,77 @@ const statItems = computed(() => !stats.value ? [] : [
               </p>
               <p class="text-sm text-slate-600 break-words whitespace-pre-wrap">{{ m.body }}</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════ BLOG ══════════════ -->
+      <div v-if="tab === 'blog'" class="space-y-4 fade-up">
+        <div class="flex items-center justify-between">
+          <p class="text-sm text-slate-500">Write posts for <RouterLink to="/blog" class="text-neon font-semibold">/blog</RouterLink> (public + SEO).</p>
+          <button class="btn-primary text-xs px-3 py-1.5" @click="newPost">＋ New post</button>
+        </div>
+
+        <!-- Editor -->
+        <div class="card p-4 space-y-3">
+          <p class="font-bold text-slate-700 text-sm">{{ editingPost.id ? 'Edit post' : 'New post' }}</p>
+          <div>
+            <label class="label">Title</label>
+            <input v-model="editingPost.title" class="input" placeholder="How to…"
+              @blur="!editingPost.slug && (editingPost.slug = slugify(editingPost.title))" />
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Slug (URL)</label>
+              <input v-model="editingPost.slug" class="input" placeholder="how-to-track-matches" />
+            </div>
+            <div>
+              <label class="label">Cover image URL</label>
+              <input v-model="editingPost.cover_url" class="input" placeholder="https://…/cover.png" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Excerpt (short summary)</label>
+            <input v-model="editingPost.excerpt" class="input" maxlength="200" placeholder="One-line teaser shown on cards" />
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Meta description (SEO, ~155 chars)</label>
+              <input v-model="editingPost.meta_description" class="input" maxlength="170" />
+            </div>
+            <div>
+              <label class="label">Keywords (comma-separated)</label>
+              <input v-model="editingPost.keywords" class="input" placeholder="badminton, score tracking, …" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Body (HTML — use &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;&lt;li&gt;, &lt;strong&gt;, &lt;a&gt;)</label>
+            <textarea v-model="editingPost.body" rows="10" class="input font-mono text-xs" placeholder="<p>Your article…</p>"></textarea>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" v-model="editingPost.published" /> Published
+          </label>
+          <div class="flex items-center gap-3">
+            <button class="btn-primary px-5 py-2 text-sm" :disabled="blogSaving" @click="savePost">
+              {{ blogSaving ? 'Saving…' : (editingPost.id ? 'Update post' : 'Publish post') }}
+            </button>
+            <button v-if="editingPost.id" class="btn-ghost px-4 py-2 text-sm" @click="newPost">Cancel</button>
+            <span v-if="blogMsg" class="text-xs" :class="blogMsg.startsWith('✅') ? 'text-emerald-600' : 'text-rose-500'">{{ blogMsg }}</span>
+          </div>
+        </div>
+
+        <!-- Existing posts -->
+        <div v-if="blogLoading" class="card p-6 text-center text-sm text-slate-400">Loading…</div>
+        <div v-else-if="!blogPosts.length" class="card p-6 text-center text-sm text-slate-400">No posts yet.</div>
+        <div v-else class="space-y-2">
+          <div v-for="p in blogPosts" :key="p.id" class="card p-3 flex items-center gap-3">
+            <img v-if="p.cover_url" :src="p.cover_url" alt="" class="w-14 h-10 rounded object-cover shrink-0" />
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-slate-700 truncate">{{ p.title }}</p>
+              <p class="text-[11px] text-slate-400">/blog/{{ p.slug }} · {{ p.published ? 'Published' : 'Draft' }}</p>
+            </div>
+            <button class="btn-ghost text-xs px-2 py-1" @click="editPost(p)">Edit</button>
+            <button class="text-xs px-2 py-1 text-rose-500 hover:bg-rose-50 rounded" @click="deletePost(p)">Delete</button>
           </div>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { useGeo } from '../composables/useGeo'
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
+import { applySeo, setJsonLd } from '../lib/seo'
 
 const { avatarMap, loadAvatars } = usePlayerAvatars()
 const router = useRouter()
@@ -121,7 +122,25 @@ function switchMyClub(clubId) {
 
 function goLogin() { router.push('/login') }
 
-onMounted(() => { load(); detectCountry() })
+onMounted(() => {
+  load(); detectCountry()
+  applySeo({
+    title: 'Badminton 360 — Free Badminton App for Match & Score Tracking',
+    description: 'Free badminton app for clubs and players: track matches and scores, get automatic Elo rankings, chat, split court fees and run tournaments. Works on any court, anywhere.',
+    keywords: 'badminton, shuttle, badminton apps, badminton match tracking, badminton score tracking, elo rankings, badminton club, doubles, leaderboard',
+    path: '/',
+  })
+  setJsonLd('ld-home', {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Badminton 360',
+    applicationCategory: 'SportsApplication',
+    operatingSystem: 'Web, Android, iOS',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: 'Free badminton app for match and score tracking, Elo rankings, club chat, expense splitting and tournaments.',
+    url: 'https://badminton360.app',
+  })
+})
 </script>
 
 <template>
@@ -286,6 +305,46 @@ onMounted(() => { load(); detectCountry() })
             <p class="text-xs text-slate-400 mb-4">No downloads, no fees, no spreadsheets. Just badminton.</p>
             <RouterLink to="/login" class="btn-primary px-8">Get Started — It's Free</RouterLink>
           </div>
+
+          <!-- ── Badminton facts (engaging + keyword-rich) ── -->
+          <div class="mt-8 fade-up">
+            <h2 class="font-display font-extrabold text-slate-800 text-lg text-center mb-1">Did you know? 🏸</h2>
+            <p class="text-xs text-slate-400 text-center mb-4">A few things that make badminton the fastest racquet sport on earth.</p>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div class="card p-4">
+                <div class="text-2xl mb-1">💨</div>
+                <p class="text-sm font-bold text-slate-700">The fastest hit in sport</p>
+                <p class="text-xs text-slate-500 mt-0.5">A smashed shuttle has been clocked over 490 km/h — faster than any ball in tennis, cricket or golf.</p>
+              </div>
+              <div class="card p-4">
+                <div class="text-2xl mb-1">🪶</div>
+                <p class="text-sm font-bold text-slate-700">16 feathers, always</p>
+                <p class="text-xs text-slate-500 mt-0.5">A traditional shuttle uses 16 feathers, usually from the left wing of a goose, for a true, consistent flight.</p>
+              </div>
+              <div class="card p-4">
+                <div class="text-2xl mb-1">🏸</div>
+                <p class="text-sm font-bold text-slate-700">A serious workout</p>
+                <p class="text-xs text-slate-500 mt-0.5">A single competitive match can cover over 6 km of movement — great cardio disguised as fun.</p>
+              </div>
+              <div class="card p-4">
+                <div class="text-2xl mb-1">📈</div>
+                <p class="text-sm font-bold text-slate-700">Tracking = improving</p>
+                <p class="text-xs text-slate-500 mt-0.5">Players who track scores and rankings improve faster — because you can only beat what you measure.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── From the blog ── -->
+          <RouterLink to="/blog" class="card overflow-hidden flex flex-col sm:flex-row items-stretch mt-6 fade-up hover:-translate-y-0.5 hover:shadow-lg transition-all group">
+            <img src="/blog/track-badminton-matches.png" alt="How to track your badminton matches" loading="lazy"
+              class="w-full sm:w-40 h-32 sm:h-auto object-cover shrink-0" />
+            <div class="p-4">
+              <p class="text-[11px] font-semibold text-neon mb-0.5">FROM THE BLOG</p>
+              <p class="font-display font-bold text-slate-800 leading-snug group-hover:text-neon transition">How to Track Your Badminton Matches (and Actually Improve)</p>
+              <p class="text-xs text-slate-500 mt-1 line-clamp-2">Keep score properly, rank players fairly with Elo, and stop losing your results to the group chat.</p>
+              <span class="inline-block mt-2 text-xs font-semibold text-neon">Read all articles →</span>
+            </div>
+          </RouterLink>
         </div>
       </template>
 

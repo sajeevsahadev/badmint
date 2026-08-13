@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "generate:icons": "node scripts/generate-icons.js",
     "generate:badge": "node scripts/generate-badge.js",
+    "generate:blog-cover": "node scripts/generate-blog-cover.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

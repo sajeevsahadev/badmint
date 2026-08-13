@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://badmint.vercel.app/sitemap.xml
+Sitemap: https://badminton360.app/sitemap.xml
