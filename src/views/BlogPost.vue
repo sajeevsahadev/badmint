@@ -15,7 +15,7 @@ async function load() {
   loading.value = true; notFound.value = false; post.value = null
   const { data } = await supabase
     .from('blog_posts')
-    .select('slug, title, excerpt, cover_url, body, meta_description, keywords, author, created_at, updated_at')
+    .select('slug, title, excerpt, cover_url, body, meta_description, keywords, author, publish_at, updated_at')
     .eq('slug', route.params.slug)
     .eq('published', true)
     .maybeSingle()
@@ -39,7 +39,7 @@ async function load() {
     image: data.cover_url ? [data.cover_url] : undefined,
     author: { '@type': 'Organization', name: data.author || 'Badminton 360' },
     publisher: { '@type': 'Organization', name: 'Badminton 360', logo: { '@type': 'ImageObject', url: `${SEO_BASE}/icon-512.png` } },
-    datePublished: data.created_at,
+    datePublished: data.publish_at,
     dateModified: data.updated_at,
     mainEntityOfPage: `${SEO_BASE}/blog/${data.slug}`,
   })
@@ -74,7 +74,7 @@ watch(() => route.params.slug, load)
       <div class="max-w-2xl mx-auto px-5 -mt-16 relative">
         <div class="card p-6 sm:p-8">
           <RouterLink to="/blog" class="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-neon transition mb-4">‹ Blog</RouterLink>
-          <p class="text-xs text-slate-400 mb-2">{{ fmtDate(post.created_at) }} · {{ post.author }}</p>
+          <p class="text-xs text-slate-400 mb-2">{{ fmtDate(post.publish_at) }} · {{ post.author }}</p>
           <h1 class="font-display text-2xl sm:text-3xl font-extrabold text-slate-800 leading-tight mb-4">{{ post.title }}</h1>
           <!-- Post body (trusted admin-authored HTML) -->
           <div class="blog-content" v-html="post.body"></div>

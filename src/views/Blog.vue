@@ -27,9 +27,9 @@ onMounted(async () => {
 
   const { data } = await supabase
     .from('blog_posts')
-    .select('slug, title, excerpt, cover_url, author, created_at')
+    .select('slug, title, excerpt, cover_url, author, publish_at')
     .eq('published', true)
-    .order('created_at', { ascending: false })
+    .order('publish_at', { ascending: false })
   posts.value = data ?? []
   loading.value = false
 })
@@ -70,7 +70,7 @@ onMounted(async () => {
             <div v-else class="w-full h-full grid place-items-center text-4xl">🏸</div>
           </div>
           <div class="p-4">
-            <p class="text-[11px] text-slate-400 mb-1">{{ fmtDate(p.created_at) }} · {{ p.author }}</p>
+            <p class="text-[11px] text-slate-400 mb-1">{{ fmtDate(p.publish_at) }} · {{ p.author }}</p>
             <h2 class="font-display font-bold text-slate-800 leading-snug group-hover:text-neon transition">{{ p.title }}</h2>
             <p v-if="p.excerpt" class="text-sm text-slate-500 mt-1.5 line-clamp-2">{{ p.excerpt }}</p>
             <span class="inline-block mt-3 text-xs font-semibold text-neon">Read more →</span>

@@ -21,22 +21,32 @@ const blogPosts   = ref([])
 const blogLoading = ref(false)
 const blogSaving  = ref(false)
 const blogMsg     = ref('')
-const blankPost = () => ({ id: null, slug: '', title: '', excerpt: '', cover_url: '', body: '', meta_description: '', keywords: '', published: true })
+const blankPost = () => ({ id: null, slug: '', title: '', excerpt: '', cover_url: '', body: '', meta_description: '', keywords: '', published: true, publish_at: '' })
 const editingPost = ref(blankPost())
 
 function slugify(s) {
   return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
 }
+// ISO → value for <input type=datetime-local> in local time
+function toLocalInput(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+const isScheduled = p => p.publish_at && new Date(p.publish_at) > new Date()
+const fmtSchedule = iso => new Date(iso).toLocaleString('en', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
 async function loadBlog() {
   blogLoading.value = true
   const { data } = await supabase.from('blog_posts')
-    .select('id, slug, title, excerpt, cover_url, body, meta_description, keywords, published, created_at')
-    .order('created_at', { ascending: false })
+    .select('id, slug, title, excerpt, cover_url, body, meta_description, keywords, published, publish_at')
+    .order('publish_at', { ascending: false })
   blogPosts.value = data ?? []
   blogLoading.value = false
 }
 function newPost()  { editingPost.value = blankPost(); blogMsg.value = '' }
-function editPost(p) { editingPost.value = { ...p }; blogMsg.value = '' }
+function editPost(p) { editingPost.value = { ...p, publish_at: toLocalInput(p.publish_at) }; blogMsg.value = '' }
 async function savePost() {
   const p = editingPost.value
   if (!p.title.trim() || !p.body.trim()) { blogMsg.value = 'Title and body are required.'; return }
@@ -46,6 +56,7 @@ async function savePost() {
     slug: p.slug.trim(), title: p.title.trim(), excerpt: p.excerpt?.trim() || null,
     cover_url: p.cover_url?.trim() || null, body: p.body, meta_description: p.meta_description?.trim() || null,
     keywords: p.keywords?.trim() || null, published: p.published,
+    publish_at: p.publish_at ? new Date(p.publish_at).toISOString() : new Date().toISOString(),
   }
   const q = p.id
     ? supabase.from('blog_posts').update(row).eq('id', p.id)
@@ -825,9 +836,16 @@ const statItems = computed(() => !stats.value ? [] : [
             <label class="label">Body (HTML — use &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;&lt;li&gt;, &lt;strong&gt;, &lt;a&gt;)</label>
             <textarea v-model="editingPost.body" rows="10" class="input font-mono text-xs" placeholder="<p>Your article…</p>"></textarea>
           </div>
-          <label class="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" v-model="editingPost.published" /> Published
-          </label>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label">Publish date &amp; time (leave empty = now)</label>
+              <input v-model="editingPost.publish_at" type="datetime-local" class="input" />
+              <p class="text-[11px] text-slate-400 mt-1">A future time schedules the post — it stays hidden until then.</p>
+            </div>
+            <label class="flex items-end gap-2 text-sm text-slate-600 pb-2">
+              <input type="checkbox" v-model="editingPost.published" /> Published (uncheck = draft)
+            </label>
+          </div>
           <div class="flex items-center gap-3">
             <button class="btn-primary px-5 py-2 text-sm" :disabled="blogSaving" @click="savePost">
               {{ blogSaving ? 'Saving…' : (editingPost.id ? 'Update post' : 'Publish post') }}
@@ -845,7 +863,12 @@ const statItems = computed(() => !stats.value ? [] : [
             <img v-if="p.cover_url" :src="p.cover_url" alt="" class="w-14 h-10 rounded object-cover shrink-0" />
             <div class="flex-1 min-w-0">
               <p class="text-sm font-semibold text-slate-700 truncate">{{ p.title }}</p>
-              <p class="text-[11px] text-slate-400">/blog/{{ p.slug }} · {{ p.published ? 'Published' : 'Draft' }}</p>
+              <p class="text-[11px]" :class="isScheduled(p) ? 'text-amber-600 font-semibold' : 'text-slate-400'">
+                /blog/{{ p.slug }} ·
+                <template v-if="!p.published">Draft</template>
+                <template v-else-if="isScheduled(p)">⏱ Scheduled {{ fmtSchedule(p.publish_at) }}</template>
+                <template v-else>Live</template>
+              </p>
             </div>
             <button class="btn-ghost text-xs px-2 py-1" @click="editPost(p)">Edit</button>
             <button class="text-xs px-2 py-1 text-rose-500 hover:bg-rose-50 rounded" @click="deletePost(p)">Delete</button>

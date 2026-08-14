@@ -67,7 +67,9 @@ async function main() {
   if (!existsSync('dist/index.html')) { console.log('[prerender] no dist/index.html — skipping'); return }
   const shell = readFileSync('dist/index.html', 'utf8')
 
-  const res = await fetch(`${URL}/rest/v1/blog_posts?select=slug,title,excerpt,cover_url,body,meta_description,keywords,author,created_at,updated_at&published=eq.true&order=created_at.desc`, {
+  // RLS (anon) already hides future-dated posts (publish_at > now), so only
+  // currently-live posts are returned and prerendered.
+  const res = await fetch(`${URL}/rest/v1/blog_posts?select=slug,title,excerpt,cover_url,body,meta_description,keywords,author,publish_at,updated_at&published=eq.true&order=publish_at.desc`, {
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}` },
   })
   const posts = res.ok ? await res.json() : []
@@ -113,7 +115,7 @@ async function main() {
           description: desc, image: p.cover_url ? [p.cover_url] : undefined,
           author: { '@type': 'Organization', name: p.author || 'Badminton 360' },
           publisher: { '@type': 'Organization', name: 'Badminton 360', logo: { '@type': 'ImageObject', url: `${BASE}/icon-512.png` } },
-          datePublished: p.created_at, dateModified: p.updated_at, mainEntityOfPage: url,
+          datePublished: p.publish_at, dateModified: p.updated_at, mainEntityOfPage: url,
         },
       }),
       appHtml,
@@ -127,7 +129,7 @@ async function main() {
     { loc: `${BASE}/`, freq: 'weekly', pri: '1.0' },
     { loc: `${BASE}/explore`, freq: 'daily', pri: '0.9' },
     { loc: `${BASE}/blog`, freq: 'weekly', pri: '0.8' },
-    ...posts.map(p => ({ loc: `${BASE}/blog/${p.slug}`, freq: 'monthly', pri: '0.7', lastmod: (p.updated_at || p.created_at || '').slice(0, 10) })),
+    ...posts.map(p => ({ loc: `${BASE}/blog/${p.slug}`, freq: 'monthly', pri: '0.7', lastmod: (p.updated_at || p.publish_at || '').slice(0, 10) })),
     { loc: `${BASE}/login`, freq: 'monthly', pri: '0.6' },
   ]
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u => `  <url>\n    <loc>${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${u.lastmod}</lastmod>` : ''}\n    <changefreq>${u.freq}</changefreq>\n    <priority>${u.pri}</priority>\n  </url>`).join('\n')}\n</urlset>\n`
