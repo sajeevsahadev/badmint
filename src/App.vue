@@ -238,7 +238,7 @@ const needsClub = computed(() =>
   <!-- Loading splash -->
   <div v-if="!ready" class="grid min-h-screen place-items-center">
     <div class="text-center">
-      <div class="text-5xl mb-4">🏸</div>
+      <img src="/icon-192.png" alt="Badminton 360" class="w-20 h-20 rounded-2xl mx-auto mb-4 shadow-lg" />
       <div class="text-neon font-semibold text-sm animate-pulse">
         {{ updating ? 'Applying update…' : 'Loading Badminton 360…' }}
       </div>
@@ -383,7 +383,7 @@ const needsClub = computed(() =>
           </button>
 
           <RouterLink to="/" class="flex items-center gap-2 hover:opacity-75 transition">
-            <span class="text-2xl leading-none">🏸</span>
+            <img src="/favicon.png" alt="Badminton 360" class="w-8 h-8 rounded-lg shrink-0" />
             <div>
               <h1 class="font-display text-xl font-extrabold tracking-tight leading-none gradient-text">Badminton 360</h1>
               <div class="text-[9px] text-slate-400 tracking-[0.2em] uppercase">Your Club · Your Game · One App</div>
@@ -467,7 +467,7 @@ const needsClub = computed(() =>
             <div class="flex items-center justify-between px-5 py-4"
               style="border-bottom:1px solid rgba(0,0,0,.07)">
               <div class="flex items-center gap-2">
-                <span class="text-xl">🏸</span>
+                <img src="/favicon.png" alt="Badminton 360" class="w-7 h-7 rounded-lg shrink-0" />
                 <span class="font-display font-extrabold gradient-text">Badminton 360</span>
               </div>
               <button @click="closeMenu"

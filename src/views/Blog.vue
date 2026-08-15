@@ -44,7 +44,7 @@ onMounted(async () => {
         style="background-image:radial-gradient(circle at 20% 30%, #22d3ee55, transparent 40%), radial-gradient(circle at 80% 20%, #a855f755, transparent 40%);"></div>
       <div class="relative max-w-3xl mx-auto px-5 pt-8 pb-10 safe-area-pt">
         <RouterLink to="/" class="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition mb-6">‹ Badminton 360</RouterLink>
-        <div class="text-4xl mb-3">🏸</div>
+        <img src="/icon-192.png" alt="Badminton 360" class="w-14 h-14 rounded-2xl mb-3 shadow-lg" />
         <h1 class="font-display text-3xl sm:text-4xl font-extrabold leading-tight">The Badminton 360 Blog</h1>
         <p class="text-white/70 mt-2 max-w-xl">Tips, scoring guides and smarter ways to track matches, rank players and run your club.</p>
       </div>
