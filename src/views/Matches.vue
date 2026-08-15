@@ -33,7 +33,7 @@ const showLineup     = ref(false)
 
 const todayStr = new Date().toISOString().slice(0, 10)
 
-async function suggestLineup() {
+async function suggestLineup(shuffle = false) {
   if (!currentClub.value) return
   lineupLoading.value = true
   lineupError.value   = null
@@ -41,7 +41,8 @@ async function suggestLineup() {
   lineupSwapMode.value = false
   const { data, error } = await supabase.rpc('suggest_lineup_by_date', {
     p_club_id: currentClub.value.club_id,
-    p_date:    todayStr
+    p_date:    todayStr,
+    p_shuffle: shuffle
   })
   lineupLoading.value = false
   if (error || data?.error) { lineupError.value = data?.error ?? error.message; return }
@@ -323,7 +324,7 @@ const canDelete = m =>
       </div>
       <div class="flex items-center gap-2">
         <button class="btn-ghost text-xs px-3 py-1.5" :disabled="lineupLoading"
-          @click.stop="suggestLineup(); showLineup = true">
+          @click.stop="suggestLineup(!!lineup); showLineup = true">
           {{ lineupLoading ? '…' : lineup ? '🔄' : '✨ Generate' }}
         </button>
         <span class="text-slate-400 text-xs transition-transform duration-200"
@@ -416,7 +417,7 @@ const canDelete = m =>
         </div>
 
         <div class="flex gap-2 pt-1">
-          <button class="btn-ghost flex-1 text-xs py-2.5" @click="suggestLineup">🔄 Reshuffle</button>
+          <button class="btn-ghost flex-1 text-xs py-2.5" :disabled="lineupLoading" @click="suggestLineup(true)">🔄 Reshuffle</button>
           <button v-if="isManager()" class="btn-primary flex-1 text-xs py-2.5" @click="acceptLineup">
             ✅ Start This Match
           </button>
