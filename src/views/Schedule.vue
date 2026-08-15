@@ -45,13 +45,53 @@ function fmtDate(d) {
 const monthSchedules  = ref([])
 const loadingSchedules = ref(false)
 
-const scheduleMap = computed(() => {
+// A date can hold multiple time-slot polls. daysMap groups them by date.
+const daysMap = computed(() => {
   const m = {}
-  monthSchedules.value.forEach(s => { m[s.scheduled_date] = s })
+  monthSchedules.value.forEach(s => { (m[s.scheduled_date] ||= []).push(s) })
   return m
 })
+// First slot per date — used only for the calendar cell colour.
+const scheduleMap = computed(() => {
+  const m = {}
+  for (const [d, slots] of Object.entries(daysMap.value)) m[d] = slots[0]
+  return m
+})
+const daySlots = computed(() => selectedDate.value ? (daysMap.value[selectedDate.value] || []) : [])
+// Which slot the panel is showing. Single-slot days resolve automatically.
+const selectedSlotId = ref(null)
+const selectedSchedule = computed(() => {
+  const slots = daySlots.value
+  if (!slots.length) return null
+  if (slots.length === 1) return slots[0]
+  return slots.find(s => s.id === selectedSlotId.value) || null
+})
+// Show the slot picker only when a day has >1 slot and none is chosen yet
+// (and we're not in the middle of adding a fresh slot).
+const showSlotPicker = computed(() => !newSlotMode.value && daySlots.value.length > 1 && !selectedSchedule.value)
+// The create form shows for an empty day, or when explicitly adding a slot.
+const showCreateForm = computed(() => newSlotMode.value || daySlots.value.length === 0)
 
-const selectedSchedule = computed(() => selectedDate.value ? scheduleMap.value[selectedDate.value] : null)
+function fmtSlotTime(s) {
+  if (!s?.start_time) return ''
+  const t = x => { const [h, mm] = x.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}` }
+  return s.end_time ? `${t(s.start_time)} – ${t(s.end_time)}` : t(s.start_time)
+}
+async function pickSlot(s) {
+  selectedSlotId.value = s.id
+  await loadVotesAndAttendees(s.id)
+}
+function backToSlots() { selectedSlotId.value = null }
+// Begin adding another slot to a day that already has one (or more).
+function startNewSlot() {
+  newSlotMode.value = true
+  selectedSlotId.value = null
+  resetSlotDraft()
+}
+function cancelNewSlot() {
+  newSlotMode.value = false
+  resetSlotDraft()
+}
 
 // ── Calendar grid ──
 const calendarDays = computed(() => {
@@ -89,6 +129,23 @@ const showFacilityPicker  = ref(false)
 const showCreateFacility  = ref(false)
 const newFacName          = ref('')
 const loadingFacilities   = ref(false)
+
+// ── Slot draft (optional time + max attendees for the slot being created) ──
+// newSlotMode = true forces createSchedule to INSERT a fresh slot even when the
+// day already has one (used by "Add another slot"). Otherwise a day with an
+// active slot updates that slot's venue.
+const newSlotMode  = ref(false)
+const slotStart    = ref('')
+const slotEnd      = ref('')
+const slotMax      = ref(0)
+const showSlotOpts = ref(false)   // collapsible optional time/max panel in create flow
+
+function resetSlotDraft() {
+  slotStart.value = ''
+  slotEnd.value = ''
+  slotMax.value = 0
+  showSlotOpts.value = false
+}
 
 const filteredFacilities = computed(() => {
   const q = facilitySearch.value.trim().toLowerCase()
@@ -282,12 +339,15 @@ async function selectDate(dateStr) {
   selectedDate.value = dateStr
   showDateModal.value = true
   showInvitePanel.value = false
+  selectedSlotId.value = null
   votes.value = []
   attendeeIds.value = new Set()
   rotationSummary.value = []
   showRotation.value = false
-  if (scheduleMap.value[dateStr]) {
-    await loadVotesAndAttendees(scheduleMap.value[dateStr].id)
+  // Single-slot day resolves automatically — load it. Multi-slot waits for a pick.
+  const slots = daysMap.value[dateStr] || []
+  if (slots.length === 1) {
+    await loadVotesAndAttendees(slots[0].id)
   }
   await loadRotationSummary(dateStr)
 }
@@ -300,11 +360,16 @@ function closeDateModal() {
   lineupSwapMode.value   = false
   rotationSummary.value  = []
   showRotation.value     = false
+  selectedSlotId.value   = null
+  newSlotMode.value      = false
+  resetSlotDraft()
 }
 
 // ── Create / update schedule (direct table ops — no RPC) ──
 async function createSchedule(facilityId, facilityName) {
-  const existing = selectedSchedule.value
+  // Adding a brand-new slot (newSlotMode) always inserts, even if the day
+  // already has a slot. Otherwise we edit the active slot's venue in place.
+  const existing = newSlotMode.value ? null : selectedSchedule.value
   let schedId = existing?.id
   let error
 
@@ -316,7 +381,7 @@ async function createSchedule(facilityId, facilityName) {
       .eq('id', schedId)
     error = res.error
   } else {
-    // Insert new schedule row
+    // Insert new schedule row (with optional time slot + max attendees)
     const res = await supabase
       .from('club_schedule')
       .insert({
@@ -324,6 +389,9 @@ async function createSchedule(facilityId, facilityName) {
         scheduled_date: selectedDate.value,
         facility_id:    facilityId ?? null,
         facility_name:  facilityName ?? null,
+        start_time:     slotStart.value || null,
+        end_time:       slotEnd.value || null,
+        max_attendees:  Number(slotMax.value) || 0,
         created_by:     user.value.id
       })
       .select('id')
@@ -336,6 +404,10 @@ async function createSchedule(facilityId, facilityName) {
   scheduleError.value = null
   showFacilityPicker.value = false
   const isNew = !existing
+  newSlotMode.value = false
+  resetSlotDraft()
+  // Auto-select the freshly created slot so the panel shows it immediately
+  if (isNew && schedId) selectedSlotId.value = schedId
   await loadMonthSchedules()
   await loadClubFacilityIds()
   if (schedId) await loadVotesAndAttendees(schedId)
@@ -659,22 +731,92 @@ watch(currentClub, async () => {
           <!-- Scrollable content -->
           <div class="overflow-y-auto px-4 pb-28" style="max-height: calc(90vh - 72px)">
 
-            <!-- No schedule: plan prompt -->
-            <div v-if="!selectedSchedule" class="pt-8 pb-4 text-center">
+            <!-- Multi-slot day: choose which session's poll to open -->
+            <div v-if="showSlotPicker" class="pt-6 pb-4">
+              <div class="text-center mb-4">
+                <div class="font-semibold text-slate-200 text-lg mb-1">{{ daySlots.length }} sessions on this day</div>
+                <div class="text-xs text-slate-500">Pick a session to view or vote in its poll.</div>
+              </div>
+              <div class="space-y-2">
+                <button v-for="s in daySlots" :key="s.id" @click="pickSlot(s)"
+                  class="w-full card p-3 flex items-center justify-between text-left hover:border-cyan-300 transition">
+                  <div class="min-w-0">
+                    <div class="font-semibold text-slate-700 truncate">{{ fmtSlotTime(s) || 'Session' }}</div>
+                    <div class="text-xs text-slate-400 truncate">{{ s.facility_name || 'Venue TBD' }}</div>
+                  </div>
+                  <div class="text-right shrink-0 pl-2">
+                    <div class="text-xs text-emerald-500 font-semibold">
+                      {{ s.attending_count }} in<span v-if="s.max_attendees" class="text-slate-400"> / {{ s.max_attendees }}</span>
+                    </div>
+                    <span class="text-cyan-400 text-lg">›</span>
+                  </div>
+                </button>
+              </div>
+              <button class="btn-ghost w-full py-2.5 text-sm mt-3" @click="startNewSlot">＋ Add another session</button>
+            </div>
+
+            <!-- No schedule for the day, or adding a fresh session: create prompt -->
+            <div v-else-if="showCreateForm" class="pt-8 pb-4 text-center">
               <div class="text-4xl mb-3">🏸</div>
-              <div class="font-semibold text-slate-200 text-lg mb-1">Plan a match on {{ selectedDateLabel }}</div>
-              <div class="text-xs text-slate-500 mb-6">Pick a venue to create this match day and open the poll.</div>
+              <div class="font-semibold text-slate-200 text-lg mb-1">
+                {{ newSlotMode ? 'Add a session' : 'Plan a match' }} on {{ selectedDateLabel }}
+              </div>
+              <div class="text-xs text-slate-500 mb-5">Pick a venue to create it and open the poll.</div>
+
+              <!-- Optional time slot + attendee limit -->
+              <div class="text-left mb-4">
+                <button class="text-xs text-cyan-400 hover:text-cyan-300 mb-2" @click="showSlotOpts = !showSlotOpts">
+                  {{ showSlotOpts ? '▾' : '▸' }} Time &amp; attendee limit (optional)
+                </button>
+                <div v-if="showSlotOpts" class="space-y-3 card p-3">
+                  <div class="flex gap-2">
+                    <label class="flex-1">
+                      <span class="text-[10px] uppercase tracking-wide text-slate-500">From</span>
+                      <input type="time" v-model="slotStart"
+                        class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                    </label>
+                    <label class="flex-1">
+                      <span class="text-[10px] uppercase tracking-wide text-slate-500">To</span>
+                      <input type="time" v-model="slotEnd"
+                        class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                    </label>
+                  </div>
+                  <label class="block">
+                    <span class="text-[10px] uppercase tracking-wide text-slate-500">Max attendees (0 = unlimited)</span>
+                    <input type="number" min="0" inputmode="numeric" v-model.number="slotMax" placeholder="0"
+                      class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                  </label>
+                  <p class="text-[11px] text-slate-400">First <b>{{ slotMax || '∞' }}</b> to say Attending get a spot — the rest go to the bench.</p>
+                </div>
+              </div>
+
               <button class="btn-primary w-full py-3" @click="openFacilityPicker">📍 Set Venue &amp; Schedule</button>
+              <button v-if="newSlotMode" class="btn-ghost w-full py-2.5 text-sm mt-2" @click="cancelNewSlot">Cancel</button>
             </div>
 
             <!-- Schedule exists -->
             <div v-else class="space-y-4 pt-4">
 
+              <!-- Multi-slot day: quick nav back to the session list -->
+              <button v-if="daySlots.length > 1" class="text-xs text-cyan-400 hover:text-cyan-300 -mb-1" @click="backToSlots">
+                ‹ All {{ daySlots.length }} sessions
+              </button>
+
               <!-- Header -->
               <div class="card-neon p-4">
                 <div class="font-display text-lg font-bold gradient-text leading-snug mb-1">{{ scheduleHeader }}</div>
-                <div v-if="selectedSchedule.status === 'cancelled'"
-                  class="inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <div v-if="fmtSlotTime(selectedSchedule)"
+                    class="inline-flex items-center gap-1 text-xs text-cyan-300 bg-cyan-500/10 rounded px-2 py-0.5">
+                    🕒 {{ fmtSlotTime(selectedSchedule) }}
+                  </div>
+                  <div v-if="selectedSchedule.max_attendees"
+                    class="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 rounded px-2 py-0.5">
+                    👥 Max {{ selectedSchedule.max_attendees }}
+                  </div>
+                  <div v-if="selectedSchedule.status === 'cancelled'"
+                    class="inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
+                </div>
 
                 <div class="flex gap-2 mt-3">
                   <button class="btn-primary flex-1 py-2 text-sm" @click="showInvitePanel = !showInvitePanel">
@@ -690,6 +832,12 @@ watch(currentClub, async () => {
                     🗑 Cancel this event
                   </button>
                 </div>
+
+                <!-- Grow this day into another time-slot session -->
+                <button class="w-full text-xs text-cyan-300 hover:text-cyan-200 py-1.5 mt-1 rounded-lg hover:bg-cyan-500/10 transition"
+                        @click="startNewSlot">
+                  ＋ Add another session on this day
+                </button>
 
                 <!-- Invite / share panel -->
                 <div v-if="showInvitePanel" class="mt-3 pt-3 border-t border-slate-100 space-y-2">

@@ -44,6 +44,31 @@ const totalVotes = computed(() =>
   (schedule.value?.attending_count ?? 0) + (schedule.value?.not_attending_count ?? 0)
 )
 
+// ── Time slot + attendee cap (both optional) ──
+function fmtTime(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const ap = h >= 12 ? 'PM' : 'AM'
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${ap}`
+}
+const slotTime = computed(() => {
+  const s = schedule.value
+  if (!s?.start_time) return ''
+  return s.end_time ? `${fmtTime(s.start_time)} – ${fmtTime(s.end_time)}` : fmtTime(s.start_time)
+})
+const maxAtt       = computed(() => schedule.value?.max_attendees || 0)
+const presentCount = computed(() => {
+  const a = schedule.value?.attending_count || 0
+  return maxAtt.value ? Math.min(a, maxAtt.value) : a
+})
+const benchCount   = computed(() => {
+  const a = schedule.value?.attending_count || 0
+  return maxAtt.value ? Math.max(a - maxAtt.value, 0) : 0
+})
+const iAmBench = computed(() =>
+  schedule.value?.my_vote === 'attending' && maxAtt.value > 0 && (schedule.value?.my_position || 0) > maxAtt.value
+)
+
 async function loadSchedule() {
   loading.value = true
   const { data, error: err } = await supabase.rpc('get_schedule_detail', {
@@ -166,6 +191,7 @@ onMounted(loadSchedule)
         <div class="card-neon p-5 mb-5">
           <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Match Day Poll</div>
           <h1 class="font-display text-xl font-bold gradient-text leading-snug">{{ dateLabel }}</h1>
+          <div v-if="slotTime" class="text-sm text-slate-500 mt-1">🕒 {{ slotTime }}</div>
           <div v-if="venueName" class="text-sm text-slate-400 mt-1">📍 {{ venueName }}</div>
           <div class="text-xs text-slate-600 mt-0.5">{{ schedule.club_name }}</div>
           <div v-if="schedule.status === 'cancelled'"
@@ -189,6 +215,16 @@ onMounted(loadSchedule)
               <span class="text-sm font-semibold text-slate-700">Not Attending</span>
               <span class="text-3xl font-bold text-rose-500">{{ schedule.not_attending_count }}</span>
             </button>
+          </div>
+
+          <!-- Present / bench (only when a cap is set) -->
+          <div v-if="maxAtt" class="text-center text-xs mb-2">
+            <span class="text-slate-600">Present <b class="text-emerald-600">{{ presentCount }}</b> / {{ maxAtt }}</span>
+            <span v-if="benchCount" class="text-slate-400"> · Bench {{ benchCount }}</span>
+          </div>
+          <div v-if="iAmBench" class="rounded-xl px-3 py-2 mb-3 text-center text-xs text-amber-700"
+            style="background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.35)">
+            This slot is full — you're on the bench. You'll move up if someone drops out.
           </div>
 
           <div class="text-center text-xs mb-3">
@@ -223,6 +259,8 @@ onMounted(loadSchedule)
               <div class="text-sm font-medium text-slate-100 truncate">{{ v.display_name || 'Unknown' }}</div>
               <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>
             </div>
+            <span v-if="v.vote === 'attending' && !v.is_present"
+              class="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">BENCH</span>
             <span class="text-lg" :class="v.vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
               {{ v.vote === 'attending' ? '✅' : '❌' }}
             </span>

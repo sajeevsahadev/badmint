@@ -190,14 +190,18 @@ const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 
 // Today/tomorrow schedule entries, labelled — powers the Dashboard quick link
 const todayStr = localDateStr(new Date())
-const upcomingSchedule = computed(() =>
-  todayTomorrowSchedule.value
+const upcomingSchedule = computed(() => {
+  // A date may hold several time-slot sessions — show one card per DATE
+  // (tapping it opens the day, which offers the session picker if >1).
+  const seen = new Set()
+  return todayTomorrowSchedule.value
     .filter(s => !hiddenDates.value.has(s.scheduled_date))
+    .filter(s => (seen.has(s.scheduled_date) ? false : seen.add(s.scheduled_date)))
     .map(s => ({
       ...s,
       label: s.scheduled_date === todayStr ? 'today' : 'tomorrow',
     }))
-)
+})
 
 const fmtDate = d => d
   ? new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:'short' })
