@@ -189,8 +189,8 @@ async function acceptInvite(token) {
 function confirmJoin(club) {
   const memberCount  = clubs.value.length
   const pendingCount = myRequests.value.filter(r => r.status === 'pending').length
-  if (memberCount + pendingCount >= 5) {
-    note.value = { ok: false, t: 'You can join or send requests to a maximum of 5 clubs. Leave a club or revoke a pending request first.' }
+  if (memberCount + pendingCount >= 10) {
+    note.value = { ok: false, t: 'You can join or send requests to a maximum of 10 clubs. Leave a club or revoke a pending request first.' }
     return
   }
   confirmClub.value = club
