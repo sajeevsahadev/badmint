@@ -79,9 +79,10 @@ function fmtSlotTime(s) {
 }
 async function pickSlot(s) {
   selectedSlotId.value = s.id
+  showEditSlot.value = false
   await loadVotesAndAttendees(s.id)
 }
-function backToSlots() { selectedSlotId.value = null }
+function backToSlots() { selectedSlotId.value = null; showEditSlot.value = false }
 // Begin adding another slot to a day that already has one (or more).
 function startNewSlot() {
   newSlotMode.value = true
@@ -145,6 +146,41 @@ function resetSlotDraft() {
   slotEnd.value = ''
   slotMax.value = 0
   showSlotOpts.value = false
+}
+
+// ── Edit an existing session's time + attendee limit ──
+const showEditSlot = ref(false)
+const editStart    = ref('')
+const editEnd      = ref('')
+const editMax      = ref(0)
+const editBusy     = ref(false)
+
+function openEditSlot() {
+  const s = selectedSchedule.value
+  if (!s) return
+  // time columns arrive as 'HH:MM:SS' — trim to 'HH:MM' for <input type="time">
+  editStart.value = s.start_time ? s.start_time.slice(0, 5) : ''
+  editEnd.value   = s.end_time   ? s.end_time.slice(0, 5)   : ''
+  editMax.value   = s.max_attendees || 0
+  showEditSlot.value = true
+}
+
+async function saveSlotDetails() {
+  const s = selectedSchedule.value
+  if (!s) return
+  editBusy.value = true; scheduleError.value = null
+  const { error } = await supabase
+    .from('club_schedule')
+    .update({
+      start_time:    editStart.value || null,
+      end_time:      editEnd.value   || null,
+      max_attendees: Number(editMax.value) || 0,
+    })
+    .eq('id', s.id)
+  editBusy.value = false
+  if (error) { scheduleError.value = error.message; return }
+  showEditSlot.value = false
+  await loadMonthSchedules()
 }
 
 const filteredFacilities = computed(() => {
@@ -362,6 +398,7 @@ function closeDateModal() {
   showRotation.value     = false
   selectedSlotId.value   = null
   newSlotMode.value      = false
+  showEditSlot.value     = false
   resetSlotDraft()
 }
 
@@ -824,7 +861,36 @@ watch(currentClub, async () => {
                   <button class="btn-primary flex-1 py-2 text-sm" @click="showInvitePanel = !showInvitePanel">
                     {{ showInvitePanel ? '✕ Close' : '📢 Invite' }}
                   </button>
-                  <button class="btn-ghost text-xs px-3" @click="openFacilityPicker">✏️ Edit Venue</button>
+                  <button class="btn-ghost text-xs px-2.5" @click="openFacilityPicker">✏️ Venue</button>
+                  <button class="btn-ghost text-xs px-2.5" @click="showEditSlot ? (showEditSlot = false) : openEditSlot()">🕒 Time</button>
+                </div>
+
+                <!-- Edit time + attendee limit for this session -->
+                <div v-if="showEditSlot" class="mt-3 pt-3 border-t border-slate-100 space-y-3">
+                  <div class="flex gap-2">
+                    <label class="flex-1">
+                      <span class="text-[10px] uppercase tracking-wide text-slate-500">From</span>
+                      <input type="time" v-model="editStart"
+                        class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                    </label>
+                    <label class="flex-1">
+                      <span class="text-[10px] uppercase tracking-wide text-slate-500">To</span>
+                      <input type="time" v-model="editEnd"
+                        class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                    </label>
+                  </div>
+                  <label class="block">
+                    <span class="text-[10px] uppercase tracking-wide text-slate-500">Max attendees (0 = unlimited)</span>
+                    <input type="number" min="0" inputmode="numeric" v-model.number="editMax" placeholder="0"
+                      class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+                  </label>
+                  <p class="text-[11px] text-slate-400">First <b>{{ editMax || '∞' }}</b> to say Attending get a spot — the rest go to the bench.</p>
+                  <div class="flex gap-2">
+                    <button class="btn-ghost flex-1 py-2 text-sm" @click="showEditSlot = false">Cancel</button>
+                    <button class="btn-primary flex-1 py-2 text-sm" :disabled="editBusy" @click="saveSlotDetails">
+                      {{ editBusy ? 'Saving…' : 'Save' }}
+                    </button>
+                  </div>
                 </div>
                 <!-- Cancel is hidden once attendance is recorded — the event has
                      effectively happened, and cancelling would wipe those attendees. -->
