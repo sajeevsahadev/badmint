@@ -110,6 +110,7 @@ const menuSections = [
     label: 'Account',
     items: [
       { to: '/profile',  icon: '👤', label: 'My Profile' },
+      { to: '/blog',     icon: '✍️', label: 'Badminton Blog' },
       { action: 'wizard', icon: '🚀', label: 'Club Setup Wizard' },
       { action: 'guide',  icon: '🗺️', label: 'App Guide' },
     ]
