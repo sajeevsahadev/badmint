@@ -64,9 +64,9 @@ watch(() => route.params.slug, load)
     </div>
 
     <article v-else-if="post">
-      <!-- Cover -->
+      <!-- Cover (responsive fixed height so it always spans full width) -->
       <header class="relative">
-        <div class="aspect-[21/9] max-h-[360px] overflow-hidden bg-slate-900">
+        <div class="w-full h-44 sm:h-64 md:h-80 overflow-hidden bg-slate-900">
           <img v-if="post.cover_url" :src="post.cover_url" :alt="post.title" class="w-full h-full object-cover" />
         </div>
       </header>
