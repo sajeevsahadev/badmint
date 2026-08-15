@@ -479,12 +479,24 @@ async function cancelEvent() {
   const schedId = selectedSchedule.value?.id
   if (!schedId) return
   cancellingEvent.value = true
-  const { error } = await supabase.from('club_schedule').delete().eq('id', schedId)
+  // .select() returns the deleted rows so we can detect an RLS-blocked delete
+  // (0 rows, no error) instead of silently pretending it worked.
+  const { data, error } = await supabase
+    .from('club_schedule').delete().eq('id', schedId).select('id')
   cancellingEvent.value = false
-  if (error) { scheduleError.value = error.message; return }
   showCancelEventConfirm.value = false
-  showDateModal.value = false
+  if (error) { scheduleError.value = error.message; return }
+  if (!data || data.length === 0) {
+    scheduleError.value = 'You don’t have permission to cancel this event.'
+    return
+  }
+  showEditSlot.value = false
   await loadMonthSchedules()
+  // If other sessions remain on this day, drop back to the session list;
+  // otherwise close the day entirely.
+  const remaining = daysMap.value[selectedDate.value] || []
+  if (remaining.length > 0) selectedSlotId.value = null
+  else showDateModal.value = false
 }
 
 async function useCustomVenue() {
