@@ -323,9 +323,11 @@ const canDelete = m =>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="lineupLoading"
-          @click.stop="suggestLineup(!!lineup); showLineup = true">
-          {{ lineupLoading ? '…' : lineup ? '🔄' : '✨ Generate' }}
+        <!-- Generate only appears before a lineup exists; once teams are shown,
+             reshuffling lives solely on the "Reshuffle" button below. -->
+        <button v-if="!lineup" class="btn-ghost text-xs px-3 py-1.5" :disabled="lineupLoading"
+          @click.stop="suggestLineup(false); showLineup = true">
+          {{ lineupLoading ? '…' : '✨ Generate' }}
         </button>
         <span class="text-slate-400 text-xs transition-transform duration-200"
           :style="showLineup ? 'transform:rotate(180deg)' : ''">▾</span>
