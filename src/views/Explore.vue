@@ -9,7 +9,7 @@ import { countryName } from '../utils/countries'
 
 const router = useRouter()
 const { user } = useAuth()
-const { clubs, currentClub } = useClub()
+const { clubs, currentClub, loadClubs } = useClub()
 const { countryCode, flagEmoji, detectCountry } = useGeo()
 
 // ── Data ──
@@ -156,6 +156,18 @@ async function requestJoin(clubId) {
   busy.value = false
 }
 
+async function joinPublic(club) {
+  if (!user.value) { router.push('/login'); return }
+  busy.value = true; note.value = null
+  const { error } = await supabase.rpc('join_club_public', { p_club_id: club.id })
+  if (error) { note.value = { ok: false, t: error.message } }
+  else {
+    await loadClubs()
+    note.value = { ok: true, t: `Joined ${club.name}! 🎉` }
+  }
+  busy.value = false
+}
+
 async function revokeRequest(clubId) {
   busy.value = true; note.value = null
   const { error } = await supabase.rpc('revoke_join_request', { p_club_id: clubId })
@@ -242,7 +254,8 @@ const activityColor = (m30) =>
             <div class="text-[11px] text-slate-500 truncate">
               {{ [club.facility_name, club.emirates].filter(Boolean).join(' · ') || 'No facility info' }}
             </div>
-            <div v-if="!club.is_public" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
+            <div v-if="club.join_policy === 'closed'" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
+            <div v-else-if="club.join_policy === 'public'" class="text-[11px] text-emerald-500 mt-0.5">⚡ Instant join</div>
           </div>
         </div>
         <!-- Action button -->
@@ -250,7 +263,11 @@ const activityColor = (m30) =>
           <span v-if="requestMap[club.id] === 'member'" class="badge-member">✓ My Club</span>
           <span v-else-if="requestMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
           <span v-else-if="requestMap[club.id] === 'approved'" class="badge-approved">Approved</span>
-          <span v-else-if="!club.is_public" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
+          <span v-else-if="club.join_policy === 'closed'" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
+          <button v-else-if="club.join_policy === 'public'" class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
+            @click="joinPublic(club)">
+            ⚡ Join
+          </button>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
             @click="confirmJoin(club)">
             Join

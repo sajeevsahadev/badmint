@@ -80,6 +80,18 @@ async function requestJoinDirect() {
   directStep.value = 'requested'
 }
 
+// Public-invite clubs: one tap joins instantly, no approval.
+async function joinPublicDirect() {
+  busy.value = true
+  const { error } = await supabase.rpc('join_club_public', { p_club_id: directClub.value.id })
+  busy.value = false
+  if (error) { directError.value = error.message; directStep.value = 'error'; return }
+  await loadClubs()
+  const joined = clubs.value.find(c => c.club_id === directClub.value.id)
+  if (joined) selectClub(joined)
+  router.push('/dashboard')
+}
+
 // ── Status map ──
 const statusMap = computed(() => {
   const map = {}
@@ -135,6 +147,7 @@ function validateForm() {
   formErrors.value = {}
   if (!form.value.fullName.trim())  formErrors.value.fullName  = 'Full name is required'
   if (!form.value.nickname.trim())  formErrors.value.nickname  = 'Nickname is required'
+  if (!form.value.phone.trim())     formErrors.value.phone     = 'Phone number is required'
   return Object.keys(formErrors.value).length === 0
 }
 
@@ -197,6 +210,18 @@ async function requestJoin(clubId) {
   busy.value = false
 }
 
+async function joinPublicBrowse(club) {
+  busy.value = true; note.value = null
+  const { error } = await supabase.rpc('join_club_public', { p_club_id: club.id })
+  if (error) {
+    note.value = { ok: false, t: error.message }
+  } else {
+    await loadClubs()
+    note.value = { ok: true, t: `Joined ${club.name}! 🎉` }
+  }
+  busy.value = false
+}
+
 async function revokeRequest(clubId) {
   busy.value = true; note.value = null
   const { error } = await supabase.rpc('revoke_join_request', { p_club_id: clubId })
@@ -254,7 +279,8 @@ onMounted(async () => {
           👥 {{ directClub.member_count }} member{{ directClub.member_count !== 1 ? 's' : '' }}
           <span v-if="directClub.facility_name"> · {{ directClub.facility_name }}</span>
         </p>
-        <p v-if="!directClub.is_public" class="text-xs text-amber-500 mb-4">🔒 Closed club — you were sent a direct invite link</p>
+        <p v-if="directClub.join_policy === 'public'" class="text-xs text-emerald-500 mb-4">⚡ Public club — tap to join instantly</p>
+        <p v-else-if="directClub.join_policy === 'closed'" class="text-xs text-amber-500 mb-4">🔒 Invite-only club</p>
         <p v-else class="mb-4"></p>
 
         <div v-if="directStep === 'member'" class="rounded-xl px-4 py-3 text-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
@@ -266,6 +292,12 @@ onMounted(async () => {
         <div v-else-if="directStep === 'requested'" class="rounded-xl px-4 py-3 text-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
           ✓ Request sent! The club manager will review it shortly.
         </div>
+        <div v-else-if="directClub.join_policy === 'closed'" class="rounded-xl px-4 py-3 text-sm bg-amber-500/15 text-amber-300 border border-amber-500/20">
+          🔒 This club is invite-only. Ask a manager to send you an invite.
+        </div>
+        <button v-else-if="directClub.join_policy === 'public'" class="btn-primary w-full py-3 text-sm" :disabled="busy" @click="joinPublicDirect">
+          {{ busy ? 'Joining…' : '⚡ Join Now' }}
+        </button>
         <button v-else class="btn-primary w-full py-3 text-sm" :disabled="busy" @click="requestJoinDirect">
           {{ busy ? 'Sending…' : 'Request to Join' }}
         </button>
@@ -342,9 +374,10 @@ onMounted(async () => {
 
         <!-- Phone -->
         <div>
-          <label class="label">Phone Number <span class="text-slate-600">(optional)</span></label>
+          <label class="label">Phone Number <span class="text-rose-400">*</span></label>
           <input v-model="form.phone" class="input" type="tel" placeholder="+971 50 123 4567" />
-          <p class="text-[10px] text-slate-500 mt-1">Only visible to you — never shown to others.</p>
+          <p class="text-[10px] text-slate-500 mt-1">Only visible to your club managers — never shown publicly.</p>
+          <p v-if="formErrors.phone" class="text-[11px] text-rose-400 mt-1">{{ formErrors.phone }}</p>
         </div>
 
         <!-- City / Region -->
@@ -431,14 +464,19 @@ onMounted(async () => {
             👥 {{ club.member_count }} member{{ club.member_count !== 1 ? 's' : '' }}
             <span v-if="club.emirates"> · {{ club.emirates }}</span>
           </div>
-          <div v-if="!club.is_public" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
+          <div v-if="club.join_policy === 'closed'" class="text-[11px] text-amber-500 mt-0.5">🔒 Closed — invite only</div>
+          <div v-else-if="club.join_policy === 'public'" class="text-[11px] text-emerald-500 mt-0.5">⚡ Instant join</div>
         </div>
         <div class="shrink-0 flex flex-col items-end gap-1">
           <span v-if="statusMap[club.id] === 'member'"   class="badge-member">✓ Joined</span>
           <span v-else-if="statusMap[club.id] === 'approved'" class="badge-approved">Approved</span>
           <span v-else-if="statusMap[club.id] === 'rejected'" class="badge-rejected">Declined</span>
           <span v-else-if="statusMap[club.id] === 'pending'" class="badge-pending">⏳ Pending</span>
-          <span v-else-if="!club.is_public" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
+          <span v-else-if="club.join_policy === 'closed'" class="badge text-slate-400" style="border:1px solid rgba(100,116,139,.4)">Closed</span>
+          <button v-else-if="club.join_policy === 'public'" class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
+            @click="joinPublicBrowse(club)">
+            ⚡ Join
+          </button>
           <button v-else class="btn-primary text-xs px-3 py-1.5" :disabled="busy"
             @click="confirmJoin(club)">
             Request to Join

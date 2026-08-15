@@ -12,6 +12,7 @@ import { useBiometricLock } from './composables/useBiometricLock'
 import { usePushNotifications } from './composables/usePushNotifications'
 import OnboardingGuide  from './components/OnboardingGuide.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
+import ProfileCompletionGate from './components/ProfileCompletionGate.vue'
 
 const { user, ready, signOut } = useAuth()
 const { syncFromProfile } = useTheme()
@@ -48,6 +49,7 @@ const updating       = ref(false)
 const isAdmin        = ref(false)
 const showOnboarding = ref(false)
 const showWizard     = ref(false)
+const profileGateOpen = ref(false)   // mandatory phone/name gate (Feature A)
 
 const ONBOARDING_KEY = 'b360_onboarding_v1'
 const WIZARD_KEY     = 'b360_wizard_v1'
@@ -164,8 +166,12 @@ async function init() {
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   }).catch(() => {})
-  supabase.from('user_profiles').select('theme_pref').eq('user_id', user.value.id).maybeSingle()
-    .then(({ data }) => { if (data?.theme_pref) syncFromProfile(data.theme_pref) })
+  supabase.from('user_profiles').select('theme_pref, phone').eq('user_id', user.value.id).maybeSingle()
+    .then(({ data }) => {
+      if (data?.theme_pref) syncFromProfile(data.theme_pref)
+      // Phone is mandatory for everyone — prompt anyone who hasn't set one.
+      profileGateOpen.value = !data?.phone || !data.phone.trim()
+    })
     .catch(() => {})
   // Self-heal push: if this device already granted permission but its
   // subscription was made with an old VAPID key (undeliverable), silently
@@ -264,6 +270,14 @@ const needsClub = computed(() =>
           </button>
         </div>
       </div>
+    </Teleport>
+
+    <!-- ── Mandatory profile completion (name + phone) ──────────────────────────
+         Shown to any signed-in user missing a phone number. Sits below the lock
+         overlay but above everything else. -->
+    <Teleport to="body">
+      <ProfileCompletionGate v-if="user && ready && !isLocked && profileGateOpen"
+        @done="profileGateOpen = false" />
     </Teleport>
 
     <!-- ── PWA update popup ───────────────────────────────────────────────────

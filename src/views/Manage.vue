@@ -54,8 +54,10 @@ const countryNote     = ref(null)
 // India, …); countries without a subdivision list fall back to free text.
 const regionInfo  = computed(() => subdivisionsFor(clubCountryCode.value))
 const regionLabel = computed(() => regionLabelFor(clubCountryCode.value))
-const visibilityBusy  = ref(false)
-const visibilityNote  = ref(null)
+// How players join: 'closed' (invite only) | 'open' (request+approve) | 'public' (auto-join via link)
+const clubJoinPolicy  = ref('open')
+const joinPolicyBusy   = ref(false)
+const joinPolicyNote   = ref(null)
 
 // Shareable club join link — admin distributes this so members request to
 // join THIS specific club directly, without searching among every club.
@@ -136,12 +138,13 @@ async function load() {
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
-    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public')
+    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public, join_policy')
     .eq('id', cid).single()
   if (clubInfo) {
     clubCurrency.value              = clubInfo.currency          ?? 'AED'
     clubCountryCode.value           = clubInfo.country_code      ?? 'AE'
     clubIsPublic.value              = clubInfo.is_public          ?? true
+    clubJoinPolicy.value            = clubInfo.join_policy        ?? 'open'
     digest.value = {
       dow:     clubInfo.digest_dow     ?? 0,
       hour:    clubInfo.digest_hour    ?? 21,
@@ -353,19 +356,31 @@ async function saveCountry() {
     : { ok: true, t: '✅ Country updated.' }
 }
 
-// ── Toggle public (discoverable) vs closed (invite-link only) ──
-async function toggleVisibility(nextValue) {
-  visibilityBusy.value = true; visibilityNote.value = null
-  const { error } = await supabase.rpc('set_club_visibility', {
-    p_club_id:  currentClub.value.club_id,
-    p_is_public: nextValue,
+// ── Set how players join (closed | open | public) ──
+// Keep the Explore listing flag (is_public) sensibly in sync: a closed club
+// is hidden from Explore; open/public clubs stay listed.
+async function setJoinPolicy(policy) {
+  if (policy === clubJoinPolicy.value) return
+  joinPolicyBusy.value = true; joinPolicyNote.value = null
+  const { error } = await supabase.rpc('set_club_join_policy', {
+    p_club_id: currentClub.value.club_id,
+    p_policy:  policy,
   })
-  visibilityBusy.value = false
-  if (error) { visibilityNote.value = { ok: false, t: error.message }; return }
-  clubIsPublic.value = nextValue
-  visibilityNote.value = { ok: true, t: nextValue
-    ? '✅ Public — anyone can find this club and request to join.'
-    : '✅ Closed — only people with your join link can request to join.' }
+  if (error) { joinPolicyBusy.value = false; joinPolicyNote.value = { ok: false, t: error.message }; return }
+  clubJoinPolicy.value = policy
+
+  const shouldList = policy !== 'closed'
+  if (shouldList !== clubIsPublic.value) {
+    const { error: visErr } = await supabase.rpc('set_club_visibility', {
+      p_club_id: currentClub.value.club_id, p_is_public: shouldList,
+    })
+    if (!visErr) clubIsPublic.value = shouldList
+  }
+  joinPolicyBusy.value = false
+  joinPolicyNote.value = { ok: true, t:
+    policy === 'closed' ? '✅ Closed — new members can only join via a manual invite.'
+    : policy === 'public' ? '✅ Public — anyone with the join link joins instantly, no approval.'
+    : '✅ Open — people request to join and you approve them below.' }
 }
 
 // ── Weekly digest schedule ──
@@ -812,9 +827,11 @@ async function leaveClub(clubId) {
   <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
     <div class="label">Club Join Link — {{ currentClub.clubs?.name }}</div>
     <p class="text-[11px] text-slate-500 mb-3">
-      Share this in your WhatsApp group. Anyone who taps it requests to join
-      <strong>this club specifically</strong> — no searching among other clubs.
-      Their request still needs your approval below.
+      Share this in your WhatsApp group. Anyone who taps it goes straight to
+      <strong>this club</strong> — no searching among other clubs.
+      <template v-if="clubJoinPolicy === 'public'"> They <strong>join instantly</strong> after signing in — no approval needed.</template>
+      <template v-else-if="clubJoinPolicy === 'closed'"> Note: this club is <strong>Closed</strong>, so the link won't let anyone join until you switch to Open or Public below.</template>
+      <template v-else> Their request still needs your <strong>approval</strong> below.</template>
     </p>
     <div class="text-xs text-slate-400 break-all font-mono mb-3 bg-[rgba(15,23,42,0.04)] rounded-lg p-2 select-all">
       {{ joinLink }}
@@ -831,33 +848,38 @@ async function leaveClub(clubId) {
     </div>
   </div>
 
-  <!-- ── Club Visibility & Country ── -->
+  <!-- ── How players join & Country ── -->
   <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
-    <div class="label">Visibility &amp; Country — {{ currentClub.clubs?.name }}</div>
+    <div class="label">How Players Join — {{ currentClub.clubs?.name }}</div>
 
-    <p class="text-[11px] text-slate-500 mb-2">
-      Controls whether this club shows a "Request to Join" button when people
-      search or browse Explore/Join. Your join link above always works either way.
+    <p class="text-[11px] text-slate-500 mb-3">
+      Choose how new players get into this club.
     </p>
-    <div class="flex gap-2 mb-1">
-      <button class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition"
-        :class="clubIsPublic ? 'text-slate-950' : 'text-slate-500 border border-[rgba(15,23,42,0.15)]'"
-        :style="clubIsPublic ? 'background:linear-gradient(135deg,#00e5ff,#0099cc)' : ''"
-        :disabled="visibilityBusy" @click="toggleVisibility(true)">
-        🌍 Public
-      </button>
-      <button class="flex-1 py-2.5 rounded-xl text-xs font-semibold transition"
-        :class="!clubIsPublic ? 'text-white' : 'text-slate-500 border border-[rgba(15,23,42,0.15)]'"
-        :style="!clubIsPublic ? 'background:linear-gradient(135deg,#64748b,#475569)' : ''"
-        :disabled="visibilityBusy" @click="toggleVisibility(false)">
-        🔒 Closed — invite only
+
+    <div class="space-y-2">
+      <button v-for="opt in [
+          { key: 'open',   icon: '🙋', title: 'Open — request & approve', desc: 'Listed in Explore. People request to join; you approve them below.' },
+          { key: 'public', icon: '🔗', title: 'Public link — instant join', desc: 'Anyone with your join link joins instantly after signing in. No approval.' },
+          { key: 'closed', icon: '🔒', title: 'Closed — invite only', desc: 'Hidden from Explore. Only people you invite manually can join.' },
+        ]" :key="opt.key"
+        class="w-full text-left rounded-xl p-3 border transition flex items-start gap-3"
+        :class="clubJoinPolicy === opt.key
+          ? 'border-cyan-400 bg-cyan-50'
+          : 'border-[rgba(15,23,42,0.12)] hover:border-[rgba(15,23,42,0.25)]'"
+        :disabled="joinPolicyBusy" @click="setJoinPolicy(opt.key)">
+        <span class="text-xl leading-none mt-0.5">{{ opt.icon }}</span>
+        <span class="min-w-0">
+          <span class="block text-sm font-semibold text-slate-800">{{ opt.title }}</span>
+          <span class="block text-[11px] text-slate-500 mt-0.5">{{ opt.desc }}</span>
+        </span>
+        <span v-if="clubJoinPolicy === opt.key" class="ml-auto text-cyan-500 text-lg shrink-0">✓</span>
       </button>
     </div>
-    <p v-if="visibilityNote" class="mt-1 mb-3 text-xs" :class="visibilityNote.ok ? 'text-emerald-500' : 'text-rose-400'">
-      {{ visibilityNote.t }}
+    <p v-if="joinPolicyNote" class="mt-2 mb-1 text-xs" :class="joinPolicyNote.ok ? 'text-emerald-500' : 'text-rose-400'">
+      {{ joinPolicyNote.t }}
     </p>
 
-    <div class="border-t border-[rgba(15,23,42,0.06)] pt-3 mt-1">
+    <div class="border-t border-[rgba(15,23,42,0.06)] pt-3 mt-3">
       <label class="label">Country</label>
       <div class="flex gap-2">
         <select v-model="clubCountryCode" class="input flex-1">
