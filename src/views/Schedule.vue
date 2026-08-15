@@ -702,7 +702,7 @@ watch(currentClub, async () => {
       class="card mb-4 px-4 py-3 flex items-center gap-3">
       <span class="text-xl shrink-0">🔔</span>
       <div class="flex-1 min-w-0">
-        <div class="text-xs font-bold text-slate-200">Get match alerts</div>
+        <div class="text-xs font-bold text-slate-700">Get match alerts</div>
         <div class="text-[10px] text-slate-500">Push notification when your manager plans a new match day</div>
       </div>
       <button class="btn-ghost text-xs px-3 py-1.5 shrink-0" :disabled="subscribingPush"
@@ -767,15 +767,15 @@ watch(currentClub, async () => {
       <div v-if="showDateModal" class="fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/70" @click="closeDateModal" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
-          style="background:#0a1628; max-height:90vh; border-top:1px solid rgba(255,255,255,.1)">
+          style="background:#eef4ff; max-height:90vh; border-top:1px solid rgba(15,23,42,.08)">
 
           <!-- Sticky header -->
           <div class="sticky top-0 px-4 pt-3 pb-3 z-10"
-            style="background:#0a1628; border-bottom:1px solid rgba(255,255,255,.07)">
-            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+            style="background:#eef4ff; border-bottom:1px solid rgba(15,23,42,.08)">
+            <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-3" />
             <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-200">{{ selectedDateLabel }}</span>
-              <button @click="closeDateModal" class="text-slate-400 hover:text-slate-200 text-lg leading-none">✕</button>
+              <span class="font-semibold text-slate-800">{{ selectedDateLabel }}</span>
+              <button @click="closeDateModal" class="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
             </div>
           </div>
 
@@ -785,7 +785,7 @@ watch(currentClub, async () => {
             <!-- Multi-slot day: choose which session's poll to open -->
             <div v-if="showSlotPicker" class="pt-6 pb-4">
               <div class="text-center mb-4">
-                <div class="font-semibold text-slate-200 text-lg mb-1">{{ daySlots.length }} sessions on this day</div>
+                <div class="font-semibold text-slate-800 text-lg mb-1">{{ daySlots.length }} sessions on this day</div>
                 <div class="text-xs text-slate-500">Pick a session to view or vote in its poll.</div>
               </div>
               <div class="space-y-2">
@@ -799,7 +799,7 @@ watch(currentClub, async () => {
                     <div class="text-xs text-emerald-500 font-semibold">
                       {{ s.attending_count }} in<span v-if="s.max_attendees" class="text-slate-400"> / {{ s.max_attendees }}</span>
                     </div>
-                    <span class="text-cyan-400 text-lg">›</span>
+                    <span class="text-cyan-600 text-lg">›</span>
                   </div>
                 </button>
               </div>
@@ -809,14 +809,14 @@ watch(currentClub, async () => {
             <!-- No schedule for the day, or adding a fresh session: create prompt -->
             <div v-else-if="showCreateForm" class="pt-8 pb-4 text-center">
               <div class="text-4xl mb-3">🏸</div>
-              <div class="font-semibold text-slate-200 text-lg mb-1">
+              <div class="font-semibold text-slate-800 text-lg mb-1">
                 {{ newSlotMode ? 'Add a session' : 'Plan a match' }} on {{ selectedDateLabel }}
               </div>
               <div class="text-xs text-slate-500 mb-5">Pick a venue to create it and open the poll.</div>
 
               <!-- Optional time slot + attendee limit -->
               <div class="text-left mb-4">
-                <button class="text-xs text-cyan-400 hover:text-cyan-300 mb-2" @click="showSlotOpts = !showSlotOpts">
+                <button class="text-xs text-cyan-600 hover:text-cyan-800 mb-2" @click="showSlotOpts = !showSlotOpts">
                   {{ showSlotOpts ? '▾' : '▸' }} Time &amp; attendee limit (optional)
                 </button>
                 <div v-if="showSlotOpts" class="space-y-3 card p-3">
@@ -849,7 +849,7 @@ watch(currentClub, async () => {
             <div v-else class="space-y-4 pt-4">
 
               <!-- Multi-slot day: quick nav back to the session list -->
-              <button v-if="daySlots.length > 1" class="text-xs text-cyan-400 hover:text-cyan-300 -mb-1" @click="backToSlots">
+              <button v-if="daySlots.length > 1" class="text-xs text-cyan-600 hover:text-cyan-800 -mb-1" @click="backToSlots">
                 ‹ All {{ daySlots.length }} sessions
               </button>
 
@@ -858,11 +858,11 @@ watch(currentClub, async () => {
                 <div class="font-display text-lg font-bold gradient-text leading-snug mb-1">{{ scheduleHeader }}</div>
                 <div class="flex flex-wrap items-center gap-2">
                   <div v-if="fmtSlotTime(selectedSchedule)"
-                    class="inline-flex items-center gap-1 text-xs text-cyan-300 bg-cyan-500/10 rounded px-2 py-0.5">
+                    class="inline-flex items-center gap-1 text-xs text-cyan-700 bg-cyan-500/10 rounded px-2 py-0.5">
                     🕒 {{ fmtSlotTime(selectedSchedule) }}
                   </div>
                   <div v-if="selectedSchedule.max_attendees"
-                    class="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 rounded px-2 py-0.5">
+                    class="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-500/10 rounded px-2 py-0.5">
                     👥 Max {{ selectedSchedule.max_attendees }}
                   </div>
                   <div v-if="selectedSchedule.status === 'cancelled'"
@@ -914,7 +914,7 @@ watch(currentClub, async () => {
                 </div>
 
                 <!-- Grow this day into another time-slot session -->
-                <button class="w-full text-xs text-cyan-300 hover:text-cyan-200 py-1.5 mt-1 rounded-lg hover:bg-cyan-500/10 transition"
+                <button class="w-full text-xs text-cyan-700 hover:text-cyan-900 py-1.5 mt-1 rounded-lg hover:bg-cyan-500/10 transition"
                         @click="startNewSlot">
                   ＋ Add another session on this day
                 </button>
@@ -1208,17 +1208,17 @@ watch(currentClub, async () => {
       <div v-if="showFacilityPicker" class="fixed inset-0 z-[60]">
         <div class="absolute inset-0 bg-black/70" @click="showFacilityPicker = false" />
         <div class="absolute bottom-0 left-0 right-0 rounded-t-2xl overflow-hidden"
-          style="background:#0a1628; max-height:82vh; border-top:1px solid rgba(255,255,255,.1)">
+          style="background:#eef4ff; max-height:82vh; border-top:1px solid rgba(15,23,42,.08)">
 
           <!-- Sticky header -->
-          <div class="sticky top-0 px-4 pt-3 pb-3" style="background:#0a1628">
-            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
+          <div class="sticky top-0 px-4 pt-3 pb-3" style="background:#eef4ff">
+            <div class="w-10 h-1 rounded-full bg-slate-300 mx-auto mb-3" />
             <div class="flex items-center justify-between mb-3">
-              <span class="font-semibold">Select Venue — {{ selectedDateLabel }}</span>
-              <button @click="showFacilityPicker = false" class="text-slate-400 hover:text-slate-200">✕</button>
+              <span class="font-semibold text-slate-800">Select Venue — {{ selectedDateLabel }}</span>
+              <button @click="showFacilityPicker = false" class="text-slate-400 hover:text-slate-700">✕</button>
             </div>
             <input v-model="facilitySearch" placeholder="Search venues…"
-              class="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm outline-none focus:border-cyan-500/40 transition" />
+              class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-cyan-500/40 transition" />
           </div>
 
           <!-- Scrollable list -->
@@ -1289,14 +1289,14 @@ watch(currentClub, async () => {
       <div v-if="showVotesModal" class="fixed inset-0 z-50 flex items-end justify-center p-4 pb-8">
         <div class="absolute inset-0 bg-black/70" @click="showVotesModal = false" />
         <div class="relative w-full max-w-sm rounded-2xl overflow-hidden"
-          style="background:#0a1628; border:1px solid rgba(255,255,255,.1)">
+          style="background:#eef4ff; border:1px solid rgba(15,23,42,.08)">
           <div class="p-4 pb-0">
             <div class="flex items-start justify-between mb-3">
               <div>
-                <h3 class="font-semibold text-sm">Poll Votes</h3>
+                <h3 class="font-semibold text-sm text-slate-800">Poll Votes</h3>
                 <div class="text-[11px] text-slate-500">{{ selectedDateLabel }}</div>
               </div>
-              <button @click="showVotesModal = false" class="text-slate-400 hover:text-slate-200 text-lg">✕</button>
+              <button @click="showVotesModal = false" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
 
             <!-- Tabs -->
@@ -1304,7 +1304,7 @@ watch(currentClub, async () => {
               <button v-for="t in ['all','attending','not_attending']" :key="t"
                 @click="votesFilter = t"
                 class="rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition"
-                :class="votesFilter === t ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-slate-300'">
+                :class="votesFilter === t ? 'bg-cyan-500 text-white' : 'text-slate-500 hover:text-slate-700'">
                 {{ t === 'all' ? `All (${votes.length})` : t === 'attending' ? `✅ ${votes.filter(v=>v.vote==='attending').length}` : `❌ ${votes.filter(v=>v.vote==='not_attending').length}` }}
               </button>
             </div>
