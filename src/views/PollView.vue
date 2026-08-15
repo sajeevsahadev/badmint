@@ -19,6 +19,10 @@ const showVotes    = ref(false)
 const votesLoading = ref(false)
 const copied   = ref(false)
 const error    = ref(null)
+const voteError = ref(null)
+// Only club members may respond; non-members can view but not vote.
+const canVote = computed(() => !!user.value && schedule.value?.is_member === true)
+const isNonMember = computed(() => !!user.value && schedule.value?.is_member === false)
 let _copiedTimer = null
 onUnmounted(() => clearTimeout(_copiedTimer))
 
@@ -59,17 +63,28 @@ async function castVote(option) {
     router.push('/login')
     return
   }
+  if (isNonMember.value) return   // guarded in UI; server also rejects
   voting.value = option
+  voteError.value = null
   const { error: err } = await supabase.rpc('vote_schedule', {
     p_schedule_id: schedule.value.id,
     p_vote:        option
   })
   if (err) {
-    alert(err.message)
+    voteError.value = err.message
   } else {
     await loadSchedule()
   }
   voting.value = null
+}
+
+function joinClub() {
+  if (!user.value) {
+    sessionStorage.setItem('bm_after_login', route.fullPath)
+    router.push('/login')
+  } else {
+    router.push(`/club/${schedule.value.club_id}`)
+  }
 }
 
 async function loadVotes() {
@@ -150,7 +165,7 @@ onMounted(loadSchedule)
         <div class="grid grid-cols-2 gap-3 mb-4">
           <button
             @click="castVote('attending')"
-            :disabled="voting !== null || schedule.status === 'cancelled'"
+            :disabled="voting !== null || schedule.status === 'cancelled' || isNonMember"
             class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
             :class="schedule.my_vote === 'attending'
               ? 'bg-emerald-500/15 border-emerald-500/60'
@@ -161,7 +176,7 @@ onMounted(loadSchedule)
           </button>
           <button
             @click="castVote('not_attending')"
-            :disabled="voting !== null || schedule.status === 'cancelled'"
+            :disabled="voting !== null || schedule.status === 'cancelled' || isNonMember"
             class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
             :class="schedule.my_vote === 'not_attending'
               ? 'bg-rose-500/15 border-rose-500/60'
@@ -172,20 +187,34 @@ onMounted(loadSchedule)
           </button>
         </div>
 
-        <!-- My vote status -->
-        <div class="text-center text-xs mb-3">
-          <span v-if="!user" class="text-slate-500">
-            <button class="text-neon underline" @click="$router.push('/login')">Sign in</button> to cast your vote
-          </span>
-          <span v-else-if="schedule.my_vote" :class="schedule.my_vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">
+        <!-- Not signed in -->
+        <div v-if="!user" class="rounded-xl px-3 py-3 mb-3 text-center text-xs"
+          style="background:rgba(0,168,204,.08); border:1px solid rgba(0,168,204,.25)">
+          <p class="text-slate-600 mb-2">Sign in to respond to this poll.</p>
+          <button class="btn-primary text-xs px-4 py-2" @click="joinClub">Sign in</button>
+        </div>
+
+        <!-- Signed in but not a member of this club -->
+        <div v-else-if="isNonMember" class="rounded-xl px-3 py-3 mb-3 text-center text-xs"
+          style="background:rgba(251,191,36,.10); border:1px solid rgba(251,191,36,.35)">
+          <p class="text-amber-700 font-semibold mb-1">You're not a member of {{ schedule.club_name }}</p>
+          <p class="text-slate-500 mb-2">Join the club first to mark your attendance.</p>
+          <button class="btn-primary text-xs px-4 py-2" @click="joinClub">Join {{ schedule.club_name }}</button>
+        </div>
+
+        <!-- Member: vote status -->
+        <div v-else class="text-center text-xs mb-3">
+          <span v-if="schedule.my_vote" :class="schedule.my_vote === 'attending' ? 'text-emerald-500' : 'text-rose-500'">
             Your vote: {{ schedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
             <button class="ml-2 text-slate-500 underline"
               @click="castVote(schedule.my_vote === 'attending' ? 'not_attending' : 'attending')">
               change
             </button>
           </span>
-          <span v-else class="text-slate-600">Tap a button to vote</span>
+          <span v-else class="text-slate-500">Tap a button to respond</span>
         </div>
+
+        <p v-if="voteError" class="text-center text-xs text-rose-500 mb-3">⚠ {{ voteError }}</p>
 
         <!-- Total + view votes -->
         <div class="flex items-center justify-between text-xs text-slate-600">
