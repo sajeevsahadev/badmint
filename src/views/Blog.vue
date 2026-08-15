@@ -42,7 +42,7 @@ onMounted(async () => {
       style="background:linear-gradient(135deg,#0b1220 0%,#0f2a4a 55%,#0a5b74 100%);">
       <div class="absolute inset-0 opacity-20" aria-hidden="true"
         style="background-image:radial-gradient(circle at 20% 30%, #22d3ee55, transparent 40%), radial-gradient(circle at 80% 20%, #a855f755, transparent 40%);"></div>
-      <div class="relative max-w-3xl mx-auto px-5 pt-8 pb-10">
+      <div class="relative max-w-3xl mx-auto px-5 pt-8 pb-10 safe-area-pt">
         <RouterLink to="/" class="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition mb-6">‹ Badminton 360</RouterLink>
         <div class="text-4xl mb-3">🏸</div>
         <h1 class="font-display text-3xl sm:text-4xl font-extrabold leading-tight">The Badminton 360 Blog</h1>

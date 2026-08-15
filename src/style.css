@@ -271,6 +271,11 @@ input, textarea, select, [contenteditable="true"], .select-all {
 
 /* ── Safe-area padding for iOS bottom nav ── */
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0); }
+/* Clear the iOS status bar / notch / Dynamic Island on installed PWAs.
+   env() is 0 in a normal browser, so these are no-ops off iOS standalone. */
+.safe-area-pt { padding-top: env(safe-area-inset-top, 0); }
+.pt-safe      { padding-top: calc(env(safe-area-inset-top, 0px) + 1rem); }
+.top-safe     { top: calc(env(safe-area-inset-top, 0px) + 0.75rem); }
 
 /* ── Light-theme text remapping ──────────────────────────────────────────────
    Tailwind's near-white slate shades (100–300) are invisible on the light

@@ -298,7 +298,7 @@ const needsClub = computed(() =>
          Public views (Explore, Home, FacilityProfile) don't use this shell's
          top bar, so we overlay a fixed button so navigation is always reachable. -->
     <button v-if="user && route.meta.public"
-      class="fixed top-3 left-3 z-40 w-10 h-10 rounded-xl flex flex-col items-center
+      class="fixed top-safe left-3 z-40 w-10 h-10 rounded-xl flex flex-col items-center
              justify-center gap-[5px] border hover:shadow-md transition shrink-0"
       style="background:rgba(255,255,255,.92); backdrop-filter:blur(12px);
              border-color:rgba(0,0,0,.10); box-shadow:0 2px 10px rgba(0,0,0,.10);"
@@ -320,7 +320,7 @@ const needsClub = computed(() =>
     </div>
 
     <!-- ── Authenticated shell ─────────────────────────────────────────────── -->
-    <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-4">
+    <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-safe">
 
       <!-- PWA install banner -->
       <div v-if="canInstall && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
