@@ -400,7 +400,9 @@ async function createSchedule(facilityId, facilityName) {
     schedId = res.data?.id
   }
 
-  if (error) { scheduleError.value = error.message; return }
+  // Close the picker even on failure — it's a higher overlay, so leaving it open
+  // would hide the error banner underneath and look like the flow is stuck.
+  if (error) { scheduleError.value = error.message; showFacilityPicker.value = false; return }
   scheduleError.value = null
   showFacilityPicker.value = false
   const isNew = !existing
