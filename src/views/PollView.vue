@@ -30,7 +30,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
 const dateLabel = computed(() => {
-  if (!schedule.value) return ''
+  if (!schedule.value?.scheduled_date) return ''
   const [y, m, d] = schedule.value.scheduled_date.split('-').map(Number)
   const dt = new Date(y, m - 1, d)
   return `${MONTHS[m-1]} ${d} ${DAYS[dt.getDay()]}`
@@ -145,87 +145,70 @@ onMounted(loadSchedule)
         <div class="text-[10px] text-slate-600 tracking-widest uppercase">Your Club · Your Game · One App</div>
       </div>
 
-      <!-- Schedule card -->
-      <div class="card-neon p-5 mb-5">
-        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Match Day Poll</div>
-        <h1 class="font-display text-xl font-bold gradient-text leading-snug">
-          {{ dateLabel }}
-        </h1>
-        <div v-if="venueName" class="text-sm text-slate-400 mt-1">📍 {{ venueName }}</div>
-        <div class="text-xs text-slate-600 mt-0.5">{{ schedule.club_name }}</div>
-
-        <div v-if="schedule.status === 'cancelled'"
-          class="mt-2 inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">
-          Cancelled
-        </div>
+      <!-- ── GATE: logged out or not a member → no poll details at all ── -->
+      <div v-if="!canVote" class="card p-8 text-center">
+        <div class="text-4xl mb-3">🔒</div>
+        <template v-if="!user">
+          <p class="font-semibold text-slate-700 mb-1">Members only</p>
+          <p class="text-sm text-slate-500 mb-5 leading-relaxed">Sign in to view and respond to this club's match poll.</p>
+          <button class="btn-primary px-6 py-2.5" @click="joinClub">Sign in</button>
+        </template>
+        <template v-else>
+          <p class="font-semibold text-slate-700 mb-1">You're not a member of this club</p>
+          <p class="text-sm text-slate-500 mb-5 leading-relaxed">Only club members can view this poll. Ask a club manager to add you.</p>
+          <RouterLink to="/dashboard" class="btn-ghost px-6 py-2.5">Open App</RouterLink>
+        </template>
       </div>
 
-      <!-- Poll -->
-      <div class="card p-4 mb-4">
-        <div v-if="canVote" class="grid grid-cols-2 gap-3 mb-4">
-          <button
-            @click="castVote('attending')"
-            :disabled="voting !== null || schedule.status === 'cancelled' || isNonMember"
-            class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
-            :class="schedule.my_vote === 'attending'
-              ? 'bg-emerald-500/15 border-emerald-500/60'
-              : 'border-[rgba(15,23,42,0.10)] hover:border-emerald-500/30 active:opacity-70'">
-            <span class="text-3xl">✅</span>
-            <span class="text-sm font-semibold text-slate-200">Attending</span>
-            <span class="text-3xl font-bold text-emerald-400">{{ schedule.attending_count }}</span>
-          </button>
-          <button
-            @click="castVote('not_attending')"
-            :disabled="voting !== null || schedule.status === 'cancelled' || isNonMember"
-            class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
-            :class="schedule.my_vote === 'not_attending'
-              ? 'bg-rose-500/15 border-rose-500/60'
-              : 'border-[rgba(15,23,42,0.10)] hover:border-rose-500/30 active:opacity-70'">
-            <span class="text-3xl">❌</span>
-            <span class="text-sm font-semibold text-slate-200">Not Attending</span>
-            <span class="text-3xl font-bold text-rose-400">{{ schedule.not_attending_count }}</span>
-          </button>
+      <!-- ── MEMBER VIEW ── -->
+      <template v-else>
+        <!-- Schedule card -->
+        <div class="card-neon p-5 mb-5">
+          <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Match Day Poll</div>
+          <h1 class="font-display text-xl font-bold gradient-text leading-snug">{{ dateLabel }}</h1>
+          <div v-if="venueName" class="text-sm text-slate-400 mt-1">📍 {{ venueName }}</div>
+          <div class="text-xs text-slate-600 mt-0.5">{{ schedule.club_name }}</div>
+          <div v-if="schedule.status === 'cancelled'"
+            class="mt-2 inline-block text-xs bg-rose-500/20 text-rose-400 rounded px-2 py-0.5">Cancelled</div>
         </div>
 
-        <!-- Not signed in -->
-        <div v-if="!user" class="rounded-xl px-3 py-3 mb-3 text-center text-xs"
-          style="background:rgba(0,168,204,.08); border:1px solid rgba(0,168,204,.25)">
-          <p class="text-slate-600 mb-2">Sign in to respond to this poll.</p>
-          <button class="btn-primary text-xs px-4 py-2" @click="joinClub">Sign in</button>
-        </div>
-
-        <!-- Signed in but not a member of this club -->
-        <div v-else-if="isNonMember" class="rounded-xl px-3 py-3 mb-3 text-center text-xs"
-          style="background:rgba(251,191,36,.10); border:1px solid rgba(251,191,36,.35)">
-          <p class="text-amber-700 font-semibold mb-1">You're not a member of {{ schedule.club_name }}</p>
-          <p class="text-slate-500 mb-2">Join the club first to mark your attendance.</p>
-          <button class="btn-primary text-xs px-4 py-2" @click="joinClub">Join {{ schedule.club_name }}</button>
-        </div>
-
-        <!-- Member: vote status -->
-        <div v-else class="text-center text-xs mb-3">
-          <span v-if="schedule.my_vote" :class="schedule.my_vote === 'attending' ? 'text-emerald-500' : 'text-rose-500'">
-            Your vote: {{ schedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
-            <button class="ml-2 text-slate-500 underline"
-              @click="castVote(schedule.my_vote === 'attending' ? 'not_attending' : 'attending')">
-              change
+        <!-- Poll -->
+        <div class="card p-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <button @click="castVote('attending')" :disabled="voting !== null || schedule.status === 'cancelled'"
+              class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
+              :class="schedule.my_vote === 'attending' ? 'bg-emerald-500/15 border-emerald-500/60' : 'border-[rgba(15,23,42,0.10)] hover:border-emerald-500/30 active:opacity-70'">
+              <span class="text-3xl">✅</span>
+              <span class="text-sm font-semibold text-slate-700">Attending</span>
+              <span class="text-3xl font-bold text-emerald-500">{{ schedule.attending_count }}</span>
             </button>
-          </span>
-          <span v-else class="text-slate-500">Tap a button to respond</span>
-        </div>
+            <button @click="castVote('not_attending')" :disabled="voting !== null || schedule.status === 'cancelled'"
+              class="rounded-2xl p-4 flex flex-col items-center gap-2 border transition"
+              :class="schedule.my_vote === 'not_attending' ? 'bg-rose-500/15 border-rose-500/60' : 'border-[rgba(15,23,42,0.10)] hover:border-rose-500/30 active:opacity-70'">
+              <span class="text-3xl">❌</span>
+              <span class="text-sm font-semibold text-slate-700">Not Attending</span>
+              <span class="text-3xl font-bold text-rose-500">{{ schedule.not_attending_count }}</span>
+            </button>
+          </div>
 
-        <p v-if="voteError" class="text-center text-xs text-rose-500 mb-3">⚠ {{ voteError }}</p>
+          <div class="text-center text-xs mb-3">
+            <span v-if="schedule.my_vote" :class="schedule.my_vote === 'attending' ? 'text-emerald-500' : 'text-rose-500'">
+              Your vote: {{ schedule.my_vote === 'attending' ? 'Attending ✓' : 'Not Attending ✓' }}
+              <button class="ml-2 text-slate-500 underline" @click="castVote(schedule.my_vote === 'attending' ? 'not_attending' : 'attending')">change</button>
+            </span>
+            <span v-else class="text-slate-500">Tap a button to respond</span>
+          </div>
+          <p v-if="voteError" class="text-center text-xs text-rose-500 mb-3">⚠ {{ voteError }}</p>
 
-        <!-- Total + view votes (members only) -->
-        <div v-if="canVote" class="flex items-center justify-between text-xs text-slate-600">
-          <span>{{ totalVotes }} {{ totalVotes === 1 ? 'vote' : 'votes' }} total</span>
-          <button class="underline text-slate-500 hover:text-slate-300 transition"
-            @click="loadVotes">View Votes</button>
+          <div class="flex items-center justify-between text-xs text-slate-600">
+            <span>{{ totalVotes }} {{ totalVotes === 1 ? 'vote' : 'votes' }} total</span>
+            <button class="underline text-slate-500 hover:text-slate-300 transition" @click="loadVotes">View Votes</button>
+          </div>
         </div>
-      </div>
+      </template>
 
       <!-- Votes list (inline, loads on demand) -->
-      <div v-if="showVotes" class="card p-4 mb-4">
+      <div v-if="canVote && showVotes" class="card p-4 mb-4">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-semibold uppercase tracking-widest text-slate-500">Who Voted</span>
           <button @click="showVotes = false" class="text-xs text-slate-600">hide</button>
