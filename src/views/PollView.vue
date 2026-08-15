@@ -162,7 +162,7 @@ onMounted(loadSchedule)
 
       <!-- Poll -->
       <div class="card p-4 mb-4">
-        <div class="grid grid-cols-2 gap-3 mb-4">
+        <div v-if="canVote" class="grid grid-cols-2 gap-3 mb-4">
           <button
             @click="castVote('attending')"
             :disabled="voting !== null || schedule.status === 'cancelled' || isNonMember"
@@ -216,8 +216,8 @@ onMounted(loadSchedule)
 
         <p v-if="voteError" class="text-center text-xs text-rose-500 mb-3">⚠ {{ voteError }}</p>
 
-        <!-- Total + view votes -->
-        <div class="flex items-center justify-between text-xs text-slate-600">
+        <!-- Total + view votes (members only) -->
+        <div v-if="canVote" class="flex items-center justify-between text-xs text-slate-600">
           <span>{{ totalVotes }} {{ totalVotes === 1 ? 'vote' : 'votes' }} total</span>
           <button class="underline text-slate-500 hover:text-slate-300 transition"
             @click="loadVotes">View Votes</button>
