@@ -1253,7 +1253,7 @@ watch(currentClub, async () => {
               </div>
 
               <!-- Custom venue -->
-              <div class="mt-4 pt-4 border-t border-white/10">
+              <div class="mt-4 pt-4 border-t border-[rgba(15,23,42,0.08)]">
                 <div class="text-xs text-slate-500 mb-2">Venue not listed?</div>
                 <div v-if="!showCreateFacility">
                   <button class="btn-ghost w-full text-sm py-2.5" @click="showCreateFacility = true">
@@ -1262,7 +1262,7 @@ watch(currentClub, async () => {
                 </div>
                 <div v-else class="space-y-2">
                   <input v-model="newFacName" placeholder="e.g. Al Nasr Sports Club, Dubai"
-                    class="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm outline-none focus:border-cyan-500/40" />
+                    class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-cyan-500/40" />
                   <div class="flex gap-2">
                     <button class="btn-primary flex-1 py-2 text-sm"
                       :disabled="!newFacName.trim()"
@@ -1317,10 +1317,10 @@ watch(currentClub, async () => {
                 No votes yet.
               </div>
               <div v-for="v in filteredVotes" :key="v.user_id"
-                class="flex items-center gap-3 py-2.5 border-b border-white/5 last:border-0">
+                class="flex items-center gap-3 py-2.5 border-b border-[rgba(15,23,42,0.06)] last:border-0">
               <Avatar :name="v.display_name || '?'" :src="avatarMap[v.user_id]" :size="32" />
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-white truncate">{{ v.display_name || 'Unknown' }}</div>
+                <div class="text-sm font-medium text-slate-800 truncate">{{ v.display_name || 'Unknown' }}</div>
                 <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>
               </div>
               <span class="text-lg shrink-0" :class="v.vote === 'attending' ? 'text-emerald-400' : 'text-rose-400'">

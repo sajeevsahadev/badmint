@@ -256,7 +256,7 @@ onMounted(loadSchedule)
             class="flex items-center gap-3 py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0">
             <Avatar :name="v.display_name || '?'" :src="avatarMap[v.user_id]" :size="32" />
             <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium text-slate-100 truncate">{{ v.display_name || 'Unknown' }}</div>
+              <div class="text-sm font-medium text-slate-800 truncate">{{ v.display_name || 'Unknown' }}</div>
               <div class="text-[10px] text-slate-500">{{ timeAgo(v.voted_at) }}</div>
             </div>
             <span v-if="v.vote === 'attending' && !v.is_present"
