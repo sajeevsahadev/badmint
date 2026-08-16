@@ -44,13 +44,15 @@ async function load() {
     adminView.value = (roles ?? []).some(r => r.role === 'app_admin')
   }
 
-  // Always fetch public club info via get_public_clubs (bypasses RLS)
+  // Fetch this club's ranking row directly (get_club_ranking bypasses RLS and,
+  // unlike get_public_clubs, returns closed clubs too so their members can view
+  // the profile).
   const [rankRes, lbRes] = await Promise.all([
-    supabase.rpc('get_public_clubs'),
+    supabase.rpc('get_club_ranking', { p_club_id: clubId }),
     supabase.rpc('get_club_leaderboard', { p_club_id: clubId }),
   ])
 
-  const publicClub = (rankRes.data ?? []).find(c => c.id === clubId) ?? null
+  const publicClub = (rankRes.data ?? [])[0] ?? null
   ranking.value = publicClub
 
   if (!publicClub) {
