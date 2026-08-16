@@ -13,6 +13,18 @@ import { supabase } from '../lib/supabase'
 // Function secrets together, then existing clients auto re-key on next load.
 const VAPID_PUBLIC_KEY = 'BFXI6DZ2xlvyg6UgtVvgs1WrRY7dbHAFBm5xje4RGvAXEStHaP-cLNDwuiwK07-df8K0J2j0aFHWGkjfyE0KAjk'
 
+// Short fingerprint of the current key, stored in localStorage when we subscribe.
+// This lets us detect a deliberate VAPID rotation on EVERY device — even the many
+// browsers (Android/WebView especially) that return applicationServerKey:null on a
+// retrieved subscription and so can't be verified by byte-comparison.
+const KEY_TAG   = 'k' + VAPID_PUBLIC_KEY.slice(-12)
+const TAG_STORE = 'bm_push_keytag'
+// Stale only when a DIFFERENT tag was previously stored (a real rotation).
+// A missing tag (existing users, first run after this fix) is NOT stale, so we
+// never force a disruptive re-subscribe on everyone — we just record the tag.
+function tagStale()  { try { const t = localStorage.getItem(TAG_STORE); return t !== null && t !== KEY_TAG } catch { return false } }
+function markTag()   { try { localStorage.setItem(TAG_STORE, KEY_TAG) } catch { /* ignore */ } }
+
 function urlBase64ToUint8Array(base64) {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4)
   const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/')
@@ -20,15 +32,19 @@ function urlBase64ToUint8Array(base64) {
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
 }
 
-// Does an existing browser subscription use the same applicationServerKey we
-// sign with? If not, it was created with an old VAPID key and is undeliverable.
-function subKeyMatches(sub, wantBytes) {
+// Returns true ONLY when we can positively prove the subscription uses a
+// different key than we sign with. Crucially, when the browser doesn't expose
+// applicationServerKey on a retrieved subscription (returns null — common on
+// Android/WebView), we DO NOT claim a mismatch. Treating "unknown" as "stale"
+// was the bug: it made a perfectly good subscription read as "not enabled"
+// after reopening the app, and re-subscribed on every launch.
+function keyDefinitelyDiffers(sub, wantBytes) {
   const buf = sub?.options?.applicationServerKey
-  if (!buf) return false
+  if (!buf) return false            // unknown → cannot conclude a mismatch
   const have = new Uint8Array(buf)
-  if (have.length !== wantBytes.length) return false
-  for (let i = 0; i < have.length; i++) if (have[i] !== wantBytes[i]) return false
-  return true
+  if (have.length !== wantBytes.length) return true
+  for (let i = 0; i < have.length; i++) if (have[i] !== wantBytes[i]) return true
+  return false
 }
 
 export function usePushNotifications() {
@@ -65,9 +81,8 @@ export function usePushNotifications() {
     const reg = await navigator.serviceWorker.ready
     let sub = await reg.pushManager.getSubscription()
 
-    // Heal the exact bug that broke delivery: a subscription created with an
-    // older VAPID key. Re-key it to the current one.
-    if (sub && !subKeyMatches(sub, wantBytes)) {
+    // Re-key only when the key definitely differs, or a rotation is flagged.
+    if (sub && (keyDefinitelyDiffers(sub, wantBytes) || tagStale())) {
       await dropStale(sub)
       sub = null
     }
@@ -79,15 +94,18 @@ export function usePushNotifications() {
     }
 
     await saveSubscription(sub)
+    markTag()
     return sub
   }
 
-  // Returns true only when a *deliverable* (correctly-keyed) subscription exists.
+  // True when a subscription exists and we cannot prove it's mis-keyed. (A
+  // rotation flagged via tagStale is healed silently by resyncIfNeeded on boot,
+  // so we still report enabled here rather than flapping the toggle off.)
   async function isSubscribed() {
     if (!isSupported) return false
     const reg = await navigator.serviceWorker.ready
     const sub = await reg.pushManager.getSubscription()
-    return !!sub && subKeyMatches(sub, urlBase64ToUint8Array(VAPID_PUBLIC_KEY))
+    return !!sub && !keyDefinitelyDiffers(sub, urlBase64ToUint8Array(VAPID_PUBLIC_KEY))
   }
 
   // Silent self-heal, safe to call on app boot. If the user already granted
@@ -101,14 +119,19 @@ export function usePushNotifications() {
       const reg = await navigator.serviceWorker.ready
       const wantBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       let sub = await reg.pushManager.getSubscription()
-      if (sub && !subKeyMatches(sub, wantBytes)) {
+      // Re-key only on a proven mismatch or a flagged rotation — NOT on every
+      // boot just because the browser hides the key.
+      if (sub && (keyDefinitelyDiffers(sub, wantBytes) || tagStale())) {
         await dropStale(sub)
         sub = null
       }
       if (!sub) {
         sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: wantBytes })
       }
+      // Idempotent upsert — also heals a DB row that went missing — plus record
+      // the key tag so a future rotation is detected on this device.
       await saveSubscription(sub)
+      markTag()
       return true
     } catch {
       return false
