@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import Avatar from '../components/Avatar.vue'
+import GamePlan from '../components/GamePlan.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const route  = useRoute()
@@ -282,6 +283,9 @@ onMounted(loadSchedule)
             <button class="underline text-slate-500 hover:text-slate-300 transition" @click="loadVotes">View Votes</button>
           </div>
         </div>
+
+        <!-- Session game plan — read-only, updates live for everyone -->
+        <GamePlan :schedule-id="schedule.id" :can-manage="false" class="mb-4" />
       </template>
 
       <!-- Votes list (inline, loads on demand) -->

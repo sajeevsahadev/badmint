@@ -8,6 +8,7 @@ import { useAuth } from '../composables/useAuth'
 import { usePushNotifications } from '../composables/usePushNotifications'
 import PageHeader from '../components/PageHeader.vue'
 import Avatar from '../components/Avatar.vue'
+import GamePlan from '../components/GamePlan.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const router = useRouter()
@@ -216,6 +217,13 @@ const attendeeIds    = ref(new Set())
 const savingAttendees = ref(false)
 const attendeesDirty  = ref(false)
 const savedAttendeeCount = ref(0)   // persisted attendees — gates "Cancel this event"
+
+// Present players for the game-plan generator: [{ id, name, elo }]
+const planAttendees = computed(() =>
+  allPlayers.value
+    .filter(p => attendeeIds.value.has(p.id))
+    .map(p => ({ id: p.id, name: p.display_name, elo: p.elo }))
+)
 
 // ── Invite ──
 const showInvitePanel = ref(false)
@@ -1022,6 +1030,12 @@ watch(currentClub, async () => {
                   Saved · Add Match will show only these {{ attendeeIds.size }} players
                 </div>
               </div>
+
+              <!-- ── Session Game Plan (fair rotation) ── -->
+              <GamePlan v-if="selectedSchedule"
+                :schedule-id="selectedSchedule.id"
+                :can-manage="isManager()"
+                :attendees="planAttendees" />
 
               <!-- ── Suggested Next Match ── -->
               <div class="card overflow-hidden">
