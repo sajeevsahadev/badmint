@@ -170,10 +170,11 @@ export async function renderPlayerCard(d) {
     }
   }
 
-  // ── Footer ──
+  // ── Footer (URL is baked onto the image so it survives even if a share
+  //     target drops the caption text) ──
   ctx.textAlign = 'center'
   ctx.fillStyle = '#22d3ee'; ctx.font = '700 26px Outfit, sans-serif'
-  ctx.fillText(d.url || 'badminton360.app', W / 2, 1285)
+  ctx.fillText((d.url || 'badminton360.app').replace(/^https?:\/\//, ''), W / 2, 1285)
   ctx.fillStyle = 'rgba(148,163,184,0.8)'; ctx.font = '500 22px Outfit, sans-serif'
   ctx.fillText('View the full profile & live rankings', W / 2, 1320)
 
@@ -186,10 +187,16 @@ export async function renderPlayerCard(d) {
 export async function sharePlayerCard(d) {
   const blob = await renderPlayerCard(d)
   const file = new File([blob], 'badminton360-card.png', { type: 'image/png' })
-  const text = `${d.name} on Badminton 360 — ${d.rank != null ? '#' + d.rank + ' · ' : ''}${d.elo} Elo · ${d.winPct}% win`
+  // Fold the marketing URL INTO the caption text. Many share targets (WhatsApp
+  // especially) drop the separate `url` field when a file is attached but keep
+  // `text`, so the link rides along as the image caption. The URL is also drawn
+  // on the card itself as a last-resort fallback.
+  const text =
+    `🏸 ${d.name} on Badminton 360 — ${d.rank != null ? '#' + d.rank + ' · ' : ''}${d.elo} Elo · ${d.winPct}% wins.\n` +
+    `Free Elo rankings & match tracking for your badminton club: ${d.url}`
   if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: d.name, text, url: d.url })
+      await navigator.share({ files: [file], title: 'Badminton 360', text })
       return 'shared'
     } catch (e) {
       if (e && e.name === 'AbortError') return 'cancelled'
@@ -202,4 +209,14 @@ export async function sharePlayerCard(d) {
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   return 'downloaded'
+}
+
+// Open WhatsApp directly with the marketing message + link (no image). Handy as
+// an explicit "Share on WhatsApp" action for desktop or when the user wants the
+// clickable link in the chat regardless of image-caption behaviour.
+export function whatsappShareUrl(d) {
+  const text =
+    `🏸 ${d.name} on Badminton 360 — ${d.rank != null ? '#' + d.rank + ' · ' : ''}${d.elo} Elo · ${d.winPct}% wins.\n` +
+    `Free Elo rankings & match tracking for your badminton club: ${d.url}`
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
 }

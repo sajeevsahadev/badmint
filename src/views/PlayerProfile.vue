@@ -6,7 +6,7 @@ import { buildProfileMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
 import Avatar from '../components/Avatar.vue'
 import PerfChart from '../components/PerfChart.vue'
-import { sharePlayerCard } from '../utils/share-card'
+import { sharePlayerCard, whatsappShareUrl } from '../utils/share-card'
 
 const route  = useRoute()
 const router = useRouter()
@@ -238,34 +238,38 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
 // ── Performance chart + form (matches are newest-first → reverse to chrono) ──
 const eloSeries = computed(() =>
-  [...matches.value].filter(m => m.eloAfter != null).reverse().map((m, i) => ({ i, elo: m.eloAfter }))
+  [...matches.value].filter(m => m.eloAfter != null).reverse().map((m, i) => ({ i, elo: m.eloAfter, date: m.date }))
 )
 const formGuide = computed(() => [...matches.value].slice(0, 12).reverse().map(m => m.won))
 
 // ── Share card ──
 const sharing   = ref(false)
 const shareNote = ref('')
+const cardData = () => ({
+  name:      publicName.value,
+  club:      clubName.value,
+  city:      emirates.value,
+  rank:      displayRank.value,
+  elo:       Math.round(stats.value?.elo ?? player.value?.elo ?? 1000),
+  games:     stats.value?.games ?? matches.value.length,
+  winPct:    Math.round(stats.value?.win_pct ?? 0),
+  form:      formGuide.value,
+  eloSeries: eloSeries.value.map(p => p.elo),
+  avatarUrl: profile.value?.avatar_url || null,
+  url:       `https://badminton360.app/player/${playerId}`,
+})
 async function shareCard() {
   sharing.value = true; shareNote.value = ''
   try {
-    const res = await sharePlayerCard({
-      name:      publicName.value,
-      club:      clubName.value,
-      city:      emirates.value,
-      rank:      displayRank.value,
-      elo:       Math.round(stats.value?.elo ?? player.value?.elo ?? 1000),
-      games:     stats.value?.games ?? matches.value.length,
-      winPct:    Math.round(stats.value?.win_pct ?? 0),
-      form:      formGuide.value,
-      eloSeries: eloSeries.value.map(p => p.elo),
-      avatarUrl: profile.value?.avatar_url || null,
-      url:       `badminton360.app/player/${playerId}`,
-    })
+    const res = await sharePlayerCard(cardData())
     if (res === 'downloaded') shareNote.value = '📥 Card saved — attach it in any app.'
   } catch {
     shareNote.value = 'Could not create the card. Please try again.'
   }
   sharing.value = false
+}
+function shareWhatsApp() {
+  window.open(whatsappShareUrl(cardData()), '_blank')
 }
 
 const expandedDates = ref(new Set())
@@ -366,10 +370,16 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
         ✏️ Edit My Profile
       </RouterLink>
 
-      <!-- Share this player's card as an image (WhatsApp / Instagram / anywhere) -->
-      <button class="mt-2 w-full btn-primary py-2.5 text-sm gap-1.5" :disabled="sharing" @click="shareCard">
-        {{ sharing ? 'Creating card…' : '📤 Share Player Card' }}
-      </button>
+      <!-- Share this player's card as an image (Instagram / anywhere) + a
+           direct WhatsApp link so the badminton360.app URL always tags along -->
+      <div class="mt-2 flex gap-2">
+        <button class="flex-1 btn-primary py-2.5 text-sm gap-1.5" :disabled="sharing" @click="shareCard">
+          {{ sharing ? 'Creating card…' : '📤 Share Card' }}
+        </button>
+        <button class="py-2.5 px-4 rounded-xl text-sm font-semibold transition shrink-0"
+          style="background:rgba(37,211,102,0.14); border:1px solid rgba(37,211,102,0.35); color:#15803d"
+          @click="shareWhatsApp">💬 WhatsApp</button>
+      </div>
       <p v-if="shareNote" class="text-center text-[11px] text-slate-500 mt-1.5">{{ shareNote }}</p>
     </div>
 
