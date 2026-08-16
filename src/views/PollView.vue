@@ -3,12 +3,14 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import { useClub } from '../composables/useClub'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 
 const route  = useRoute()
 const router = useRouter()
 const { user } = useAuth()
+const { loadClubs } = useClub()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
 
 const schedule = ref(null)
@@ -20,9 +22,13 @@ const votesLoading = ref(false)
 const copied   = ref(false)
 const error    = ref(null)
 const voteError = ref(null)
+const joinError = ref(null)
+let autoJoinTried = false
 // Only club members may respond; non-members can view but not vote.
 const canVote = computed(() => !!user.value && schedule.value?.is_member === true)
 const isNonMember = computed(() => !!user.value && schedule.value?.is_member === false)
+// Public clubs let anyone join instantly via the link (see scenarios 2 & 3).
+const isPublicClub = computed(() => schedule.value?.join_policy === 'public')
 let _copiedTimer = null
 onUnmounted(() => clearTimeout(_copiedTimer))
 
@@ -76,10 +82,36 @@ async function loadSchedule() {
   })
   if (err || !data?.length) {
     error.value = 'Match day not found or the link has expired.'
-  } else {
-    schedule.value = data[0]
+    loading.value = false
+    return
+  }
+  schedule.value = data[0]
+
+  // Scenario 2: logged-in member of B360 but not of THIS club, and the club is
+  // public → auto-join instantly, then re-fetch so the poll shows as a member.
+  if (user.value && schedule.value.is_member === false && isPublicClub.value && !autoJoinTried) {
+    autoJoinTried = true
+    const { error: jerr } = await supabase.rpc('join_club_public', { p_club_id: schedule.value.club_id })
+    sessionStorage.removeItem('bm_skip_intro')
+    if (jerr) {
+      joinError.value = jerr.message
+    } else {
+      // Refresh the app's club cache so the new membership is known app-wide.
+      await loadClubs().catch(() => {})
+      const { data: d2 } = await supabase.rpc('get_schedule_detail', { p_schedule_id: route.params.id })
+      if (d2?.length) schedule.value = d2[0]
+    }
   }
   loading.value = false
+}
+
+// Scenario 3: not signed in → sign in, then come back here and auto-join.
+function signInToJoin() {
+  sessionStorage.setItem('bm_after_login', route.fullPath)
+  // Only suppress the first-run wizard when this poll's club will actually
+  // auto-join them (public). Non-public sign-ins keep the normal onboarding.
+  if (isPublicClub.value) sessionStorage.setItem('bm_skip_intro', '1')
+  router.push('/login')
 }
 
 async function castVote(option) {
@@ -101,15 +133,6 @@ async function castVote(option) {
     await loadSchedule()
   }
   voting.value = null
-}
-
-function joinClub() {
-  if (!user.value) {
-    sessionStorage.setItem('bm_after_login', route.fullPath)
-    router.push('/login')
-  } else {
-    router.push(`/club/${schedule.value.club_id}`)
-  }
 }
 
 async function loadVotes() {
@@ -170,17 +193,35 @@ onMounted(loadSchedule)
         <div class="text-[10px] text-slate-600 tracking-widest uppercase">Your Club · Your Game · One App</div>
       </div>
 
-      <!-- ── GATE: logged out or not a member → no poll details at all ── -->
+      <!-- ── GATE: non-members. Public clubs get an instant-join path; others
+           stay members-only. ── -->
       <div v-if="!canVote" class="card p-8 text-center">
-        <div class="text-4xl mb-3">🔒</div>
+        <!-- Not signed in -->
         <template v-if="!user">
-          <p class="font-semibold text-slate-700 mb-1">Members only</p>
-          <p class="text-sm text-slate-500 mb-5 leading-relaxed">Sign in to view and respond to this club's match poll.</p>
-          <button class="btn-primary px-6 py-2.5" @click="joinClub">Sign in</button>
+          <div class="text-4xl mb-3">{{ isPublicClub ? '👋' : '🔒' }}</div>
+          <template v-if="isPublicClub">
+            <p class="font-semibold text-slate-700 mb-1">Join {{ schedule.club_name }}</p>
+            <p class="text-sm text-slate-500 mb-5 leading-relaxed">Sign in and you'll join instantly and can vote in this poll.</p>
+            <button class="btn-primary px-6 py-2.5" @click="signInToJoin">Sign in &amp; Join</button>
+          </template>
+          <template v-else>
+            <p class="font-semibold text-slate-700 mb-1">Members only</p>
+            <p class="text-sm text-slate-500 mb-5 leading-relaxed">Sign in to view and respond to this club's match poll.</p>
+            <button class="btn-primary px-6 py-2.5" @click="signInToJoin">Sign in</button>
+          </template>
+        </template>
+        <!-- Signed in but not a member -->
+        <template v-else-if="isPublicClub">
+          <!-- Only reached if auto-join failed (e.g. club cap). -->
+          <div class="text-4xl mb-3">😕</div>
+          <p class="font-semibold text-slate-700 mb-1">Couldn't join automatically</p>
+          <p class="text-sm text-rose-500 mb-5 leading-relaxed">{{ joinError || 'Please try again in a moment.' }}</p>
+          <RouterLink to="/dashboard" class="btn-ghost px-6 py-2.5">Open App</RouterLink>
         </template>
         <template v-else>
+          <div class="text-4xl mb-3">🔒</div>
           <p class="font-semibold text-slate-700 mb-1">You're not a member of this club</p>
-          <p class="text-sm text-slate-500 mb-5 leading-relaxed">Only club members can view this poll. Ask a club manager to add you.</p>
+          <p class="text-sm text-slate-500 mb-5 leading-relaxed">This club is invite-only. Ask a club manager to add you.</p>
           <RouterLink to="/dashboard" class="btn-ghost px-6 py-2.5">Open App</RouterLink>
         </template>
       </div>

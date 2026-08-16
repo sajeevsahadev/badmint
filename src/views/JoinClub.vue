@@ -64,8 +64,29 @@ async function loadDirectClub(clubId) {
   directClub.value = data[0]
 
   await loadClubs()
-  if (clubs.value.some(c => c.club_id === clubId)) { directStep.value = 'member'; return }
 
+  // Already a member → straight to the club profile, no intro.
+  if (clubs.value.some(c => c.club_id === clubId)) {
+    sessionStorage.removeItem('bm_skip_intro')
+    router.replace(`/club/${clubId}`)
+    return
+  }
+
+  // Public club → the tap on the link IS the intent to join. Add them instantly
+  // and open the club profile, skipping the request/approve step entirely.
+  if (directClub.value.join_policy === 'public') {
+    directStep.value = 'joining'
+    const { error: jerr } = await supabase.rpc('join_club_public', { p_club_id: clubId })
+    if (jerr) { directError.value = jerr.message; directStep.value = 'error'; return }
+    await loadClubs()
+    const joined = clubs.value.find(c => c.club_id === clubId)
+    if (joined) selectClub(joined)
+    sessionStorage.removeItem('bm_skip_intro')
+    router.replace(`/club/${clubId}`)
+    return
+  }
+
+  // Open (request+approve) or closed (invite-only) → keep the manual flow.
   const { data: reqRow } = await supabase
     .from('join_requests').select('status')
     .eq('club_id', clubId).eq('user_id', user.value.id).maybeSingle()
@@ -256,9 +277,9 @@ onMounted(async () => {
        instead of searching among every club on the platform. -->
   <template v-if="route.params.clubId">
 
-    <div v-if="directStep === 'loading' || directStep === null" class="card p-8 text-center fade-up">
+    <div v-if="directStep === 'loading' || directStep === 'joining' || directStep === null" class="card p-8 text-center fade-up">
       <div class="text-3xl mb-3 animate-pulse">🏸</div>
-      <p class="text-slate-400 text-sm">Loading club…</p>
+      <p class="text-slate-400 text-sm">{{ directStep === 'joining' ? 'Joining club…' : 'Loading club…' }}</p>
     </div>
 
     <div v-else-if="directStep === 'error'" class="card p-8 text-center fade-up" style="border-color:rgba(244,63,94,.3)">

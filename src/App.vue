@@ -152,13 +152,19 @@ function closeMenu() { showMenu.value = false }
 
 async function init() {
   if (!user.value) return
+  // Capture the deep-link intro-skip flag BEFORE any awaits — the join/poll
+  // views clear it once they finish, so reading it later would race them.
+  const skipIntro = sessionStorage.getItem('bm_skip_intro')
+  sessionStorage.removeItem('bm_skip_intro')
   armOnBoot()
   try {
     await loadClubs()
     await refreshPending()
   } catch {}
-  // First-time users with no clubs get the setup wizard; returning users skip it
-  if (!localStorage.getItem(WIZARD_KEY) && clubs.value.length === 0) {
+  // First-time users with no clubs get the setup wizard; returning users skip it.
+  // But anyone arriving via a join/poll link is here to join a specific club —
+  // don't interrupt them with the wizard.
+  if (!skipIntro && !localStorage.getItem(WIZARD_KEY) && clubs.value.length === 0) {
     showWizard.value = true
   }
   // Non-blocking: session + admin check don't need to hold up club/page loading

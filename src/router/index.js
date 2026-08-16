@@ -66,6 +66,11 @@ router.beforeEach(async (to) => {
     // don't need to be returned to after login.
     if (to.path.startsWith('/join') || to.path.startsWith('/player') || to.path.startsWith('/poll')) {
       sessionStorage.setItem(REDIRECT_KEY, to.fullPath)
+      // Coming in via a club-join or poll link → the person wants to JOIN, not
+      // sit through the first-run setup wizard. Suppress the intro this once.
+      if (to.path.startsWith('/join') || to.path.startsWith('/poll')) {
+        sessionStorage.setItem('bm_skip_intro', '1')
+      }
     }
     return '/login'
   }
