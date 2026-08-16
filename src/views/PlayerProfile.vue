@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { buildProfileMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
 import Avatar from '../components/Avatar.vue'
+import PerfChart from '../components/PerfChart.vue'
+import { sharePlayerCard } from '../utils/share-card'
 
 const route  = useRoute()
 const router = useRouter()
@@ -111,6 +113,7 @@ async function load() {
         myTeam:  (mySide?.participants  ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
         oppTeam: (oppSide?.participants ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
         eloDelta: myMp?.elo_after != null ? Math.round(myMp.elo_after - myMp.elo_before) : null,
+        eloAfter: myMp?.elo_after != null ? Math.round(myMp.elo_after) : null,
       }
     })
 
@@ -209,6 +212,10 @@ async function load() {
       eloDelta: (() => {
         const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
         return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
+      })(),
+      eloAfter: (() => {
+        const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
+        return mp?.elo_after != null ? Math.round(mp.elo_after) : null
       })()
     }
   })
@@ -228,6 +235,38 @@ const fmt = d => new Date(d).toLocaleDateString('en-AE', { day:'numeric', month:
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
 const deltaColor = d => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-rose-400' : 'text-slate-500'
 const deltaText  = d => d > 0 ? `+${d}` : `${d}`
+
+// ── Performance chart + form (matches are newest-first → reverse to chrono) ──
+const eloSeries = computed(() =>
+  [...matches.value].filter(m => m.eloAfter != null).reverse().map((m, i) => ({ i, elo: m.eloAfter }))
+)
+const formGuide = computed(() => [...matches.value].slice(0, 12).reverse().map(m => m.won))
+
+// ── Share card ──
+const sharing   = ref(false)
+const shareNote = ref('')
+async function shareCard() {
+  sharing.value = true; shareNote.value = ''
+  try {
+    const res = await sharePlayerCard({
+      name:      publicName.value,
+      club:      clubName.value,
+      city:      emirates.value,
+      rank:      displayRank.value,
+      elo:       Math.round(stats.value?.elo ?? player.value?.elo ?? 1000),
+      games:     stats.value?.games ?? matches.value.length,
+      winPct:    Math.round(stats.value?.win_pct ?? 0),
+      form:      formGuide.value,
+      eloSeries: eloSeries.value.map(p => p.elo),
+      avatarUrl: profile.value?.avatar_url || null,
+      url:       `badminton360.app/player/${playerId}`,
+    })
+    if (res === 'downloaded') shareNote.value = '📥 Card saved — attach it in any app.'
+  } catch {
+    shareNote.value = 'Could not create the card. Please try again.'
+  }
+  sharing.value = false
+}
 
 const expandedDates = ref(new Set())
 const allExpanded   = computed(() => groupedMatches.value.length > 0 && expandedDates.value.size === groupedMatches.value.length)
@@ -326,6 +365,12 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
         class="mt-3 block text-center text-xs text-neon hover:opacity-80 transition border border-cyan-500/25 rounded-xl py-2">
         ✏️ Edit My Profile
       </RouterLink>
+
+      <!-- Share this player's card as an image (WhatsApp / Instagram / anywhere) -->
+      <button class="mt-2 w-full btn-primary py-2.5 text-sm gap-1.5" :disabled="sharing" @click="shareCard">
+        {{ sharing ? 'Creating card…' : '📤 Share Player Card' }}
+      </button>
+      <p v-if="shareNote" class="text-center text-[11px] text-slate-500 mt-1.5">{{ shareNote }}</p>
     </div>
 
     <!-- Stats row -->
@@ -347,6 +392,25 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
       <div class="card p-3 text-center">
         <div class="text-lg font-extrabold text-violet">{{ stats.win_pct }}%</div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Win%</div>
+      </div>
+    </div>
+
+    <!-- Performance chart + recent form -->
+    <div v-if="stats && stats.games > 0" class="card p-4 mb-4 fade-up">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-bold text-slate-700">📈 Elo Progression</div>
+        <div v-if="formGuide.length" class="flex items-center gap-1" title="Recent form">
+          <span v-for="(w, i) in formGuide" :key="i" class="w-2.5 h-2.5 rounded-full"
+            :class="w ? 'bg-emerald-500' : 'bg-rose-400'"></span>
+        </div>
+      </div>
+      <PerfChart :series="eloSeries" :height="130" />
+      <div v-if="eloSeries.length >= 2" class="flex justify-between text-[10px] text-slate-400 mt-1">
+        <span>{{ eloSeries[0].elo }}</span>
+        <span class="text-slate-500">{{ eloSeries.length }} matches</span>
+        <span :class="eloSeries[eloSeries.length-1].elo >= eloSeries[0].elo ? 'text-emerald-500' : 'text-rose-400'">
+          {{ eloSeries[eloSeries.length-1].elo }}
+        </span>
       </div>
     </div>
 
