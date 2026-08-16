@@ -224,6 +224,10 @@ const planAttendees = computed(() =>
     .filter(p => attendeeIds.value.has(p.id))
     .map(p => ({ id: p.id, name: p.display_name, elo: p.elo }))
 )
+// When a full Game Plan exists it's the source of truth for the next match,
+// so we hide the standalone "Suggested Next Match" card to avoid a conflicting
+// second suggestion.
+const planExists = ref(false)
 
 // ── Invite ──
 const showInvitePanel = ref(false)
@@ -1035,10 +1039,12 @@ watch(currentClub, async () => {
               <GamePlan v-if="selectedSchedule"
                 :schedule-id="selectedSchedule.id"
                 :can-manage="isManager()"
-                :attendees="planAttendees" />
+                :attendees="planAttendees"
+                :date="selectedSchedule.scheduled_date"
+                @plan-exists="planExists = $event" />
 
-              <!-- ── Suggested Next Match ── -->
-              <div class="card overflow-hidden">
+              <!-- ── Suggested Next Match — hidden once a Game Plan exists ── -->
+              <div v-if="!planExists" class="card overflow-hidden">
                 <!-- Header row -->
                 <div class="flex items-center justify-between px-4 pt-4 pb-3">
                   <div>

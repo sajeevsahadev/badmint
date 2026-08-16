@@ -185,6 +185,14 @@ async function doSubmit() {
       p_display_name: matchName.value.trim() || autoMatchName.value || null
     })
     if (!error) {
+      // If this match was started from a Game Plan slot, mark it played so the
+      // plan advances to the next match (fire-and-forget).
+      if (route.query.planMatch) {
+        supabase.rpc('set_plan_match_status', {
+          p_plan_match_id: route.query.planMatch, p_status: 'done', p_match_id: matchData?.id ?? null,
+        }).then(undefined, () => {})
+      }
+
       // Update rotation stats for the 4 players who just played (fire-and-forget).
       // supabase.rpc() returns a thenable query builder with no .catch — use .then(ok, err).
       supabase.rpc('update_rotation_stats', {
