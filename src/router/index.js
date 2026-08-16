@@ -6,6 +6,7 @@ const routes = [
   { path: '/explore',   component: () => import('../views/Explore.vue'),      meta: { public: true } },
   { path: '/',          component: () => import('../views/Home.vue'),          meta: { public: true } },
   { path: '/poll/:id',  component: () => import('../views/PollView.vue'),  meta: { public: true } },
+  { path: '/p/:code',   component: () => import('../views/ShareRedirect.vue'), meta: { public: true } },
   { path: '/dashboard',  component: () => import('../views/Dashboard.vue') },
   { path: '/scoreboard', component: () => import('../views/Scoreboard.vue') },
   { path: '/schedule',  component: () => import('../views/Schedule.vue') },

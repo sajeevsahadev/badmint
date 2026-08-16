@@ -245,6 +245,18 @@ const formGuide = computed(() => [...matches.value].slice(0, 12).reverse().map(m
 // ── Share card ──
 const sharing   = ref(false)
 const shareNote = ref('')
+const shareCode = ref(null)   // tiny link code → badminton360.app/p/<code>
+
+// Fetch (or create) the short share code once, so shared links stay tidy.
+async function ensureShareCode() {
+  if (shareCode.value) return
+  const { data } = await supabase.rpc('get_or_create_player_share_code', { p_player_id: playerId })
+  if (data) shareCode.value = data
+}
+const shareUrl = () => shareCode.value
+  ? `https://badminton360.app/p/${shareCode.value}`
+  : `https://badminton360.app/player/${playerId}`
+
 const cardData = () => ({
   name:      publicName.value,
   club:      clubName.value,
@@ -256,11 +268,12 @@ const cardData = () => ({
   form:      formGuide.value,
   eloSeries: eloSeries.value.map(p => p.elo),
   avatarUrl: profile.value?.avatar_url || null,
-  url:       `https://badminton360.app/player/${playerId}`,
+  url:       shareUrl(),
 })
 async function shareCard() {
   sharing.value = true; shareNote.value = ''
   try {
+    await ensureShareCode()
     const res = await sharePlayerCard(cardData())
     if (res === 'downloaded') shareNote.value = '📥 Card saved — attach it in any app.'
   } catch {
@@ -268,8 +281,14 @@ async function shareCard() {
   }
   sharing.value = false
 }
-function shareWhatsApp() {
-  window.open(whatsappShareUrl(cardData()), '_blank')
+async function shareWhatsApp() {
+  // Pre-open a tab synchronously (avoids popup blockers), then set its URL once
+  // the short code resolves.
+  const w = window.open('', '_blank')
+  await ensureShareCode()
+  const url = whatsappShareUrl(cardData())
+  if (w) w.location = url
+  else window.open(url, '_blank')
 }
 
 const expandedDates = ref(new Set())
