@@ -6,6 +6,10 @@ import { useInstall } from '../composables/useInstall'
 const { signInWithGoogle, signInWithApple } = useAuth()
 const { canInstall, isIOS, promptInstall } = useInstall()
 const router = useRouter()
+
+// Apple sign-in isn't wired up in Supabase yet — hide the button until it is.
+// Flip to true (and keep signInWithApple imported) to re-enable.
+const APPLE_LOGIN_READY = false
 </script>
 
 <template>
@@ -70,7 +74,8 @@ const router = useRouter()
       </button>
 
       <!-- Sign in with Apple (required on iOS; works once enabled in Supabase) -->
-      <button class="w-full py-3.5 mb-4 rounded-2xl bg-black text-white font-semibold text-base flex items-center justify-center gap-2.5 active:scale-[.99] transition"
+      <button v-if="APPLE_LOGIN_READY"
+        class="w-full py-3.5 mb-4 rounded-2xl bg-black text-white font-semibold text-base flex items-center justify-center gap-2.5 active:scale-[.99] transition"
         @click="signInWithApple">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M17.05 12.04c-.03-2.6 2.12-3.85 2.22-3.9-1.21-1.77-3.1-2.02-3.77-2.05-1.6-.16-3.13.94-3.94.94-.81 0-2.07-.92-3.4-.9-1.75.03-3.37 1.02-4.27 2.59-1.82 3.16-.47 7.84 1.31 10.41.87 1.26 1.9 2.67 3.26 2.62 1.31-.05 1.8-.85 3.39-.85 1.58 0 2.03.85 3.41.82 1.41-.03 2.3-1.28 3.16-2.55.99-1.46 1.4-2.87 1.42-2.94-.03-.01-2.73-1.05-2.76-4.15zM14.6 4.6c.72-.88 1.21-2.1 1.08-3.31-1.04.04-2.3.69-3.05 1.56-.67.77-1.25 2.01-1.09 3.19 1.16.09 2.34-.59 3.06-1.44z"/>
