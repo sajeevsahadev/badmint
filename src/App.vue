@@ -10,6 +10,7 @@ import { useSession } from './composables/useSession'
 import { useTheme } from './composables/useTheme'
 import { useBiometricLock } from './composables/useBiometricLock'
 import { usePushNotifications } from './composables/usePushNotifications'
+import { migrateOwnAvatarIfNeeded } from './lib/avatarStorage'
 import OnboardingGuide  from './components/OnboardingGuide.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
 import ProfileCompletionGate from './components/ProfileCompletionGate.vue'
@@ -172,11 +173,15 @@ async function init() {
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   }).catch(() => {})
-  supabase.from('user_profiles').select('theme_pref, phone').eq('user_id', user.value.id).maybeSingle()
+  supabase.from('user_profiles').select('theme_pref, phone, avatar_url').eq('user_id', user.value.id).maybeSingle()
     .then(({ data }) => {
       if (data?.theme_pref) syncFromProfile(data.theme_pref)
       // Phone is mandatory for everyone — prompt anyone who hasn't set one.
       profileGateOpen.value = !data?.phone || !data.phone.trim()
+      // Silently move a legacy base64 avatar to Storage on next app open.
+      if (data?.avatar_url?.startsWith('data:')) {
+        migrateOwnAvatarIfNeeded(user.value.id, data.avatar_url).catch(() => {})
+      }
     })
     .catch(() => {})
   // Self-heal push: if this device already granted permission but its

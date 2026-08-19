@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import { useSession } from '../composables/useSession'
-import { compressImageToDataUrl } from '../lib/imageCompress'
+import { compressImageToBlob } from '../lib/imageCompress'
+import { uploadAvatarBlob, migrateOwnAvatarIfNeeded } from '../lib/avatarStorage'
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
 import pkg from '../../package.json'
@@ -35,7 +36,8 @@ async function onAvatarFile(e) {
   avatarError.value = ''
   avatarBusy.value = true
   try {
-    form.value.avatar_url = await compressImageToDataUrl(file)
+    const blob = await compressImageToBlob(file)
+    form.value.avatar_url = await uploadAvatarBlob(user.value.id, blob)
   } catch (err) {
     avatarError.value = err.message || 'Could not process image.'
   } finally {
@@ -84,6 +86,16 @@ async function load() {
   form.value.gender      = prof?.gender     ?? ''
   form.value.avatar_url  = prof?.avatar_url ?? ''
   loading.value = false
+
+  // One-time move of a legacy inline base64 avatar to Storage.
+  if (prof?.avatar_url?.startsWith('data:')) {
+    migrateOwnAvatarIfNeeded(user.value.id, prof.avatar_url).then(url => {
+      if (url) {
+        form.value.avatar_url = url
+        if (profile.value) profile.value.avatar_url = url
+      }
+    })
+  }
 }
 
 onMounted(load)

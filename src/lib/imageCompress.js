@@ -27,6 +27,21 @@ export async function compressImageToDataUrl(file, { maxSize = 256, quality = 0.
   return out
 }
 
+// Same compression, but returns a Blob ready to upload to Storage.
+export async function compressImageToBlob(file, opts) {
+  return dataUrlToBlob(await compressImageToDataUrl(file, opts))
+}
+
+// Convert a data: URI (e.g. an existing base64 avatar) into a Blob.
+export function dataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(',')
+  const mime = head.match(/data:(.*?)(;base64)?$/)?.[1] || 'image/jpeg'
+  const bin = atob(b64)
+  const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+  return new Blob([arr], { type: mime })
+}
+
 // Decode a File into something drawable on a canvas.
 // Prefer createImageBitmap: it decodes off the main thread, handles very large
 // phone photos that make the classic `new Image()` path fail on mobile ("Invalid
