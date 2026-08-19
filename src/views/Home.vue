@@ -81,6 +81,10 @@ const story = [
 ]
 
 async function load() {
+  // Top Clubs / Top Players are only shown to signed-in visitors, so don't run
+  // those two aggregation queries at all on the logged-out landing page —
+  // keeps first paint instant for brand-new visitors.
+  if (!user.value) { loading.value = false; return }
   loading.value = true
   const [clubsRes, playersRes] = await Promise.all([
     supabase.rpc('get_public_clubs'),

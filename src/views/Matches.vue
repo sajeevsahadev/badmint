@@ -2,7 +2,6 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
-import { buildProfileMap } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import PageHeader from '../components/PageHeader.vue'
@@ -22,6 +21,9 @@ const renameVal      = ref('')
 const deleting       = ref(null)
 const collapsedDates = ref(new Set())
 const allExpanded    = ref(false)
+const loadingMore    = ref(false)
+const hasMore        = ref(false)
+const PAGE_SIZE      = 30
 
 // ── Lineup suggestion (available to all members) ──
 const lineup         = ref(null)
@@ -80,83 +82,68 @@ function acceptLineup() {
   router.push(`/match?sideA=${sideAIds}&sideB=${sideBIds}&date=${todayStr}`)
 }
 
+// Map one match from get_club_matches jsonb → the shape the template expects.
+// Names + avatars come from the deduped players map (resolved server-side, no
+// second round trip, avatar bytes sent once per player rather than per match).
+function mapMatch(m, pmap) {
+  const sA = m.sides?.find(s => s.side === 'A')
+  const sB = m.sides?.find(s => s.side === 'B')
+  const mapPlayers = arr => (arr ?? []).map(p => ({
+    id: p.id,
+    name: pmap[p.id]?.name ?? '—',
+    user_id: pmap[p.id]?.user_id ?? null,
+    avatar: pmap[p.id]?.avatar ?? null,
+    delta: p.elo_after != null ? Math.round(p.elo_after - p.elo_before) : null,
+    elo:   p.elo_after != null ? Math.round(p.elo_after) : null,
+  }))
+  return {
+    id: m.id,
+    played_on: m.played_on,
+    created_at: m.created_at,
+    created_by: m.created_by,
+    name: m.display_name ?? `Match #${m.match_number}`,
+    match_number: m.match_number,
+    sideA: { score: sA?.score ?? 0, winner: sA?.is_winner ?? false, players: mapPlayers(sA?.players) },
+    sideB: { score: sB?.score ?? 0, winner: sB?.is_winner ?? false, players: mapPlayers(sB?.players) },
+  }
+}
+
 async function load() {
   if (!currentClub.value) return
   loading.value = true
-  const { data } = await supabase
-    .from('matches')
-    .select(`
-      id, played_on, created_at, created_by, display_name, match_number,
-      match_sides(
-        id, side, score, is_winner,
-        match_participants(
-          elo_before, elo_after,
-          players(id, display_name, user_id)
-        )
-      )
-    `)
-    .eq('club_id', currentClub.value.club_id)
-    .order('created_at', { ascending: false })
-    .limit(100)
-
-  const rawMatches = (data ?? []).map(m => {
-    const sA = m.match_sides?.find(s => s.side === 'A')
-    const sB = m.match_sides?.find(s => s.side === 'B')
-    return {
-      id: m.id,
-      played_on: m.played_on,
-      created_at: m.created_at,
-      created_by: m.created_by,
-      name: m.display_name ?? `Match #${m.match_number}`,
-      match_number: m.match_number,
-      sideA: {
-        score: sA?.score ?? 0,
-        winner: sA?.is_winner ?? false,
-        players: (sA?.match_participants ?? []).map(mp => ({
-          id: mp.players?.id,
-          name: mp.players?.display_name,
-          user_id: mp.players?.user_id ?? null,
-          avatar: null,
-          delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
-          elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
-        }))
-      },
-      sideB: {
-        score: sB?.score ?? 0,
-        winner: sB?.is_winner ?? false,
-        players: (sB?.match_participants ?? []).map(mp => ({
-          id: mp.players?.id,
-          name: mp.players?.display_name,
-          user_id: mp.players?.user_id ?? null,
-          avatar: null,
-          delta: mp.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null,
-          elo: mp.elo_after != null ? Math.round(mp.elo_after) : null,
-        }))
-      }
-    }
+  const { data } = await supabase.rpc('get_club_matches', {
+    p_club_id: currentClub.value.club_id, p_limit: PAGE_SIZE, p_before: null,
   })
-
-  // Resolve nicknames for all participants
-  const allIds = [...new Set(rawMatches.flatMap(m => [
-    ...m.sideA.players.map(p => p.id),
-    ...m.sideB.players.map(p => p.id)
-  ]).filter(Boolean))]
-  const profileMap = await buildProfileMap(allIds)
-  const enrich = p => ({
-    ...p,
-    name: profileMap[p.id]?.name ?? p.name,
-    avatar: profileMap[p.id]?.avatar ?? null
-  })
-  matches.value = rawMatches.map(m => ({
-    ...m,
-    sideA: { ...m.sideA, players: m.sideA.players.map(enrich) },
-    sideB: { ...m.sideB, players: m.sideB.players.map(enrich) }
-  }))
+  const pmap = data?.players ?? {}
+  const list = (data?.matches ?? []).map(m => mapMatch(m, pmap))
+  matches.value = list
+  hasMore.value = list.length === PAGE_SIZE
   // Collapse all dates by default — most recent date stays open
-  const dates = [...new Set(matches.value.map(m => m.played_on))]
-  collapsedDates.value = new Set(dates.slice(1))  // keep newest date open
+  const dates = [...new Set(list.map(m => m.played_on))]
+  collapsedDates.value = new Set(dates.slice(1))
   allExpanded.value = false
   loading.value = false
+}
+
+// Lazy pagination — fetch older matches (keyset on created_at).
+async function loadMore() {
+  if (!currentClub.value || !hasMore.value || loadingMore.value) return
+  loadingMore.value = true
+  const oldest = matches.value[matches.value.length - 1]?.created_at
+  const { data } = await supabase.rpc('get_club_matches', {
+    p_club_id: currentClub.value.club_id, p_limit: PAGE_SIZE, p_before: oldest,
+  })
+  const pmap = data?.players ?? {}
+  const list = (data?.matches ?? []).map(m => mapMatch(m, pmap))
+  const existingCount = matches.value.length
+  matches.value = [...matches.value, ...list]
+  hasMore.value = list.length === PAGE_SIZE
+  // Newly loaded dates start collapsed (except any already open)
+  const existing = new Set(matches.value.slice(0, existingCount).map(m => m.played_on))
+  const s = new Set(collapsedDates.value)
+  for (const m of list) if (!existing.has(m.played_on)) s.add(m.played_on)
+  collapsedDates.value = s
+  loadingMore.value = false
 }
 async function checkActiveLive() {
   if (!currentClub.value) return
@@ -581,6 +568,12 @@ const canDelete = m =>
       </div><!-- closes match card -->
       </div><!-- end space-y-2 -->
     </div><!-- end date group -->
+
+    <!-- Lazy pagination — older matches load on demand -->
+    <button v-if="hasMore" class="w-full card py-3 text-sm font-semibold text-neon hover:opacity-80 transition"
+      :disabled="loadingMore" @click="loadMore">
+      {{ loadingMore ? 'Loading…' : '↓ Load older matches' }}
+    </button>
   </div><!-- end grouped list -->
 
   <!-- ── Delete confirmation modal ── -->
