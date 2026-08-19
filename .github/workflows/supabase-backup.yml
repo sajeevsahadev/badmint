@@ -1,0 +1,62 @@
+name: Weekly Supabase backup to Google Drive
+
+# Runs a full pg_dump of the Supabase database and uploads it to Google Drive,
+# keeping only the newest 7 backups. Set the three secrets described in
+# store-assets/backup-runbook.md before enabling.
+on:
+  schedule:
+    - cron: '0 3 * * 0'      # every Sunday 03:00 UTC
+  workflow_dispatch: {}       # allow manual "Run workflow" from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install PostgreSQL 17 client (matches the server)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump the database (custom format, compressed)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%d)
+          FILE="badminton360-backup-${STAMP}.dump"
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom --compress=9 --no-owner --no-privileges \
+            --file "$FILE"
+          ls -lh "$FILE"
+          echo "FILE=$FILE" >> "$GITHUB_ENV"
+
+      - name: Install rclone
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Write rclone config
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+      - name: Upload to Google Drive
+        run: |
+          rclone copy "$FILE" "gdrive:${{ secrets.GDRIVE_FOLDER }}" \
+            --drive-use-trash=false -v
+
+      - name: Prune — keep only the newest 7 backups
+        run: |
+          set -euo pipefail
+          # ISO-dated filenames sort chronologically; delete everything except
+          # the last 7.
+          rclone lsf "gdrive:${{ secrets.GDRIVE_FOLDER }}" --files-only \
+            | grep '^badminton360-backup-' | sort | head -n -7 \
+            | while IFS= read -r f; do
+                [ -n "$f" ] && echo "Pruning $f" && \
+                  rclone deletefile "gdrive:${{ secrets.GDRIVE_FOLDER }}/$f" --drive-use-trash=false
+              done
