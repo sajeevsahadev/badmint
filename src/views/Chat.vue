@@ -319,6 +319,28 @@ function openImage(m) {
   lightboxIdx.value = idx >= 0 ? idx : 0
 }
 function closeLightbox() { lightboxIdx.value = -1 }
+const downloadingImg = ref(false)
+async function downloadImage() {
+  const url = lightboxImages.value[lightboxIdx.value]
+  if (!url || downloadingImg.value) return
+  downloadingImg.value = true
+  try {
+    const res = await fetch(url, { mode: 'cors' })
+    if (!res.ok) throw new Error('fetch failed')
+    const blob = await res.blob()
+    const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `badminton360-${Date.now()}.${ext}`
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  } catch {
+    // CORS/network blocked → open in a new tab so the user can save it manually
+    window.open(url, '_blank')
+  } finally {
+    downloadingImg.value = false
+  }
+}
 function nextImg() { const n = lightboxImages.value.length; if (n) lightboxIdx.value = (lightboxIdx.value + 1) % n }
 function prevImg() { const n = lightboxImages.value.length; if (n) lightboxIdx.value = (lightboxIdx.value - 1 + n) % n }
 function lbTouchStart(e) { lbStartX = e.changedTouches[0].clientX }
@@ -938,6 +960,14 @@ onBeforeUnmount(() => {
       <img :src="lightboxImages[lightboxIdx]" class="max-w-full max-h-full rounded-lg select-none" alt="photo" @click.stop />
 
       <button class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center" aria-label="Close" @click.stop="closeLightbox">✕</button>
+
+      <!-- Download the photo -->
+      <button class="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center active:scale-90"
+        aria-label="Download photo" :disabled="downloadingImg" @click.stop="downloadImage">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M5 21h14" />
+        </svg>
+      </button>
 
       <template v-if="lightboxImages.length > 1">
         <button class="absolute left-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 text-white text-2xl flex items-center justify-center active:scale-90" aria-label="Previous" @click.stop="prevImg">‹</button>

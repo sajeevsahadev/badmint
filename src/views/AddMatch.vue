@@ -6,6 +6,7 @@ import { withNicknames } from '../lib/playerNames'
 import { useClub } from '../composables/useClub'
 import Avatar from '../components/Avatar.vue'
 import DateField from '../components/DateField.vue'
+import WinnerCelebration from '../components/WinnerCelebration.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -234,20 +235,32 @@ async function doSubmit() {
   }
 }
 
+// ── Winner celebration ──
+const celebrate = ref(null)   // { names, score, after }
+function showCelebration(after) {
+  const aWon = Number(scoreA.value) > Number(scoreB.value)
+  const winners = (aWon ? sideA.value : sideB.value).map(id => nameOf(id) ?? 'Player')
+  const hi = Math.max(Number(scoreA.value), Number(scoreB.value))
+  const lo = Math.min(Number(scoreA.value), Number(scoreB.value))
+  celebrate.value = { names: winners, score: `${hi} – ${lo}`, after }
+}
+function onCelebrationDone() {
+  const after = celebrate.value?.after
+  celebrate.value = null
+  after && after()
+}
+
 async function submitAndGo() {
   const error = await doSubmit()
   if (error) { msg.value = { ok: false, t: error.message }; return }
-  router.push('/matches')
+  showCelebration(() => router.push('/matches'))
 }
 
 async function submitAndStay() {
   const error = await doSubmit()
   if (error) { msg.value = { ok: false, t: error.message }; return }
   msg.value = null
-  if (savedToastTimer.value) clearTimeout(savedToastTimer.value)
-  savedToast.value = true
-  savedToastTimer.value = setTimeout(() => { savedToast.value = false }, 3500)
-  reset(); loadPlayers(); loadNextMatchNum()
+  showCelebration(() => { reset(); loadPlayers(); loadNextMatchNum() })
 }
 
 onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.value) })
@@ -255,6 +268,12 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
 
 <template>
   <div>
+
+    <!-- Winner celebration (fireworks) -->
+    <Teleport to="body">
+      <WinnerCelebration v-if="celebrate" :names="celebrate.names" :score="celebrate.score"
+        @done="onCelebrationDone" />
+    </Teleport>
 
     <!-- Success toast for Record & Add New -->
     <Transition name="toast-slide">
@@ -455,17 +474,17 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
       Scores cannot be equal — one side must win.
     </div>
 
-    <!-- Submit buttons -->
-    <div class="grid grid-cols-2 gap-2">
-      <button class="btn-ghost py-3 text-sm font-semibold"
+    <!-- Submit buttons — Record Match is the primary, most-used action -->
+    <div class="grid grid-cols-3 gap-2">
+      <button class="btn-primary col-span-2 py-3.5 text-base font-bold pulse-glow"
         :disabled="!ready || saving || startingLive"
         @click="submitAndGo">
         {{ saving ? 'Saving…' : '🏸 Record Match' }}
       </button>
-      <button class="btn-primary py-3 text-sm font-semibold"
+      <button class="btn-ghost py-3.5 text-xs font-semibold leading-tight"
         :disabled="!ready || saving || startingLive"
         @click="submitAndStay">
-        {{ saving ? 'Saving…' : '➕ Record &amp; Add New' }}
+        {{ saving ? '…' : '➕ Add New' }}
       </button>
     </div>
     <p class="text-center text-xs text-slate-600 mt-1.5">
