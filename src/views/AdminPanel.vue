@@ -100,9 +100,43 @@ const sessionsLoading = ref(false)
 // Login-audit filtering (client-side over the loaded rows)
 const sessionFilter = ref('')
 const sessionActiveOnly = ref(false)
+const datePreset = ref('all')
+const customFrom = ref('')
+const customTo   = ref('')
+const DATE_PRESETS = [
+  { v: 'all', l: 'All' }, { v: 'today', l: 'Today' }, { v: 'yesterday', l: 'Yesterday' },
+  { v: 'week', l: 'This week' }, { v: 'lastweek', l: 'Last week' }, { v: 'month', l: 'This month' },
+  { v: 'custom', l: 'Custom' },
+]
+// [startInclusive, endExclusive] Date bounds for the selected preset (null = open).
+function dateBounds() {
+  const now = new Date()
+  const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+  const today = startOfDay(now)
+  const monday = () => { const off = (today.getDay() + 6) % 7; return addDays(today, -off) } // week starts Mon
+  switch (datePreset.value) {
+    case 'today':     return [today, addDays(today, 1)]
+    case 'yesterday': return [addDays(today, -1), today]
+    case 'week':      return [monday(), addDays(today, 1)]
+    case 'lastweek':  return [addDays(monday(), -7), monday()]
+    case 'month':     return [new Date(now.getFullYear(), now.getMonth(), 1), addDays(today, 1)]
+    case 'custom':    return [
+      customFrom.value ? startOfDay(new Date(customFrom.value)) : null,
+      customTo.value ? addDays(startOfDay(new Date(customTo.value)), 1) : null,
+    ]
+    default:          return [null, null]
+  }
+}
 const filteredSessions = computed(() => {
   let list = sessions.value
   if (sessionActiveOnly.value) list = list.filter(s => s.is_active)
+  const [ds, de] = dateBounds()
+  if (ds || de) {
+    const sMs = ds ? ds.getTime() : -Infinity
+    const eMs = de ? de.getTime() : Infinity
+    list = list.filter(s => { const t = new Date(s.logged_in_at).getTime(); return t >= sMs && t < eMs })
+  }
   const q = sessionFilter.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(s => [
@@ -110,6 +144,8 @@ const filteredSessions = computed(() => {
     deviceName(s.user_agent), sessionLocation(s), s.club_name,
   ].some(v => String(v || '').toLowerCase().includes(q)))
 })
+const sessionsFiltered = computed(() =>
+  sessionFilter.value.trim() || sessionActiveOnly.value || datePreset.value !== 'all')
 const chatClubId  = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
@@ -728,7 +764,7 @@ const statItems = computed(() => !stats.value ? [] : [
             <p class="text-sm font-bold text-slate-800">Login Audit</p>
             <p class="text-[11px] text-slate-500">
               Newest first ·
-              <template v-if="sessionFilter.trim() || sessionActiveOnly">{{ filteredSessions.length }} of {{ sessions.length }}</template>
+              <template v-if="sessionsFiltered">{{ filteredSessions.length }} of {{ sessions.length }}</template>
               <template v-else>{{ sessions.length }}</template>
               logins
             </p>
@@ -739,24 +775,42 @@ const statItems = computed(() => !stats.value ? [] : [
         </div>
 
         <!-- Filter bar -->
-        <div v-if="sessions.length" class="flex flex-wrap items-center gap-2">
-          <div class="relative flex-1 min-w-[180px]">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-            <input v-model="sessionFilter" placeholder="Filter by name, email, phone, IP, device, location…"
-              class="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-700 outline-none focus:border-cyan-400" />
-            <button v-if="sessionFilter" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              @click="sessionFilter = ''">✕</button>
+        <div v-if="sessions.length" class="space-y-2">
+          <!-- Date range presets -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button v-for="d in DATE_PRESETS" :key="d.v" @click="datePreset = d.v"
+              class="px-2.5 py-1 rounded-full text-[11px] font-semibold transition"
+              :class="datePreset === d.v ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:text-slate-700'">
+              {{ d.l }}
+            </button>
+            <template v-if="datePreset === 'custom'">
+              <input type="date" v-model="customFrom"
+                class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+              <span class="text-xs text-slate-400">→</span>
+              <input type="date" v-model="customTo"
+                class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+            </template>
           </div>
-          <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap">
-            <input type="checkbox" v-model="sessionActiveOnly" class="w-3.5 h-3.5 rounded accent-emerald-500" />
-            Active only
-          </label>
+          <!-- Text search + active toggle -->
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative flex-1 min-w-[180px]">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+              <input v-model="sessionFilter" placeholder="Filter by name, email, phone, IP, device, location…"
+                class="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+              <button v-if="sessionFilter" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                @click="sessionFilter = ''">✕</button>
+            </div>
+            <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap">
+              <input type="checkbox" v-model="sessionActiveOnly" class="w-3.5 h-3.5 rounded accent-emerald-500" />
+              Active only
+            </label>
+          </div>
         </div>
 
         <div v-if="sessionsLoading" class="card p-8 text-center text-sm text-slate-400">Loading logins…</div>
         <div v-else-if="!sessions.length" class="card p-8 text-center text-sm text-slate-400">No logins recorded yet.</div>
         <div v-else-if="!filteredSessions.length" class="card p-8 text-center text-sm text-slate-400">
-          No logins match “{{ sessionFilter }}”.
+          No logins match the current filters.
         </div>
 
         <div v-else class="card overflow-x-auto">
