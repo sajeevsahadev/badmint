@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generatePlan, defaultMatchCount } from '../utils/game-plan'
+import { generatePlan, defaultMatchCount, winnerStaysInit, winnerStaysAdvance } from '../utils/game-plan'
 
 // Seeded RNG so tie-breaks are deterministic in tests.
 function seeded(seed = 1) {
@@ -80,5 +80,72 @@ describe('generatePlan — friendly fair rotation', () => {
   it('defaultMatchCount maps hours → games', () => {
     expect(defaultMatchCount(1)).toBe(6)
     expect(defaultMatchCount(2)).toBe(12)
+  })
+})
+
+describe('winnerStaysInit', () => {
+  it('needs at least 4 players', () => {
+    const { error } = winnerStaysInit({ players: mkPlayers(3), courts: 1 })
+    expect(error).toBeTruthy()
+  })
+
+  it('8 players / 2 courts → 2 matches, empty queue', () => {
+    const { matches, state } = winnerStaysInit({ players: mkPlayers(8), courts: 2, rng: seeded() })
+    expect(matches).toHaveLength(2)
+    expect(state.queue).toHaveLength(0)
+    expect(state.streak).toEqual({ 1: 0, 2: 0 })
+    for (const m of matches) expect(new Set([...m.sideA, ...m.sideB]).size).toBe(4)
+  })
+
+  it('6 players / 1 court → 1 match, 2 waiting', () => {
+    const { matches, state } = winnerStaysInit({ players: mkPlayers(6), courts: 1, rng: seeded() })
+    expect(matches).toHaveLength(1)
+    expect(state.queue).toHaveLength(2)
+  })
+})
+
+describe('winnerStaysAdvance', () => {
+  const players = mkPlayers(6)  // p1..p6
+  const init = () => winnerStaysInit({ players, courts: 1, cap: 2, rng: seeded(5) })
+
+  it('winners stay and two from the queue challenge (streak < cap)', () => {
+    const { matches, state } = init()
+    const m = matches[0]
+    const winners = m.sideA
+    const { nextMatch, state: s2 } = winnerStaysAdvance({
+      court: 1, winnerIds: winners, loserIds: m.sideB, state, players, seq: 2, round: 1,
+    })
+    // winners are still on Side A
+    expect(nextMatch.sideA).toEqual(winners)
+    // challengers came from the original queue (the 2 who were waiting)
+    expect(new Set([...nextMatch.sideA, ...nextMatch.sideB]).size).toBe(4)
+    // losers went to the back of the queue
+    expect(s2.queue).toEqual(expect.arrayContaining(m.sideB))
+    expect(s2.streak[1]).toBe(1)
+  })
+
+  it('rotates everyone out after reaching the win cap', () => {
+    let { matches, state } = init()
+    let m = matches[0]
+    let winners = m.sideA
+    // win #1
+    let r = winnerStaysAdvance({ court: 1, winnerIds: winners, loserIds: m.sideB, state, players, seq: 2, round: 1 })
+    // win #2 (reaches cap=2) — same winners win again
+    const nm = r.nextMatch
+    r = winnerStaysAdvance({ court: 1, winnerIds: nm.sideA, loserIds: nm.sideB, state: r.state, players, seq: 3, round: 2 })
+    expect(r.state.streak[1]).toBe(0)                 // streak reset after rotation
+    // the twice-winning pair is now waiting in the queue
+    expect(r.state.queue).toEqual(expect.arrayContaining(nm.sideA))
+  })
+
+  it('conserves all players across an advance', () => {
+    const { matches, state } = init()
+    const m = matches[0]
+    const before = new Set([...m.sideA, ...m.sideB, ...state.queue])
+    const { nextMatch, state: s2 } = winnerStaysAdvance({
+      court: 1, winnerIds: m.sideA, loserIds: m.sideB, state, players, seq: 2, round: 1,
+    })
+    const after = new Set([...nextMatch.sideA, ...nextMatch.sideB, ...s2.queue])
+    expect(after).toEqual(before)
   })
 })

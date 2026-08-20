@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar.vue'
-import { generatePlan, defaultMatchCount } from '../utils/game-plan'
+import { generatePlan, defaultMatchCount, winnerStaysInit, winnerStaysAdvance } from '../utils/game-plan'
 
 // Shared session game plan (friendly fair-rotation).
 // - Managers pass canManage=true + present `attendees` to generate/edit.
@@ -30,6 +30,11 @@ const courts     = ref(1)
 const hours      = ref(1)
 const matchCount = ref(6)
 watch(hours, h => { matchCount.value = defaultMatchCount(h) })
+
+// Format: 'friendly' (fair rotation, default) | 'winner_stays' (King of the Court)
+const chosenFormat = ref('friendly')   // what the generate control will produce
+const showAdvanced = ref(false)
+const showHistory  = ref(false)
 
 const picked = ref(null) // { round, kind:'play'|'rest', matchId?, side?, index?, playerId }
 
@@ -64,11 +69,21 @@ const rounds = computed(() => {
 
 const doneCount = computed(() => matches.value.filter(m => m.status === 'done').length)
 
+// ── Format-aware derived views ──
+const format         = computed(() => plan.value?.format || 'friendly')
+const isWinnerStays  = computed(() => format.value === 'winner_stays')
+const planState      = computed(() => plan.value?.state || {})
+const activeMatches  = computed(() => matches.value.filter(m => m.status !== 'done').sort((a, b) => a.court - b.court || a.seq - b.seq))
+const historyMatches = computed(() => matches.value.filter(m => m.status === 'done').sort((a, b) => b.seq - a.seq))
+const queueIds       = computed(() => planState.value.queue || [])
+const maxSeq = () => matches.value.reduce((m, x) => Math.max(m, x.seq), 0)
+
 async function load() {
   const { data } = await supabase.rpc('get_session_plan', { p_schedule_id: props.scheduleId })
   if (data) {
     plan.value = data.plan; matches.value = data.matches || []; players.value = data.players || {}
     courts.value = data.plan.courts; matchCount.value = data.plan.match_count
+    chosenFormat.value = data.plan.format || 'friendly'
   } else {
     plan.value = null; matches.value = []
   }
@@ -94,6 +109,7 @@ function gamesPlayedFromDone() {
   return gp
 }
 async function generate(regen = false) {
+  if (chosenFormat.value === 'winner_stays') return generateWinnerStays()
   errorMsg.value = null
   const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
   if (present.length < 4) { errorMsg.value = 'Need at least 4 saved attendees.'; return }
@@ -127,6 +143,49 @@ async function generate(regen = false) {
   await load()
 }
 async function clearPlan() { busy.value = true; await supabase.rpc('delete_session_plan', { p_schedule_id: props.scheduleId }); busy.value = false; await load() }
+
+// ── Winner-stays (King of the Court) ──
+async function generateWinnerStays() {
+  errorMsg.value = null
+  const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
+  const { matches: starts, state, error } = winnerStaysInit({ players: present, courts: courts.value })
+  if (error) { errorMsg.value = error; return }
+  const payload = starts.map(m => ({ round: m.round, court: m.court, seq: m.seq, side_a: m.sideA, side_b: m.sideB, status: 'planned' }))
+  busy.value = true
+  const { error: err } = await supabase.rpc('save_session_plan', {
+    p_schedule_id: props.scheduleId, p_courts: courts.value, p_match_count: 0,
+    p_matches: payload, p_format: 'winner_stays', p_state: state,
+  })
+  busy.value = false
+  if (err) { errorMsg.value = err.message; return }
+  picked.value = null; await load()
+}
+
+// Tap the winner → winners stay, losers + next-up rotate. Advances the queue.
+async function markWinner(m, side) {
+  const winnerIds = side === 'A' ? m.side_a : m.side_b
+  const loserIds  = side === 'A' ? m.side_b : m.side_a
+  const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
+  const { nextMatch, state } = winnerStaysAdvance({
+    court: m.court, winnerIds, loserIds, state: planState.value, players: present,
+    seq: maxSeq() + 1, round: m.round,
+  })
+  const payload = matches.value.map(x => ({
+    round: x.round, court: x.court, seq: x.seq, side_a: x.side_a, side_b: x.side_b,
+    status: x.id === m.id ? 'done' : x.status,
+    winner_side: x.id === m.id ? side : x.winner_side,
+    match_id: x.match_id,
+  }))
+  payload.push({ round: nextMatch.round, court: nextMatch.court, seq: nextMatch.seq, side_a: nextMatch.sideA, side_b: nextMatch.sideB, status: 'planned' })
+  busy.value = true
+  const { error: err } = await supabase.rpc('save_session_plan', {
+    p_schedule_id: props.scheduleId, p_courts: courts.value, p_match_count: 0,
+    p_matches: payload, p_format: 'winner_stays', p_state: state,
+  })
+  busy.value = false
+  if (err) { errorMsg.value = err.message; return }
+  await load()
+}
 
 async function toggleDone(m) {
   busy.value = true
@@ -184,37 +243,69 @@ const isPicked = pid => picked.value?.playerId === pid
       <!-- Manager controls -->
       <div v-if="canManage" class="px-4 pb-3">
         <div class="rounded-2xl border border-[rgba(15,23,42,0.08)] p-3 space-y-3" style="background:rgba(0,229,255,.03)">
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid gap-2" :class="chosenFormat === 'friendly' ? 'grid-cols-3' : 'grid-cols-1'">
             <label class="block">
               <span class="text-[10px] uppercase tracking-wide text-slate-500">Courts</span>
               <input type="number" min="1" max="8" v-model.number="courts"
                 class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
             </label>
-            <label class="block">
-              <span class="text-[10px] uppercase tracking-wide text-slate-500">Duration</span>
-              <select v-model.number="hours" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700">
-                <option :value="1">1 hour</option><option :value="2">2 hours</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="text-[10px] uppercase tracking-wide text-slate-500">Matches</span>
-              <input type="number" min="1" max="40" v-model.number="matchCount"
-                class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
-            </label>
+            <template v-if="chosenFormat === 'friendly'">
+              <label class="block">
+                <span class="text-[10px] uppercase tracking-wide text-slate-500">Duration</span>
+                <select v-model.number="hours" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700">
+                  <option :value="1">1 hour</option><option :value="2">2 hours</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="text-[10px] uppercase tracking-wide text-slate-500">Matches</span>
+                <input type="number" min="1" max="40" v-model.number="matchCount"
+                  class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+              </label>
+            </template>
           </div>
+
+          <!-- Advanced: game format (opt-in — casual clubs just hit Generate) -->
+          <button type="button" class="text-[11px] font-semibold text-cyan-600 hover:text-cyan-700" @click="showAdvanced = !showAdvanced">
+            {{ showAdvanced ? '▾' : '▸' }} Advanced · game format
+          </button>
+          <div v-if="showAdvanced" class="space-y-1.5">
+            <label class="flex items-start gap-2 rounded-lg p-2 border cursor-pointer transition"
+              :class="chosenFormat === 'friendly' ? 'border-cyan-400 bg-cyan-50' : 'border-slate-200'">
+              <input type="radio" value="friendly" v-model="chosenFormat" class="mt-0.5 accent-cyan-500" />
+              <span>
+                <span class="block text-xs font-semibold text-slate-700">🔄 Everyone plays · fair rotation</span>
+                <span class="block text-[10px] text-slate-500">Balanced teams and equal game time. Best for casual sessions.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 rounded-lg p-2 border cursor-pointer transition"
+              :class="chosenFormat === 'winner_stays' ? 'border-cyan-400 bg-cyan-50' : 'border-slate-200'">
+              <input type="radio" value="winner_stays" v-model="chosenFormat" class="mt-0.5 accent-cyan-500" />
+              <span>
+                <span class="block text-xs font-semibold text-slate-700">👑 Winner stays on · King of the Court</span>
+                <span class="block text-[10px] text-slate-500">Winners keep the court; challengers rotate in from the queue. Auto-rotates after 2 wins so nobody hogs it.</span>
+              </span>
+            </label>
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Running a full tournament (round-robin or knockout brackets)?
+              <RouterLink to="/tournaments" class="text-cyan-600 underline">Use the Tournament module →</RouterLink>
+            </p>
+          </div>
+
           <div class="flex gap-2">
             <button v-if="!plan" class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(false)">
-              {{ busy ? 'Building…' : '✨ Generate Plan' }}
+              {{ busy ? 'Building…' : (chosenFormat === 'winner_stays' ? '👑 Start King of the Court' : '✨ Generate Plan') }}
             </button>
             <template v-else>
-              <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(true)">
-                {{ busy ? 'Rebuilding…' : '↻ Regenerate remaining' }}
+              <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy"
+                @click="generate(chosenFormat === 'friendly' && format === 'friendly')">
+                {{ busy ? 'Rebuilding…' : (chosenFormat === 'winner_stays' ? '↻ Reshuffle &amp; restart'
+                   : format !== 'friendly' ? '✨ Switch to fair rotation' : '↻ Regenerate remaining') }}
               </button>
               <button class="btn-ghost text-xs px-3" :disabled="busy" @click="clearPlan">Clear</button>
             </template>
           </div>
           <p v-if="errorMsg" class="text-xs text-rose-500">{{ errorMsg }}</p>
-          <p v-if="plan" class="text-[11px] text-neon">Tip: tap a player, then tap another (or a resting player) to swap them for that round.</p>
+          <p v-if="plan && !isWinnerStays" class="text-[11px] text-neon">Tip: tap a player, then tap another (or a resting player) to swap them for that round.</p>
         </div>
       </div>
 
@@ -224,7 +315,83 @@ const isPicked = pid => picked.value?.playerId === pid
         <template v-else>The manager hasn't posted a game plan for this session yet.</template>
       </div>
 
-      <!-- Rounds -->
+      <!-- ══ Winner stays (King of the Court) ══ -->
+      <div v-else-if="isWinnerStays" class="px-4 pb-4 space-y-4">
+        <!-- On court now -->
+        <div>
+          <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">👑 On court now</div>
+          <div class="space-y-2">
+            <div v-for="m in activeMatches" :key="m.id" class="rounded-2xl p-3 card-neon">
+              <div class="text-[9px] font-bold uppercase tracking-wider text-neon mb-2">
+                Court {{ m.court }}
+                <span v-if="(planState.streak && planState.streak[m.court]) > 0" class="text-amber-600 normal-case">
+                  · winners on a {{ planState.streak[m.court] }}-win streak
+                </span>
+              </div>
+              <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div class="rounded-xl p-2" style="background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.18)">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[9px] font-bold text-neon uppercase tracking-wider">Side A</span>
+                    <span class="text-[9px] text-slate-400">{{ sideElo(m.side_a) }}</span>
+                  </div>
+                  <div v-for="(pid, i) in m.side_a" :key="'wa'+i" class="flex items-center gap-1.5 px-1 py-1">
+                    <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
+                    <span class="text-[11px] font-semibold text-slate-700 truncate">{{ nameOf(pid) }}</span>
+                  </div>
+                </div>
+                <span class="text-[10px] font-black text-slate-300">VS</span>
+                <div class="rounded-xl p-2" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.18)">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[9px] text-slate-400">{{ sideElo(m.side_b) }}</span>
+                    <span class="text-[9px] font-bold text-violet uppercase tracking-wider">Side B</span>
+                  </div>
+                  <div v-for="(pid, i) in m.side_b" :key="'wb'+i" class="flex items-center gap-1.5 px-1 py-1">
+                    <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
+                    <span class="text-[11px] font-semibold text-slate-700 truncate">{{ nameOf(pid) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="canManage" class="grid grid-cols-2 gap-2 mt-2">
+                <button class="py-2 text-xs font-bold rounded-xl text-white transition active:scale-[.98]"
+                  style="background:#0099b8" :disabled="busy" @click="markWinner(m, 'A')">🏆 Side A won</button>
+                <button class="py-2 text-xs font-bold rounded-xl text-white transition active:scale-[.98]"
+                  style="background:#8b5cf6" :disabled="busy" @click="markWinner(m, 'B')">🏆 Side B won</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Up next queue -->
+        <div v-if="queueIds.length">
+          <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">⏳ Up next ({{ queueIds.length }})</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span v-for="(pid, i) in queueIds" :key="'q'+pid"
+              class="flex items-center gap-1 rounded-full pl-0.5 pr-2 py-0.5 bg-slate-100">
+              <span class="text-[9px] font-bold text-slate-400 w-4 text-center">{{ i + 1 }}</span>
+              <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="18" />
+              <span class="text-[10px] font-medium text-slate-600">{{ nameOf(pid) }}</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div v-if="historyMatches.length">
+          <button class="text-[11px] font-semibold text-slate-500 hover:text-slate-700" @click="showHistory = !showHistory">
+            {{ showHistory ? '▾' : '▸' }} History · {{ historyMatches.length }} played
+          </button>
+          <div v-if="showHistory" class="space-y-1 mt-2">
+            <div v-for="m in historyMatches" :key="'h'+m.id"
+              class="text-[11px] flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5">
+              <span class="truncate" :class="m.winner_side === 'A' ? 'font-bold text-emerald-700' : 'text-slate-400'">{{ m.side_a.map(nameOf).join(' & ') }}</span>
+              <span class="text-slate-300 shrink-0">vs</span>
+              <span class="truncate" :class="m.winner_side === 'B' ? 'font-bold text-emerald-700' : 'text-slate-400'">{{ m.side_b.map(nameOf).join(' & ') }}</span>
+              <span class="ml-auto shrink-0 text-[10px]">🏆</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Friendly · rounds ══ -->
       <div v-else class="px-4 pb-4 space-y-4">
         <div v-for="rd in rounds" :key="rd.round">
           <div class="flex items-center gap-2 mb-2">

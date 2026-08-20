@@ -95,3 +95,82 @@ export function generatePlan({
 export function defaultMatchCount(hours) {
   return hours === 2 ? 12 : 6
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Winner-stays ("King of the Court") — DYNAMIC: the next match depends on who
+// won, so it's generated one match ahead per court, with a waiting queue.
+// A fairness cap rotates a pair out after N wins in a row so the bench still
+// gets a full game (default 2).
+// ─────────────────────────────────────────────────────────────────────────
+
+function balanceFour(ids, elo) {
+  const s = [...ids].sort((a, b) => (elo[b] || 1000) - (elo[a] || 1000))
+  return { sideA: [s[0], s[3]], sideB: [s[1], s[2]] }   // strong+weak vs mid+mid
+}
+
+/**
+ * Start a winner-stays session.
+ * @returns {{ matches: Array, state: Object, error?: string }}
+ *   matches: one starting match per court ({round,court,seq,sideA,sideB})
+ *   state:   { queue: string[], streak: {court:number}, cap: number }
+ */
+export function winnerStaysInit({ players, courts = 1, cap = 2, rng = defaultRng }) {
+  const pool = (players || []).filter(p => p && p.id)
+  if (pool.length < 4) {
+    return { matches: [], state: { queue: [], streak: {}, cap }, error: 'Need at least 4 attendees to start.' }
+  }
+  courts = Math.max(1, Math.floor(courts))
+  const elo = Object.fromEntries(pool.map(p => [p.id, Number(p.elo) || 1000]))
+  const maxCourts = Math.min(courts, Math.floor(pool.length / 4))
+  const shuffled = [...pool].sort(() => rng() - 0.5)
+
+  const matches = []
+  const state = { queue: [], streak: {}, cap: Math.max(1, cap) }
+  let idx = 0
+  for (let c = 0; c < maxCourts; c++) {
+    const four = shuffled.slice(idx, idx + 4).map(p => p.id); idx += 4
+    const b = balanceFour(four, elo)
+    matches.push({ round: 1, court: c + 1, seq: c + 1, sideA: b.sideA, sideB: b.sideB })
+    state.streak[c + 1] = 0
+  }
+  state.queue = shuffled.slice(idx).map(p => p.id)
+  return { matches, state }
+}
+
+/**
+ * Advance one court after a result.
+ * @returns {{ nextMatch: Object, state: Object }}
+ */
+export function winnerStaysAdvance({ court, winnerIds, loserIds, state, players, seq, round }) {
+  const elo = Object.fromEntries((players || []).map(p => [p.id, Number(p.elo) || 1000]))
+  let queue = [...(state.queue || [])]
+  const cap = state.cap || 2
+  const streak = (state.streak?.[court] || 0) + 1
+
+  queue.push(...loserIds)                          // losers rejoin the back
+  const rotateWinners = streak >= cap && queue.length >= 2
+
+  let sideA, sideB, newStreak
+  if (rotateWinners) {
+    queue.push(...winnerIds)                        // winners rest too — fair to the bench
+    const four = queue.splice(0, 4)
+    const b = balanceFour(four, elo)
+    sideA = b.sideA; sideB = b.sideB
+    newStreak = 0
+  } else {
+    const challengers = queue.splice(0, 2)          // winners stay vs next two up
+    if (challengers.length < 2) {                   // tiny group / no bench → rematch losers
+      const need = 2 - challengers.length
+      const fill = loserIds.slice(0, need)
+      for (const id of fill) { const i = queue.lastIndexOf(id); if (i >= 0) queue.splice(i, 1) }
+      challengers.push(...fill)
+    }
+    sideA = winnerIds; sideB = challengers
+    newStreak = streak
+  }
+
+  return {
+    nextMatch: { round: (round || 1) + 1, court, seq, sideA, sideB },
+    state: { ...state, queue, streak: { ...(state.streak || {}), [court]: newStreak }, cap },
+  }
+}
