@@ -129,6 +129,11 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
 <template>
   <div>
+    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-3" @click="router.push('/tournaments')">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+      All Tournaments
+    </button>
+
     <!-- Loading -->
     <div v-if="loading" class="space-y-3">
       <div class="h-32 shimmer rounded-2xl" />

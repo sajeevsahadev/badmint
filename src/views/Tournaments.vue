@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
@@ -8,6 +8,7 @@ import PageHeader from '../components/PageHeader.vue'
 import DateField from '../components/DateField.vue'
 
 const router = useRouter()
+const route  = useRoute()
 const { user } = useAuth()
 const { currentClub, isManager } = useClub()
 const cur = computed(() => currentClub.value?.clubs?.currency || 'AED')
@@ -53,7 +54,18 @@ async function load() {
   loading.value = false
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  // Coming from a play day's Game Plan → open the create sheet, prefilled with
+  // that date so a tournament links straight off the session.
+  if (route.query.create && isManager()) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date || '')) {
+      form.value.start_date = route.query.date
+      form.value.registration_end = route.query.date
+    }
+    showCreate.value = true
+  }
+})
 
 const filtered = computed(() => tournaments.value)
 
@@ -101,6 +113,10 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
 <template>
   <div>
+    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-3 fade-up" @click="router.back()">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+      Back
+    </button>
     <PageHeader icon="🏆" title="Tournaments" subtitle="Doubles elimination & round-robin events">
       <template #help>
         <div class="text-xs space-y-1.5">

@@ -101,6 +101,124 @@ const historyMatches = computed(() => matches.value.filter(m => m.status === 'do
 const queueIds       = computed(() => planState.value.queue || [])
 const maxSeq = () => matches.value.reduce((m, x) => Math.max(m, x.seq), 0)
 
+// ── Set up a tournament off this play day (prefills the create sheet with the date) ──
+function goToTournament() {
+  router.push({ path: '/tournaments', query: { create: '1', date: props.date || '' } })
+}
+
+// ── Export & share (PDF / Excel / link) ─────────────────────────────
+const shareNote = ref('')
+let noteTimer = null
+function flashNote(msg) {
+  shareNote.value = msg
+  clearTimeout(noteTimer)
+  noteTimer = setTimeout(() => { shareNote.value = '' }, 2500)
+}
+
+const fmtLabel = computed(() =>
+  isWinnerStays.value ? 'King of the Court' : format.value === 'tournament' ? 'Tournament' : 'Fair rotation')
+const planDateLabel = computed(() => {
+  if (!props.date) return ''
+  const d = new Date(props.date + 'T00:00:00')
+  return isNaN(d) ? props.date : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+})
+
+// Ordered rows for export: play order (seq), each with names + status.
+function exportRows() {
+  return [...matches.value].sort((a, b) => a.seq - b.seq).map(m => ({
+    game: m.seq,
+    court: m.court,
+    round: m.round,
+    sideA: m.side_a.map(nameOf).join(' & '),
+    sideB: m.side_b.map(nameOf).join(' & '),
+    status: m.status === 'done'
+      ? (m.winner_side ? `Played · Side ${m.winner_side} won` : 'Played')
+      : (m.id === nextUpId.value ? 'Next up' : 'Upcoming'),
+  }))
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// Excel-friendly CSV (opens directly in Excel / Google Sheets / Numbers).
+function downloadExcel() {
+  const rows = [['Game', 'Court', 'Round', 'Side A', 'Side B', 'Status'],
+    ...exportRows().map(r => [r.game, r.court, r.round, r.sideA, r.sideB, r.status])]
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+  // BOM so Excel reads UTF-8 (names with accents) correctly.
+  downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }),
+    `game-plan-${props.date || 'session'}.csv`)
+  flashNote('Excel file downloaded')
+}
+
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// PDF via a branded print window → the browser's "Save as PDF" (zero extra deps,
+// works on desktop and mobile). Also prints nicely on paper.
+function downloadPdf() {
+  const rowsHtml = exportRows().map(r => `
+    <tr class="${r.status.startsWith('Played') ? 'done' : ''}">
+      <td class="num">${r.game}</td>
+      <td><span class="court c${((r.court - 1) % 5) + 1}">Court ${r.court}</span></td>
+      <td class="team">${esc(r.sideA)}</td>
+      <td class="vs">vs</td>
+      <td class="team">${esc(r.sideB)}</td>
+      <td class="st">${esc(r.status)}</td>
+    </tr>`).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Game Plan${props.date ? ' · ' + props.date : ''}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;margin:32px;background:#fff}
+  .head{display:flex;align-items:center;gap:12px;border-bottom:3px solid #00b4d8;padding-bottom:14px;margin-bottom:6px}
+  .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#00b4d8,#a855f7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px}
+  h1{font-size:22px;margin:0} .sub{color:#64748b;font-size:13px;margin:2px 0 18px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0;padding:8px 6px}
+  td{padding:10px 6px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+  tr.done{color:#94a3b8} tr.done .team{text-decoration:line-through}
+  .num{font-weight:800;color:#0891a8;width:44px} .vs{color:#94a3b8;text-align:center;width:34px} .team{font-weight:600}
+  .st{color:#64748b;font-size:12px;white-space:nowrap} .court{font-weight:700;font-size:12px;padding:2px 8px;border-radius:999px}
+  .c1{background:rgba(0,180,216,.14);color:#0891a8} .c2{background:rgba(168,85,247,.14);color:#8b5cf6}
+  .c3{background:rgba(245,158,11,.16);color:#c2740a} .c4{background:rgba(16,185,129,.14);color:#059669} .c5{background:rgba(244,63,94,.14);color:#e11d48}
+  .foot{margin-top:22px;color:#94a3b8;font-size:11px;border-top:1px solid #eef2f7;padding-top:10px}
+  @media print{body{margin:14mm} .noprint{display:none}}
+</style></head><body>
+  <div class="head"><div class="logo">🏸</div><div><h1>Game Plan</h1></div></div>
+  <div class="sub">${esc(planDateLabel.value || props.date || '')} · ${plan.value?.courts || 1} court(s) · ${esc(fmtLabel.value)} · ${matches.value.length} games</div>
+  <table><thead><tr><th>#</th><th>Court</th><th>Side A</th><th></th><th>Side B</th><th>Status</th></tr></thead>
+  <tbody>${rowsHtml}</tbody></table>
+  <div class="foot">Generated by Badminton 360 · badminton360.app</div>
+  <script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script>
+</body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { flashNote('Allow pop-ups to save the PDF'); return }
+  w.document.write(html); w.document.close()
+  flashNote('Opening print / Save as PDF…')
+}
+
+// Share the live plan link + a text summary (everyone can share; the plan is
+// already live for members on the poll page).
+function planSummaryText() {
+  const lines = [`🏸 Game Plan${props.date ? ' — ' + planDateLabel.value : ''}`, '']
+  for (const r of exportRows().filter(r => !r.status.startsWith('Played'))) {
+    lines.push(`Game ${r.game} (Court ${r.court}): ${r.sideA} vs ${r.sideB}`)
+  }
+  return lines.join('\n')
+}
+async function sharePlan() {
+  const url = `https://badminton360.app/poll/${props.scheduleId}`
+  const text = planSummaryText() + `\n\nLive plan → ${url}`
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Game Plan', text }); return } catch (e) { if (e?.name === 'AbortError') return }
+  }
+  try { await navigator.clipboard.writeText(text); flashNote('Plan copied — paste into WhatsApp') }
+  catch { flashNote('Could not share on this device') }
+}
+
 async function load() {
   const { data } = await supabase.rpc('get_session_plan', { p_schedule_id: props.scheduleId })
   if (data) {
@@ -122,7 +240,7 @@ onMounted(async () => {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'session_plans' }, load)
     .subscribe()
 })
-onUnmounted(() => { if (channel) supabase.removeChannel(channel) })
+onUnmounted(() => { if (channel) supabase.removeChannel(channel); clearTimeout(noteTimer) })
 
 // ── Generate / regenerate ──
 function gamesPlayedFromDone() {
@@ -132,7 +250,7 @@ function gamesPlayedFromDone() {
   return gp
 }
 async function generate(regen = false) {
-  if (chosenFormat.value === 'tournament') { router.push('/tournaments'); return }
+  if (chosenFormat.value === 'tournament') { goToTournament(); return }
   if (chosenFormat.value === 'winner_stays') return generateWinnerStays()
   errorMsg.value = null
   const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
@@ -307,7 +425,7 @@ const isPicked = pid => picked.value?.playerId === pid
           </div>
 
           <div class="flex gap-2">
-            <button v-if="chosenFormat === 'tournament'" class="btn-primary flex-1 py-2 text-sm gap-1.5" @click="router.push('/tournaments')">
+            <button v-if="chosenFormat === 'tournament'" class="btn-primary flex-1 py-2 text-sm gap-1.5" @click="goToTournament">
               🏆 Set up a tournament →
             </button>
             <template v-else-if="!plan">
@@ -327,6 +445,24 @@ const isPicked = pid => picked.value?.playerId === pid
           <p v-if="errorMsg" class="text-xs text-rose-500">{{ errorMsg }}</p>
           <p v-if="plan && !isWinnerStays" class="text-[11px] text-neon">Tip: tap a player, then tap another (or a resting player) to swap them for that round.</p>
         </div>
+      </div>
+
+      <!-- Share / export the plan -->
+      <div v-if="plan" class="px-4 pb-3">
+        <div class="flex items-center gap-2">
+          <button class="btn-ghost flex-1 py-1.5 text-xs gap-1" @click="sharePlan" title="Share the live plan">
+            <span>📤</span> Share
+          </button>
+          <template v-if="canManage">
+            <button class="btn-ghost flex-1 py-1.5 text-xs gap-1" @click="downloadPdf" title="Save as PDF">
+              <span>📄</span> PDF
+            </button>
+            <button class="btn-ghost flex-1 py-1.5 text-xs gap-1" @click="downloadExcel" title="Download for Excel">
+              <span>📊</span> Excel
+            </button>
+          </template>
+        </div>
+        <p v-if="shareNote" class="text-[11px] text-neon text-center mt-1.5 fade-up">{{ shareNote }}</p>
       </div>
 
       <!-- Empty -->
