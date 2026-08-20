@@ -43,6 +43,29 @@ const eloOf    = id => players.value[id]?.elo ?? 1000
 const avatarOf = id => players.value[id]?.avatar || null
 const sideElo  = ids => ids.reduce((s, id) => s + eloOf(id), 0)
 
+// Each court gets its own colour so games are instantly distinguishable.
+const COURT_COLORS = [
+  { line: '#00b4d8', soft: 'rgba(0,180,216,.10)', text: '#0891a8', chip: 'rgba(0,180,216,.14)' },
+  { line: '#a855f7', soft: 'rgba(168,85,247,.10)', text: '#8b5cf6', chip: 'rgba(168,85,247,.14)' },
+  { line: '#f59e0b', soft: 'rgba(245,158,11,.12)', text: '#c2740a', chip: 'rgba(245,158,11,.16)' },
+  { line: '#10b981', soft: 'rgba(16,185,129,.10)', text: '#059669', chip: 'rgba(16,185,129,.14)' },
+  { line: '#f43f5e', soft: 'rgba(244,63,94,.10)',  text: '#e11d48', chip: 'rgba(244,63,94,.14)' },
+]
+const courtStyle = c => COURT_COLORS[(Math.max(1, c || 1) - 1) % COURT_COLORS.length]
+
+// Format picker options + the one-line description shown under it.
+const FORMATS = [
+  { v: 'friendly',     icon: '🔄', label: 'Fair play' },
+  { v: 'winner_stays', icon: '👑', label: 'King court' },
+  { v: 'tournament',   icon: '🏆', label: 'Tournament' },
+]
+const FORMAT_DESC = {
+  friendly:     'Balanced teams · everyone plays an equal share. Great for casual sessions.',
+  winner_stays: 'Winners keep the court; challengers rotate in. Auto-rotates so nobody hogs it.',
+  tournament:   'Round-robin or knockout brackets with seeding, scores and a champion.',
+}
+const formatDesc = computed(() => FORMAT_DESC[chosenFormat.value] || '')
+
 const rosterIds = computed(() => {
   const s = new Set()
   for (const m of matches.value) for (const id of [...m.side_a, ...m.side_b]) s.add(id)
@@ -109,6 +132,7 @@ function gamesPlayedFromDone() {
   return gp
 }
 async function generate(regen = false) {
+  if (chosenFormat.value === 'tournament') { router.push('/tournaments'); return }
   if (chosenFormat.value === 'winner_stays') return generateWinnerStays()
   errorMsg.value = null
   const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
@@ -229,8 +253,12 @@ const isPicked = pid => picked.value?.playerId === pid
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between px-4 pt-4 pb-2">
       <div>
-        <div class="text-sm font-bold text-slate-800">🗺️ Game Plan</div>
-        <div class="text-[10px] text-slate-500 mt-0.5">Balanced rotation · everyone plays a fair share</div>
+        <div class="text-sm font-bold text-slate-800">
+          {{ plan && isWinnerStays ? '👑 King of the Court' : '🗺️ Game Plan' }}
+        </div>
+        <div class="text-[10px] text-slate-500 mt-0.5">
+          {{ plan && isWinnerStays ? 'Winners stay on · challengers rotate in' : 'Balanced rotation · everyone plays a fair share' }}
+        </div>
       </div>
       <span v-if="plan" class="text-[10px] font-semibold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
         {{ doneCount }}/{{ matches.length }} played
@@ -243,7 +271,21 @@ const isPicked = pid => picked.value?.playerId === pid
       <!-- Manager controls -->
       <div v-if="canManage" class="px-4 pb-3">
         <div class="rounded-2xl border border-[rgba(15,23,42,0.08)] p-3 space-y-3" style="background:rgba(0,229,255,.03)">
-          <div class="grid gap-2" :class="chosenFormat === 'friendly' ? 'grid-cols-3' : 'grid-cols-1'">
+          <!-- How do you want to play today? — always visible, compact -->
+          <div>
+            <div class="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-100">
+              <button v-for="opt in FORMATS" :key="opt.v" type="button" @click="chosenFormat = opt.v"
+                class="py-1.5 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5"
+                :class="chosenFormat === opt.v ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'">
+                <span class="text-base leading-none">{{ opt.icon }}</span>{{ opt.label }}
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-500 text-center mt-1.5 leading-relaxed">{{ formatDesc }}</p>
+          </div>
+
+          <!-- Courts / duration / matches — only where relevant -->
+          <div v-if="chosenFormat !== 'tournament'" class="grid gap-2"
+            :class="chosenFormat === 'friendly' ? 'grid-cols-3' : 'grid-cols-1'">
             <label class="block">
               <span class="text-[10px] uppercase tracking-wide text-slate-500">Courts</span>
               <input type="number" min="1" max="8" v-model.number="courts"
@@ -264,37 +306,15 @@ const isPicked = pid => picked.value?.playerId === pid
             </template>
           </div>
 
-          <!-- Advanced: game format (opt-in — casual clubs just hit Generate) -->
-          <button type="button" class="text-[11px] font-semibold text-cyan-600 hover:text-cyan-700" @click="showAdvanced = !showAdvanced">
-            {{ showAdvanced ? '▾' : '▸' }} Advanced · game format
-          </button>
-          <div v-if="showAdvanced" class="space-y-1.5">
-            <label class="flex items-start gap-2 rounded-lg p-2 border cursor-pointer transition"
-              :class="chosenFormat === 'friendly' ? 'border-cyan-400 bg-cyan-50' : 'border-slate-200'">
-              <input type="radio" value="friendly" v-model="chosenFormat" class="mt-0.5 accent-cyan-500" />
-              <span>
-                <span class="block text-xs font-semibold text-slate-700">🔄 Everyone plays · fair rotation</span>
-                <span class="block text-[10px] text-slate-500">Balanced teams and equal game time. Best for casual sessions.</span>
-              </span>
-            </label>
-            <label class="flex items-start gap-2 rounded-lg p-2 border cursor-pointer transition"
-              :class="chosenFormat === 'winner_stays' ? 'border-cyan-400 bg-cyan-50' : 'border-slate-200'">
-              <input type="radio" value="winner_stays" v-model="chosenFormat" class="mt-0.5 accent-cyan-500" />
-              <span>
-                <span class="block text-xs font-semibold text-slate-700">👑 Winner stays on · King of the Court</span>
-                <span class="block text-[10px] text-slate-500">Winners keep the court; challengers rotate in from the queue. Auto-rotates after 2 wins so nobody hogs it.</span>
-              </span>
-            </label>
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Running a full tournament (round-robin or knockout brackets)?
-              <RouterLink to="/tournaments" class="text-cyan-600 underline">Use the Tournament module →</RouterLink>
-            </p>
-          </div>
-
           <div class="flex gap-2">
-            <button v-if="!plan" class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(false)">
-              {{ busy ? 'Building…' : (chosenFormat === 'winner_stays' ? '👑 Start King of the Court' : '✨ Generate Plan') }}
+            <button v-if="chosenFormat === 'tournament'" class="btn-primary flex-1 py-2 text-sm gap-1.5" @click="router.push('/tournaments')">
+              🏆 Set up a tournament →
             </button>
+            <template v-else-if="!plan">
+              <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(false)">
+                {{ busy ? 'Building…' : (chosenFormat === 'winner_stays' ? '👑 Start King of the Court' : '✨ Generate Plan') }}
+              </button>
+            </template>
             <template v-else>
               <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy"
                 @click="generate(chosenFormat === 'friendly' && format === 'friendly')">
@@ -320,13 +340,18 @@ const isPicked = pid => picked.value?.playerId === pid
         <!-- On court now -->
         <div>
           <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">👑 On court now</div>
-          <div class="space-y-2">
-            <div v-for="m in activeMatches" :key="m.id" class="rounded-2xl p-3 card-neon">
-              <div class="text-[9px] font-bold uppercase tracking-wider text-neon mb-2">
-                Court {{ m.court }}
-                <span v-if="(planState.streak && planState.streak[m.court]) > 0" class="text-amber-600 normal-case">
-                  · winners on a {{ planState.streak[m.court] }}-win streak
-                </span>
+          <div class="space-y-2.5">
+            <div v-for="m in activeMatches" :key="m.id" class="rounded-2xl p-3"
+              :style="{
+                borderLeft: '5px solid ' + courtStyle(m.court).line,
+                background: 'radial-gradient(130% 130% at 100% 0%, ' + courtStyle(m.court).soft + ', #ffffff 58%)',
+                boxShadow: '0 0 0 1.5px ' + courtStyle(m.court).line + ', 0 8px 24px ' + courtStyle(m.court).soft
+              }">
+              <div class="flex items-center gap-1.5 mb-2">
+                <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                  :style="{ background: courtStyle(m.court).chip, color: courtStyle(m.court).text }">Court {{ m.court }}</span>
+                <span v-if="(planState.streak && planState.streak[m.court]) > 0"
+                  class="text-[9px] font-bold text-amber-600">🔥 {{ planState.streak[m.court] }}-win streak</span>
               </div>
               <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <div class="rounded-xl p-2" style="background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.18)">
@@ -392,79 +417,97 @@ const isPicked = pid => picked.value?.playerId === pid
       </div>
 
       <!-- ══ Friendly · rounds ══ -->
-      <div v-else class="px-4 pb-4 space-y-4">
+      <div v-else class="px-4 pb-4 space-y-5">
         <div v-for="rd in rounds" :key="rd.round">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Round {{ rd.round }}</span>
-            <span class="h-px flex-1 bg-[rgba(15,23,42,0.08)]"></span>
+          <!-- Round divider -->
+          <div class="flex items-center gap-3 mb-2.5">
+            <span class="h-px flex-1 bg-[rgba(15,23,42,0.10)]"></span>
+            <span class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500 flex items-center gap-1">
+              🏸 Round {{ rd.round }}
+            </span>
+            <span class="h-px flex-1 bg-[rgba(15,23,42,0.10)]"></span>
           </div>
 
-          <div class="space-y-2">
+          <div class="space-y-2.5">
             <div v-for="m in rd.matches" :key="m.id"
-              class="rounded-2xl p-3 transition"
-              :class="[
-                m.status === 'done' ? 'bg-emerald-50 border border-emerald-200'
-                : m.id === nextUpId ? 'card-neon' : 'border border-[rgba(15,23,42,0.08)]'
-              ]">
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-[9px] font-bold uppercase tracking-wider"
-                  :class="m.id === nextUpId && m.status !== 'done' ? 'text-neon' : 'text-slate-400'">
-                  {{ m.status === 'done' ? '✓ Played' : m.id === nextUpId ? '● Next up' : 'Upcoming' }}
-                  <span v-if="courts > 1" class="text-slate-400"> · Court {{ m.court }}</span>
-                </span>
-                <button v-if="canManage" class="text-[10px] px-2 py-0.5 rounded-full transition"
-                  :class="m.status === 'done' ? 'bg-emerald-500 text-white' : 'border border-slate-200 text-slate-500'"
-                  :disabled="busy" @click="toggleDone(m)">
-                  {{ m.status === 'done' ? 'Undo' : 'Mark played' }}
+              class="relative rounded-2xl overflow-hidden transition"
+              :style="{
+                borderLeft: '5px solid ' + courtStyle(m.court).line,
+                background: m.status === 'done'
+                  ? 'linear-gradient(120% 120% at 100% 0%, rgba(16,185,129,.12), #ffffff 55%)'
+                  : 'radial-gradient(130% 130% at 100% 0%, ' + courtStyle(m.court).soft + ', #ffffff 58%)',
+                boxShadow: m.id === nextUpId && m.status !== 'done'
+                  ? '0 0 0 1.5px ' + courtStyle(m.court).line + ', 0 8px 24px ' + courtStyle(m.court).soft
+                  : '0 1px 2px rgba(15,23,42,.04)'
+              }">
+              <div class="p-3">
+                <!-- Header: game number + court chip + status -->
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="text-xs font-black" :style="{ color: courtStyle(m.court).text }">GAME {{ m.seq }}</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full shrink-0"
+                      :style="{ background: courtStyle(m.court).chip, color: courtStyle(m.court).text }">
+                      Court {{ m.court }}
+                    </span>
+                    <span v-if="m.id === nextUpId && m.status !== 'done'"
+                      class="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full text-white shrink-0"
+                      :style="{ background: courtStyle(m.court).line }">▶ Next</span>
+                    <span v-if="m.status === 'done'" class="text-[9px] font-bold text-emerald-600 shrink-0">✓ Played</span>
+                  </div>
+                  <button v-if="canManage" class="text-[10px] px-2 py-0.5 rounded-full transition shrink-0"
+                    :class="m.status === 'done' ? 'bg-emerald-500 text-white' : 'border border-slate-200 text-slate-500'"
+                    :disabled="busy" @click="toggleDone(m)">
+                    {{ m.status === 'done' ? 'Undo' : 'Mark played' }}
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <!-- Side A -->
+                  <div class="rounded-xl p-2" style="background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.18)">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[9px] font-bold text-neon uppercase tracking-wider">Side A</span>
+                      <span class="text-[9px] text-slate-400">{{ sideElo(m.side_a) }}</span>
+                    </div>
+                    <button v-for="(pid, i) in m.side_a" :key="'a'+i"
+                      :disabled="!canManage || m.status === 'done'"
+                      @click="tapSlot(playerSlot(rd.round, m, 'side_a', i))"
+                      class="w-full flex items-center gap-1.5 rounded-lg px-1 py-1 mb-0.5 last:mb-0 transition"
+                      :class="isPicked(pid) ? 'bg-cyan-500' : 'active:bg-cyan-100'">
+                      <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
+                      <span class="text-[11px] font-semibold truncate" :class="isPicked(pid) ? 'text-white' : 'text-slate-700'">{{ nameOf(pid) }}</span>
+                    </button>
+                  </div>
+
+                  <span class="text-[10px] font-black text-slate-300">VS</span>
+
+                  <!-- Side B -->
+                  <div class="rounded-xl p-2" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.18)">
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-[9px] text-slate-400">{{ sideElo(m.side_b) }}</span>
+                      <span class="text-[9px] font-bold text-violet uppercase tracking-wider">Side B</span>
+                    </div>
+                    <button v-for="(pid, i) in m.side_b" :key="'b'+i"
+                      :disabled="!canManage || m.status === 'done'"
+                      @click="tapSlot(playerSlot(rd.round, m, 'side_b', i))"
+                      class="w-full flex items-center gap-1.5 rounded-lg px-1 py-1 mb-0.5 last:mb-0 transition"
+                      :class="isPicked(pid) ? 'bg-violet-500' : 'active:bg-violet-100'">
+                      <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
+                      <span class="text-[11px] font-semibold truncate" :class="isPicked(pid) ? 'text-white' : 'text-slate-700'">{{ nameOf(pid) }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Start This Match (manager, on the next-up match) -->
+                <button v-if="canManage && m.id === nextUpId && m.status !== 'done'"
+                  class="btn-primary w-full mt-2 py-2 text-sm" @click="startPlanMatch(m)">
+                  ✅ Start This Match
                 </button>
               </div>
-
-              <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <!-- Side A -->
-                <div class="rounded-xl p-2" style="background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.18)">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-[9px] font-bold text-neon uppercase tracking-wider">Side A</span>
-                    <span class="text-[9px] text-slate-400">{{ sideElo(m.side_a) }}</span>
-                  </div>
-                  <button v-for="(pid, i) in m.side_a" :key="'a'+i"
-                    :disabled="!canManage || m.status === 'done'"
-                    @click="tapSlot(playerSlot(rd.round, m, 'side_a', i))"
-                    class="w-full flex items-center gap-1.5 rounded-lg px-1 py-1 mb-0.5 last:mb-0 transition"
-                    :class="isPicked(pid) ? 'bg-cyan-500' : 'active:bg-cyan-100'">
-                    <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
-                    <span class="text-[11px] font-semibold truncate" :class="isPicked(pid) ? 'text-white' : 'text-slate-700'">{{ nameOf(pid) }}</span>
-                  </button>
-                </div>
-
-                <span class="text-[10px] font-black text-slate-300">VS</span>
-
-                <!-- Side B -->
-                <div class="rounded-xl p-2" style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.18)">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-[9px] text-slate-400">{{ sideElo(m.side_b) }}</span>
-                    <span class="text-[9px] font-bold text-violet uppercase tracking-wider">Side B</span>
-                  </div>
-                  <button v-for="(pid, i) in m.side_b" :key="'b'+i"
-                    :disabled="!canManage || m.status === 'done'"
-                    @click="tapSlot(playerSlot(rd.round, m, 'side_b', i))"
-                    class="w-full flex items-center gap-1.5 rounded-lg px-1 py-1 mb-0.5 last:mb-0 transition"
-                    :class="isPicked(pid) ? 'bg-violet-500' : 'active:bg-violet-100'">
-                    <Avatar :name="nameOf(pid)" :src="avatarOf(pid)" :size="22" />
-                    <span class="text-[11px] font-semibold truncate" :class="isPicked(pid) ? 'text-white' : 'text-slate-700'">{{ nameOf(pid) }}</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Start This Match (manager, on the next-up match) -->
-              <button v-if="canManage && m.id === nextUpId && m.status !== 'done'"
-                class="btn-primary w-full mt-2 py-2 text-sm" @click="startPlanMatch(m)">
-                ✅ Start This Match
-              </button>
             </div>
 
             <!-- Resting -->
-            <div v-if="rd.resting.length" class="flex flex-wrap items-center gap-1.5 pt-1">
-              <span class="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5">Resting</span>
+            <div v-if="rd.resting.length" class="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span class="text-[10px] uppercase tracking-wide text-slate-400 mr-0.5">😴 Resting</span>
               <button v-for="pid in rd.resting" :key="'r'+pid" :disabled="!canManage"
                 @click="tapSlot(restSlot(rd.round, pid))"
                 class="flex items-center gap-1 rounded-full pl-0.5 pr-2 py-0.5 transition"
