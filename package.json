@@ -8,6 +8,7 @@
     "build": "vite build && node scripts/prerender.js",
     "preview": "vite preview",
     "generate:icons": "node scripts/generate-icons.js",
+    "generate:blog-covers": "node scripts/generate-blog-covers.js",
     "generate:badge": "node scripts/generate-badge.js",
     "generate:blog-cover": "node scripts/generate-blog-cover.js",
     "test": "vitest run",
