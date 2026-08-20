@@ -97,6 +97,19 @@ const tournaments = ref([])
 const stats       = ref(null)
 const sessions    = ref([])
 const sessionsLoading = ref(false)
+// Login-audit filtering (client-side over the loaded rows)
+const sessionFilter = ref('')
+const sessionActiveOnly = ref(false)
+const filteredSessions = computed(() => {
+  let list = sessions.value
+  if (sessionActiveOnly.value) list = list.filter(s => s.is_active)
+  const q = sessionFilter.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(s => [
+    s.full_name, s.email, s.phone, s.ip_address,
+    deviceName(s.user_agent), sessionLocation(s), s.club_name,
+  ].some(v => String(v || '').toLowerCase().includes(q)))
+})
 const chatClubId  = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
@@ -400,18 +413,17 @@ const statItems = computed(() => !stats.value ? [] : [
     <div v-if="err" class="rounded-xl px-4 py-3 mb-3 text-sm text-rose-600 bg-rose-50 border border-rose-200">⚠️ {{ err }}</div>
     <div v-if="ok"  class="rounded-xl px-4 py-3 mb-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200">✅ {{ ok }}</div>
 
-    <!-- Tab bar (horizontally scrollable — 6 tabs) -->
-    <div class="overflow-x-auto -mx-4 px-4 pb-1 mb-5">
-      <div class="flex gap-1.5" style="width:max-content">
-        <button v-for="t in TABS" :key="t.v"
-          class="px-3.5 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all border"
-          :class="tab === t.v
-            ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-            : 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300'"
-          @click="switchTab(t.v)">
-          {{ t.l }}
-        </button>
-      </div>
+    <!-- Tab bar — wraps to multiple rows so it scales as features grow
+         (no horizontal scrolling). -->
+    <div class="flex flex-wrap gap-1.5 mb-5">
+      <button v-for="t in TABS" :key="t.v"
+        class="px-3 py-1.5 text-xs font-semibold rounded-full transition-all border"
+        :class="tab === t.v
+          ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+          : 'bg-white text-slate-500 border-slate-200 hover:text-slate-700 hover:border-slate-300'"
+        @click="switchTab(t.v)">
+        {{ t.l }}
+      </button>
     </div>
 
     <!-- Global loading shimmer -->
@@ -714,15 +726,38 @@ const statItems = computed(() => !stats.value ? [] : [
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-bold text-slate-800">Login Audit</p>
-            <p class="text-[11px] text-slate-500">Newest first · {{ sessions.length }} logins</p>
+            <p class="text-[11px] text-slate-500">
+              Newest first ·
+              <template v-if="sessionFilter.trim() || sessionActiveOnly">{{ filteredSessions.length }} of {{ sessions.length }}</template>
+              <template v-else>{{ sessions.length }}</template>
+              logins
+            </p>
           </div>
           <button class="btn-ghost text-xs px-3 py-1.5" :disabled="sessionsLoading" @click="loadSessions">
             {{ sessionsLoading ? '…' : '↻ Refresh' }}
           </button>
         </div>
 
+        <!-- Filter bar -->
+        <div v-if="sessions.length" class="flex flex-wrap items-center gap-2">
+          <div class="relative flex-1 min-w-[180px]">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+            <input v-model="sessionFilter" placeholder="Filter by name, email, phone, IP, device, location…"
+              class="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+            <button v-if="sessionFilter" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              @click="sessionFilter = ''">✕</button>
+          </div>
+          <label class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap">
+            <input type="checkbox" v-model="sessionActiveOnly" class="w-3.5 h-3.5 rounded accent-emerald-500" />
+            Active only
+          </label>
+        </div>
+
         <div v-if="sessionsLoading" class="card p-8 text-center text-sm text-slate-400">Loading logins…</div>
         <div v-else-if="!sessions.length" class="card p-8 text-center text-sm text-slate-400">No logins recorded yet.</div>
+        <div v-else-if="!filteredSessions.length" class="card p-8 text-center text-sm text-slate-400">
+          No logins match “{{ sessionFilter }}”.
+        </div>
 
         <div v-else class="card overflow-x-auto">
           <table class="w-full text-xs min-w-[720px]">
@@ -738,7 +773,7 @@ const statItems = computed(() => !stats.value ? [] : [
               </tr>
             </thead>
             <tbody>
-              <tr v-for="s in sessions" :key="s.session_id" class="border-b border-slate-50 last:border-0 align-top">
+              <tr v-for="s in filteredSessions" :key="s.session_id" class="border-b border-slate-50 last:border-0 align-top">
                 <td class="py-2.5 px-3">
                   <div class="font-semibold text-slate-800 whitespace-nowrap">{{ s.full_name || '—' }}</div>
                   <span v-if="s.is_active" class="inline-block mt-0.5 text-[9px] font-bold text-emerald-600">● active</span>
