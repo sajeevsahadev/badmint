@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar.vue'
@@ -29,7 +29,14 @@ const errorMsg = ref(null)
 const courts     = ref(1)
 const hours      = ref(1)
 const matchCount = ref(6)
-watch(hours, h => { matchCount.value = defaultMatchCount(h) })
+// Duration is a convenience that seeds the match count; the user can still
+// fine-tune matches. Only recompute on an actual user change (never on load),
+// so restoring a saved plan keeps its exact match count.
+function onHoursChange() {
+  const h = Math.max(1, Math.round(Number(hours.value) || 1))
+  hours.value = h
+  matchCount.value = defaultMatchCount(h)
+}
 
 // Format: 'friendly' (fair rotation, default) | 'winner_stays' (King of the Court)
 const chosenFormat = ref('friendly')   // what the generate control will produce
@@ -224,6 +231,7 @@ async function load() {
   if (data) {
     plan.value = data.plan; matches.value = data.matches || []; players.value = data.players || {}
     courts.value = data.plan.courts; matchCount.value = data.plan.match_count
+    hours.value = Math.max(1, Math.round((data.plan.match_count || 6) / 6))   // reflect saved duration
     chosenFormat.value = data.plan.format || 'friendly'
   } else {
     plan.value = null; matches.value = []
@@ -411,10 +419,9 @@ const isPicked = pid => picked.value?.playerId === pid
             </label>
             <template v-if="chosenFormat === 'friendly'">
               <label class="block">
-                <span class="text-[10px] uppercase tracking-wide text-slate-500">Duration</span>
-                <select v-model.number="hours" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700">
-                  <option :value="1">1 hour</option><option :value="2">2 hours</option>
-                </select>
+                <span class="text-[10px] uppercase tracking-wide text-slate-500">Hours</span>
+                <input type="number" min="1" max="8" step="0.5" v-model.number="hours" @change="onHoursChange"
+                  class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
               </label>
               <label class="block">
                 <span class="text-[10px] uppercase tracking-wide text-slate-500">Matches</span>

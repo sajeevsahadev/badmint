@@ -38,11 +38,27 @@ export function generatePlan({
 
   const elo = Object.fromEntries(pool.map(p => [p.id, Number(p.elo) || 1000]))
   const gp  = {}
-  const rest = {}
-  for (const p of pool) { gp[p.id] = (gamesPlayed && gamesPlayed[p.id]) || 0; rest[p.id] = 0 }
+  for (const p of pool) gp[p.id] = (gamesPlayed && gamesPlayed[p.id]) || 0
 
-  // How many players can actually sit on courts in one round.
-  const maxSeats = Math.min(4 * courts, Math.floor(pool.length / 4) * 4)
+  // Seats available per round (whole doubles matches only).
+  const seatsPerRound = Math.min(4 * courts, Math.floor(pool.length / 4) * 4)
+
+  // ── Circular waiting-line queue ──
+  // This is the heart of the fair rotation. Each round the players at the FRONT
+  // of the line take the courts; everyone behind them waits. Afterwards the
+  // players who just rested move to the front (they play next) and the players
+  // who just played go to the back. That single rule gives exactly the hand-off
+  // people expect on court: e.g. 6 players / 1 court →
+  //   R1: 1,2,3,4 play · 5,6 rest
+  //   R2: 5,6 join · 1,2 stay · 3,4 rest
+  //   R3: 3,4 join · 5,6 stay · 1,2 rest …
+  // so nobody plays 3–4 in a row and nobody sits for two rounds while others
+  // play two. Seed the line by fewest carried games first (a late joiner or a
+  // mid-session regeneration puts whoever is "behind" up front), random only as
+  // a tie-break for a fresh shuffle at the start.
+  let queue = [...pool]
+    .sort((a, b) => (gp[a.id] - gp[b.id]) || (rng() - 0.5))
+    .map(p => p.id)
 
   const matches = []
   let seq = startSeq
@@ -50,38 +66,30 @@ export function generatePlan({
 
   while (matches.length < matchCount) {
     const remaining = matchCount - matches.length
-    const seatsThisRound = Math.min(maxSeats, remaining * 4)
+    const seatsThisRound = Math.min(seatsPerRound, remaining * 4)
     const courtsThisRound = seatsThisRound / 4
 
-    // Rank the pool: fewest games first, then longest rest, then random.
-    const ranked = [...pool].sort((a, b) =>
-      (gp[a.id] - gp[b.id]) ||
-      (rest[b.id] - rest[a.id]) ||
-      (rng() - 0.5)
-    )
-    const playing = ranked.slice(0, seatsThisRound)
-    const sitting = ranked.slice(seatsThisRound)
-    for (const p of sitting) rest[p.id]++
+    const playing = queue.slice(0, seatsThisRound)
+    const resting = queue.slice(seatsThisRound)
+    queue = [...resting, ...playing]   // resters to the front, players to the back
 
-    // Distribute the playing players across courts by Elo using serpentine
-    // seeding so each court gets a balanced spread (e.g. 8 → C1:{1,4,5,8}, C2:{2,3,6,7}).
-    const byElo = [...playing].sort((a, b) => elo[b.id] - elo[a.id])
+    // Spread the playing pool across courts by Elo with serpentine seeding so
+    // each court is a balanced mix (e.g. 8 → C1:{1,4,5,8}, C2:{2,3,6,7}).
+    const byElo = [...playing].sort((a, b) => elo[b] - elo[a])
     const groups = Array.from({ length: courtsThisRound }, () => [])
     let dir = 1, ci = 0
-    for (const p of byElo) {
-      groups[ci].push(p)
+    for (const id of byElo) {
+      groups[ci].push(id)
       if (dir === 1) { if (ci === courtsThisRound - 1) dir = -1; else ci++ }
       else           { if (ci === 0) dir = 1;          else ci-- }
     }
 
     for (let c = 0; c < courtsThisRound && matches.length < matchCount; c++) {
       // Within a court, split 4 by Elo into balanced teams: (strong+weak) vs (mid+mid).
-      const g = [...groups[c]].sort((a, b) => elo[b.id] - elo[a.id]) // r0>=r1>=r2>=r3
-      const sideA = [g[0].id, g[3].id]
-      const sideB = [g[1].id, g[2].id]
+      const { sideA, sideB } = balanceFour(groups[c], elo)
       matches.push({ round, court: c + 1, seq, sideA, sideB })
       seq++
-      for (const p of g) { gp[p.id]++; rest[p.id] = 0 }
+      for (const id of groups[c]) gp[id]++
     }
     round++
   }
@@ -90,10 +98,12 @@ export function generatePlan({
 }
 
 /**
- * Convenience default for the "1 hr = 6 games, 2 hr = 12 games" rule.
+ * Games for a session length. Roughly 6 games per court-hour of play; scales
+ * to any duration (1 h → 6, 2 h → 12, 3 h → 18 …).
  */
 export function defaultMatchCount(hours) {
-  return hours === 2 ? 12 : 6
+  const h = Number(hours) || 1
+  return Math.max(1, Math.round(h * 6))
 }
 
 // ─────────────────────────────────────────────────────────────────────────

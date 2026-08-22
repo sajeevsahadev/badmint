@@ -77,9 +77,35 @@ describe('generatePlan — friendly fair rotation', () => {
     expect(total).toBe(matches.length * 4)
   })
 
-  it('defaultMatchCount maps hours → games', () => {
+  it('defaultMatchCount maps hours → games (any duration)', () => {
     expect(defaultMatchCount(1)).toBe(6)
     expect(defaultMatchCount(2)).toBe(12)
+    expect(defaultMatchCount(3)).toBe(18)
+    expect(defaultMatchCount(1.5)).toBe(9)
+  })
+
+  it('6 players / 1 court: clean rotation — never 3 in a row, never rests twice in a row', () => {
+    const players = mkPlayers(6)
+    const { matches } = generatePlan({ players, courts: 1, matchCount: 9, rng: seeded(11) })
+    // Build a per-round play/rest map.
+    const byRound = {}
+    for (const m of matches) { (byRound[m.round] ||= new Set()); for (const id of [...m.sideA, ...m.sideB]) byRound[m.round].add(id) }
+    const roundNums = Object.keys(byRound).map(Number).sort((a, b) => a - b)
+    for (const p of players) {
+      let playStreak = 0, restStreak = 0, maxPlay = 0, maxRest = 0
+      for (const r of roundNums) {
+        if (byRound[r].has(p.id)) { playStreak++; restStreak = 0 }
+        else { restStreak++; playStreak = 0 }
+        maxPlay = Math.max(maxPlay, playStreak)
+        maxRest = Math.max(maxRest, restStreak)
+      }
+      expect(maxPlay).toBeLessThanOrEqual(2)   // at most "2 stay", then rest
+      expect(maxRest).toBeLessThanOrEqual(1)   // never benched two rounds running
+    }
+    // …and games are perfectly even over 9 rounds.
+    const gp = tally(matches)
+    const counts = players.map(p => gp[p.id] || 0)
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1)
   })
 })
 
