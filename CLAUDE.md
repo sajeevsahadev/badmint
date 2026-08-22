@@ -438,6 +438,7 @@ elo_score, part_score, composite, club_rank
 |---|---|---|
 | `record_match(p_club_id, p_played_on, p_side_a[], p_side_b[], p_score_a, p_score_b, p_display_name?)` | Manager | Full Elo engine — only write path for match data |
 | `delete_match(p_match_id)` | Manager | Delete + full Elo recalculation |
+| `update_match(p_match_id, p_side_a[], p_side_b[], p_score_a, p_score_b, p_played_on?, p_display_name?)` | Creator or owner/manager | (v93) Edit a recorded match's players/scores/winner/date/name, then full Elo replay (same engine as delete_match). Validates 4 distinct club players + non-equal scores |
 | `create_club(p_name)` | Any auth | Creates club + owner membership + ranking_config |
 | `leave_club(p_club_id)` | Own user | Leave a club (blocks owner/match-history; cleans join_requests) |
 | `revoke_join_request(p_club_id)` | Own user | Cancel a pending join request (so Explore shows Join again) |

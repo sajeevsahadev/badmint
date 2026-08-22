@@ -118,6 +118,7 @@ async function load() {
   const list = (data?.matches ?? []).map(m => mapMatch(m, pmap))
   matches.value = list
   hasMore.value = list.length === PAGE_SIZE
+  loadMemberNames()
   // Collapse all dates by default — most recent date stays open
   const dates = [...new Set(list.map(m => m.played_on))]
   collapsedDates.value = new Set(dates.slice(1))
@@ -257,6 +258,78 @@ const deltaText  = d => d > 0 ? `+${d}` : `${d}`
 
 const canDelete = m =>
   m.created_by === user.value?.id || currentClub.value?.role === 'owner'
+
+// Edit: match creator or a club owner/manager (mirrors the update_match RPC).
+const canEdit = m =>
+  m.created_by === user.value?.id || isManager()
+
+// ── Who recorded the match ──
+const memberNames = ref({})   // user_id → display name
+async function loadMemberNames() {
+  if (!currentClub.value) return
+  const { data } = await supabase.rpc('get_member_profile_names', {
+    p_club_id: currentClub.value.club_id,
+  })
+  const map = {}
+  for (const r of data ?? []) map[r.user_id] = r.nickname || r.full_name || null
+  memberNames.value = map
+}
+const creatorName = m =>
+  (m.created_by && memberNames.value[m.created_by]) || 'a club member'
+
+// ── Edit match ──
+const editing     = ref(null)   // the match being edited
+const editForm    = ref({ a0: '', a1: '', b0: '', b1: '', scoreA: 0, scoreB: 0, date: '', name: '' })
+const clubPlayers = ref([])
+const editError   = ref(null)
+const editSaving  = ref(false)
+
+async function startEdit(m) {
+  editError.value = null
+  // Load the full club roster for the pickers (active + inactive).
+  if (!clubPlayers.value.length && currentClub.value) {
+    const { data } = await supabase.rpc('get_club_players', { p_club_id: currentClub.value.club_id })
+    clubPlayers.value = (data ?? [])
+      .map(p => ({ id: p.id, name: p.display_name || '—', active: p.is_active }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+  editForm.value = {
+    a0: m.sideA.players[0]?.id ?? '',
+    a1: m.sideA.players[1]?.id ?? '',
+    b0: m.sideB.players[0]?.id ?? '',
+    b1: m.sideB.players[1]?.id ?? '',
+    scoreA: m.sideA.score,
+    scoreB: m.sideB.score,
+    date: m.played_on,
+    name: m.name,
+  }
+  editing.value = m
+}
+
+async function saveEdit() {
+  const f = editForm.value
+  const ids = [f.a0, f.a1, f.b0, f.b1]
+  if (ids.some(x => !x)) { editError.value = 'Pick all four players.'; return }
+  if (new Set(ids).size !== 4) { editError.value = 'The four players must all be different.'; return }
+  if (f.scoreA === f.scoreB) { editError.value = 'Scores cannot be equal — there must be a winner.'; return }
+  if (f.scoreA < 0 || f.scoreB < 0) { editError.value = 'Scores cannot be negative.'; return }
+
+  editSaving.value = true
+  const { error } = await supabase.rpc('update_match', {
+    p_match_id:     editing.value.id,
+    p_side_a:       [f.a0, f.a1],
+    p_side_b:       [f.b0, f.b1],
+    p_score_a:      Number(f.scoreA),
+    p_score_b:      Number(f.scoreB),
+    p_played_on:    f.date || null,
+    p_display_name: f.name?.trim() || null,
+  })
+  editSaving.value = false
+  if (error) { editError.value = error.message; return }
+  editing.value = null
+  expanded.value = null
+  await load()
+}
 </script>
 
 <template>
@@ -547,15 +620,24 @@ const canDelete = m =>
           </div>
         </div>
 
+        <!-- Recorded by -->
+        <div class="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400 px-1">
+          <span>🖊️</span>
+          <span>Recorded by <span class="font-semibold text-slate-500">{{ creatorName(m) }}</span></span>
+        </div>
+
         <!-- Match actions -->
-        <div v-if="(isManager() || canDelete(m)) && renaming !== m.id" class="mt-2">
+        <div v-if="(canEdit(m) || canDelete(m)) && renaming !== m.id" class="mt-2">
           <p v-if="deleteError && deleting !== m.id" class="text-xs text-rose-400 mb-1.5 px-2">
             ⚠️ {{ deleteError }}
           </p>
           <div class="flex justify-between items-center">
-            <button v-if="isManager()" class="text-xs text-slate-500 hover:text-neon transition px-2 py-1"
-              @click="startRename(m)">✏️ Rename</button>
-            <div v-else />
+            <div class="flex items-center gap-1">
+              <button v-if="isManager()" class="text-xs text-slate-500 hover:text-neon transition px-2 py-1"
+                @click="startRename(m)">✏️ Rename</button>
+              <button v-if="canEdit(m)" class="text-xs text-slate-500 hover:text-violet transition px-2 py-1 flex items-center gap-1"
+                @click="startEdit(m)">🛠️ Edit match</button>
+            </div>
             <button v-if="canDelete(m)"
               class="text-xs text-rose-500/70 hover:text-rose-400 transition px-2 py-1 flex items-center gap-1"
               :disabled="deleting === m.id"
@@ -618,6 +700,92 @@ const canDelete = m =>
             style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
             @click="confirmDoDelete">
             Yes, Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── Edit match modal ── -->
+  <Teleport to="body">
+    <div v-if="editing"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-5"
+      style="background:rgba(15,23,42,.45); backdrop-filter:blur(4px)"
+      @click.self="editing = null">
+
+      <div class="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-display text-lg font-bold text-slate-800">🛠️ Edit Match</h3>
+          <button class="text-slate-400 hover:text-slate-600 text-xl leading-none" @click="editing = null">×</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4">Fix the players, scores or date. Saving replays Elo for the whole club.</p>
+
+        <!-- Side A -->
+        <div class="rounded-2xl p-3 mb-3" style="background:rgba(0,180,216,.06); border:1px solid rgba(0,180,216,.18)">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] font-bold text-neon uppercase tracking-wider">Side A</span>
+            <input type="number" min="0" v-model.number="editForm.scoreA"
+              class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm text-center font-bold bg-white text-slate-800" />
+          </div>
+          <div class="space-y-2">
+            <select v-model="editForm.a0" class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700">
+              <option value="" disabled>Select player…</option>
+              <option v-for="p in clubPlayers" :key="'a0'+p.id" :value="p.id">{{ p.name }}{{ p.active ? '' : ' (inactive)' }}</option>
+            </select>
+            <select v-model="editForm.a1" class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700">
+              <option value="" disabled>Select player…</option>
+              <option v-for="p in clubPlayers" :key="'a1'+p.id" :value="p.id">{{ p.name }}{{ p.active ? '' : ' (inactive)' }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Side B -->
+        <div class="rounded-2xl p-3 mb-3" style="background:rgba(168,85,247,.06); border:1px solid rgba(168,85,247,.18)">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] font-bold text-violet uppercase tracking-wider">Side B</span>
+            <input type="number" min="0" v-model.number="editForm.scoreB"
+              class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm text-center font-bold bg-white text-slate-800" />
+          </div>
+          <div class="space-y-2">
+            <select v-model="editForm.b0" class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700">
+              <option value="" disabled>Select player…</option>
+              <option v-for="p in clubPlayers" :key="'b0'+p.id" :value="p.id">{{ p.name }}{{ p.active ? '' : ' (inactive)' }}</option>
+            </select>
+            <select v-model="editForm.b1" class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700">
+              <option value="" disabled>Select player…</option>
+              <option v-for="p in clubPlayers" :key="'b1'+p.id" :value="p.id">{{ p.name }}{{ p.active ? '' : ' (inactive)' }}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Date + name -->
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-wide text-slate-500">Date</span>
+            <input type="date" v-model="editForm.date"
+              class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700" />
+          </label>
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-wide text-slate-500">Name (optional)</span>
+            <input type="text" v-model="editForm.name" placeholder="Match name"
+              class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white text-slate-700" />
+          </label>
+        </div>
+
+        <p v-if="editError" class="text-xs text-rose-500 mb-3">⚠️ {{ editError }}</p>
+
+        <div class="rounded-xl p-3 mb-4 text-[11px] text-amber-700 leading-relaxed"
+          style="background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.25)">
+          ⚠️ Saving recalculates every player's Elo from scratch across the club's whole match history.
+        </div>
+
+        <div class="flex gap-3">
+          <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-600 border border-slate-200 hover:border-slate-300 transition"
+            @click="editing = null">Cancel</button>
+          <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[0.97]"
+            style="background:linear-gradient(135deg,#00b4d8,#8b5cf6)"
+            :disabled="editSaving" @click="saveEdit">
+            {{ editSaving ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
       </div>
