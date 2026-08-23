@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar.vue'
-import { generatePlan, defaultMatchCount, winnerStaysInit, winnerStaysAdvance } from '../utils/game-plan'
+import { generatePlan, defaultMatchCount, winnerStaysAdvance } from '../utils/game-plan'
 
 // Shared session game plan (friendly fair-rotation).
 // - Managers pass canManage=true + present `attendees` to generate/edit.
@@ -38,9 +38,10 @@ function onHoursChange() {
   matchCount.value = defaultMatchCount(h)
 }
 
-// Format: 'friendly' (fair rotation, default) | 'winner_stays' (King of the Court)
-const chosenFormat = ref('friendly')   // what the generate control will produce
-const showAdvanced = ref(false)
+// Only "friendly" (fair rotation) is offered now. `chosenFormat` is kept so
+// older saved plans (e.g. a legacy winner_stays plan) still render/regenerate
+// correctly via load(), but new plans are always friendly.
+const chosenFormat = ref('friendly')
 const showHistory  = ref(false)
 
 const picked = ref(null) // { round, kind:'play'|'rest', matchId?, side?, index?, playerId }
@@ -59,19 +60,6 @@ const COURT_COLORS = [
   { line: '#f43f5e', soft: 'rgba(244,63,94,.10)',  text: '#e11d48', chip: 'rgba(244,63,94,.14)' },
 ]
 const courtStyle = c => COURT_COLORS[(Math.max(1, c || 1) - 1) % COURT_COLORS.length]
-
-// Format picker options + the one-line description shown under it.
-const FORMATS = [
-  { v: 'friendly',     icon: '🔄', label: 'Fair play' },
-  { v: 'winner_stays', icon: '👑', label: 'King court' },
-  { v: 'tournament',   icon: '🏆', label: 'Tournament' },
-]
-const FORMAT_DESC = {
-  friendly:     'Balanced teams · everyone plays an equal share. Great for casual sessions.',
-  winner_stays: 'Winners keep the court; challengers rotate in. Auto-rotates so nobody hogs it.',
-  tournament:   'Round-robin or knockout brackets with seeding, scores and a champion.',
-}
-const formatDesc = computed(() => FORMAT_DESC[chosenFormat.value] || '')
 
 const rosterIds = computed(() => {
   const s = new Set()
@@ -107,11 +95,6 @@ const activeMatches  = computed(() => matches.value.filter(m => m.status !== 'do
 const historyMatches = computed(() => matches.value.filter(m => m.status === 'done').sort((a, b) => b.seq - a.seq))
 const queueIds       = computed(() => planState.value.queue || [])
 const maxSeq = () => matches.value.reduce((m, x) => Math.max(m, x.seq), 0)
-
-// ── Set up a tournament off this play day (prefills the create sheet with the date) ──
-function goToTournament() {
-  router.push({ path: '/tournaments', query: { create: '1', date: props.date || '' } })
-}
 
 // ── Export & share (PDF / Excel / link) ─────────────────────────────
 const shareNote = ref('')
@@ -258,8 +241,6 @@ function gamesPlayedFromDone() {
   return gp
 }
 async function generate(regen = false) {
-  if (chosenFormat.value === 'tournament') { goToTournament(); return }
-  if (chosenFormat.value === 'winner_stays') return generateWinnerStays()
   errorMsg.value = null
   const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
   if (present.length < 4) { errorMsg.value = 'Need at least 4 saved attendees.'; return }
@@ -295,23 +276,9 @@ async function generate(regen = false) {
 async function clearPlan() { busy.value = true; await supabase.rpc('delete_session_plan', { p_schedule_id: props.scheduleId }); busy.value = false; await load() }
 
 // ── Winner-stays (King of the Court) ──
-async function generateWinnerStays() {
-  errorMsg.value = null
-  const present = props.attendees.map(a => ({ id: a.id, elo: a.elo ?? 1000 }))
-  const { matches: starts, state, error } = winnerStaysInit({ players: present, courts: courts.value })
-  if (error) { errorMsg.value = error; return }
-  const payload = starts.map(m => ({ round: m.round, court: m.court, seq: m.seq, side_a: m.sideA, side_b: m.sideB, status: 'planned' }))
-  busy.value = true
-  const { error: err } = await supabase.rpc('save_session_plan', {
-    p_schedule_id: props.scheduleId, p_courts: courts.value, p_match_count: 0,
-    p_matches: payload, p_format: 'winner_stays', p_state: state,
-  })
-  busy.value = false
-  if (err) { errorMsg.value = err.message; return }
-  picked.value = null; await load()
-}
-
 // Tap the winner → winners stay, losers + next-up rotate. Advances the queue.
+// (Retained so any previously-saved "King of the Court" plan still advances;
+//  new plans are always fair-play.)
 async function markWinner(m, side) {
   const winnerIds = side === 'A' ? m.side_a : m.side_b
   const loserIds  = side === 'A' ? m.side_b : m.side_a
@@ -397,54 +364,34 @@ const isPicked = pid => picked.value?.playerId === pid
       <!-- Manager controls -->
       <div v-if="canManage" class="px-4 pb-3">
         <div class="rounded-2xl border border-[rgba(15,23,42,0.08)] p-3 space-y-3" style="background:rgba(0,229,255,.03)">
-          <!-- How do you want to play today? — always visible, compact -->
-          <div>
-            <div class="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-100">
-              <button v-for="opt in FORMATS" :key="opt.v" type="button" @click="chosenFormat = opt.v"
-                class="py-1.5 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5"
-                :class="chosenFormat === opt.v ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'">
-                <span class="text-base leading-none">{{ opt.icon }}</span>{{ opt.label }}
-              </button>
-            </div>
-            <p class="text-[10px] text-slate-500 text-center mt-1.5 leading-relaxed">{{ formatDesc }}</p>
-          </div>
-
-          <!-- Courts / duration / matches — only where relevant -->
-          <div v-if="chosenFormat !== 'tournament'" class="grid gap-2"
-            :class="chosenFormat === 'friendly' ? 'grid-cols-3' : 'grid-cols-1'">
+          <!-- Courts / duration / matches -->
+          <div class="grid grid-cols-3 gap-2">
             <label class="block">
               <span class="text-[10px] uppercase tracking-wide text-slate-500">Courts</span>
               <input type="number" min="1" max="8" v-model.number="courts"
                 class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
             </label>
-            <template v-if="chosenFormat === 'friendly'">
-              <label class="block">
-                <span class="text-[10px] uppercase tracking-wide text-slate-500">Hours</span>
-                <input type="number" min="1" max="8" step="0.5" v-model.number="hours" @change="onHoursChange"
-                  class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
-              </label>
-              <label class="block">
-                <span class="text-[10px] uppercase tracking-wide text-slate-500">Matches</span>
-                <input type="number" min="1" max="40" v-model.number="matchCount"
-                  class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
-              </label>
-            </template>
+            <label class="block">
+              <span class="text-[10px] uppercase tracking-wide text-slate-500">Hours</span>
+              <input type="number" min="1" max="8" step="0.5" v-model.number="hours" @change="onHoursChange"
+                class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+            </label>
+            <label class="block">
+              <span class="text-[10px] uppercase tracking-wide text-slate-500">Matches</span>
+              <input type="number" min="1" max="40" v-model.number="matchCount"
+                class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white text-slate-700" />
+            </label>
           </div>
 
           <div class="flex gap-2">
-            <button v-if="chosenFormat === 'tournament'" class="btn-primary flex-1 py-2 text-sm gap-1.5" @click="goToTournament">
-              🏆 Set up a tournament →
-            </button>
-            <template v-else-if="!plan">
+            <template v-if="!plan">
               <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(false)">
-                {{ busy ? 'Building…' : (chosenFormat === 'winner_stays' ? '👑 Start King of the Court' : '✨ Generate Plan') }}
+                {{ busy ? 'Building…' : '✨ Generate Plan' }}
               </button>
             </template>
             <template v-else>
-              <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy"
-                @click="generate(chosenFormat === 'friendly' && format === 'friendly')">
-                {{ busy ? 'Rebuilding…' : (chosenFormat === 'winner_stays' ? '↻ Reshuffle &amp; restart'
-                   : format !== 'friendly' ? '✨ Switch to fair rotation' : '↻ Regenerate remaining') }}
+              <button class="btn-primary flex-1 py-2 text-sm" :disabled="busy" @click="generate(true)">
+                {{ busy ? 'Rebuilding…' : '↻ Regenerate remaining' }}
               </button>
               <button class="btn-ghost text-xs px-3" :disabled="busy" @click="clearPlan">Clear</button>
             </template>
