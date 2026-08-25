@@ -6,7 +6,6 @@ import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
-import { CURRENCIES } from '../utils/currency'
 import { DAYS, HOURS, TIMEZONES, describeSchedule } from '../utils/schedule'
 import { useGeo } from '../composables/useGeo'
 import { COUNTRIES, countryName } from '../utils/countries'
@@ -38,11 +37,6 @@ const guestInviteEmail = ref('')
 const guestInviteLink  = ref('')
 const guestInviteNote  = ref(null)
 const guestInviteBusy  = ref(false)
-
-// Club currency
-const clubCurrency = ref('AED')
-const currencyBusy = ref(false)
-const currencyNote = ref(null)
 
 // Club country + public/closed visibility
 const clubCountryCode = ref('AE')
@@ -138,10 +132,9 @@ async function load() {
 
   // Load current club facility info
   const { data: clubInfo } = await supabase.from('clubs')
-    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, currency, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public, join_policy')
+    .select('emirates, facility_name, facility_address, maps_url, description, facility_id, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public, join_policy')
     .eq('id', cid).single()
   if (clubInfo) {
-    clubCurrency.value              = clubInfo.currency          ?? 'AED'
     clubCountryCode.value           = clubInfo.country_code      ?? 'AE'
     clubIsPublic.value              = clubInfo.is_public          ?? true
     clubJoinPolicy.value            = clubInfo.join_policy        ?? 'open'
@@ -325,23 +318,6 @@ async function saveFacility() {
     : { ok: true, t: '✅ Facility info saved. Visible on the Explore page.' }
 }
 
-// ── Save club currency ──
-async function saveCurrency() {
-  currencyBusy.value = true; currencyNote.value = null
-  const { error } = await supabase.rpc('set_club_currency', {
-    p_club_id:  currentClub.value.club_id,
-    p_currency: clubCurrency.value,
-  })
-  currencyBusy.value = false
-  if (error) {
-    currencyNote.value = { ok: false, t: error.message }
-    return
-  }
-  // Reflect immediately in the switcher + Split Pay without a reload
-  if (currentClub.value?.clubs) currentClub.value.clubs.currency = clubCurrency.value
-  await loadClubs()
-  currencyNote.value = { ok: true, t: '✅ Currency updated.' }
-}
 
 // ── Save club country ──
 async function saveCountry() {
@@ -802,25 +778,6 @@ async function leaveClub(clubId) {
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ── Club Currency ── -->
-  <div v-if="currentClub && isManager()" class="card p-4 mb-4 fade-up">
-    <div class="label">Currency — {{ currentClub.clubs?.name }}</div>
-    <p class="text-[11px] text-slate-500 mb-3">
-      Used for Split Pay and tournament fees across this club.
-    </p>
-    <div class="flex gap-2">
-      <select v-model="clubCurrency" class="input flex-1">
-        <option v-for="c in CURRENCIES" :key="c.code" :value="c.code">{{ c.label }}</option>
-      </select>
-      <button class="btn-primary px-4 shrink-0" :disabled="currencyBusy" @click="saveCurrency">
-        {{ currencyBusy ? '…' : 'Save' }}
-      </button>
-    </div>
-    <p v-if="currencyNote" class="mt-2 text-xs" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">
-      {{ currencyNote.t }}
-    </p>
   </div>
 
   <!-- ── Club Join Link ── -->

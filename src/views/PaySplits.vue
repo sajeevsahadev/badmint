@@ -6,19 +6,43 @@ import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import { computeSettledEdges } from '../utils/settle-up'
 import { fmtExpMonth, fmtExpDay, timeAgo } from '../utils/formatters'
-import { formatMoney } from '../utils/currency'
+import { formatMoney, CURRENCIES } from '../utils/currency'
 import PageHeader from '../components/PageHeader.vue'
 import DateField from '../components/DateField.vue'
 
 const route  = useRoute()
 const router = useRouter()
 
-const { currentClub, isManager } = useClub()
+const { currentClub, isManager, loadClubs } = useClub()
 const { user } = useAuth()
 
 // ── Money formatting — uses THIS club's currency (falls back to AED) ────
 const clubCurrency = computed(() => currentClub.value?.clubs?.currency || 'AED')
 const aed = n => formatMoney(n, clubCurrency.value)
+
+// ── Club currency setting (managers) — lives here since it only affects Split Pay ──
+const currencyBusy = ref(false)
+const currencyNote = ref(null)
+const currencySel  = ref(clubCurrency.value)
+watch(clubCurrency, c => { currencySel.value = c })
+async function saveCurrency() {
+  const code = currencySel.value
+  if (!currentClub.value || code === clubCurrency.value) return
+  currencyBusy.value = true; currencyNote.value = null
+  const { error } = await supabase.rpc('set_club_currency', {
+    p_club_id: currentClub.value.club_id, p_currency: code,
+  })
+  currencyBusy.value = false
+  if (error) {
+    currencyNote.value = { ok: false, t: error.message }
+    currencySel.value = clubCurrency.value           // revert the dropdown
+    return
+  }
+  if (currentClub.value?.clubs) currentClub.value.clubs.currency = code  // reflect instantly
+  await loadClubs()
+  currencyNote.value = { ok: true, t: `Currency set to ${code}` }
+  setTimeout(() => { currencyNote.value = null }, 2500)
+}
 const CATEGORIES = [
   { value: 'facility',  label: 'Court Rent',      icon: '🏟️' },
   { value: 'food',      label: 'Food / Snacks',    icon: '🍔' },
@@ -949,6 +973,18 @@ const categoryBreakdown = computed(() => {
         </div>
       </template>
     </PageHeader>
+
+    <!-- ── Club currency (managers) — moved here from Manage; only affects Split Pay ── -->
+    <div v-if="isManager()" class="flex items-center justify-end gap-2 mb-3 -mt-1">
+      <span v-if="currencyNote" class="text-[11px] mr-1" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">{{ currencyNote.t }}</span>
+      <label class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white pl-2.5 pr-1.5 py-1">
+        <span class="text-[11px] text-slate-500">💱 Currency</span>
+        <select v-model="currencySel" :disabled="currencyBusy" @change="saveCurrency"
+          class="text-xs font-semibold text-slate-700 bg-transparent pr-1 py-0.5 focus:outline-none cursor-pointer">
+          <option v-for="c in CURRENCIES" :key="c.code" :value="c.code">{{ c.code }} — {{ c.label }}</option>
+        </select>
+      </label>
+    </div>
 
     <!-- ── Summary card ── -->
     <div class="card-neon p-4 mb-4 fade-up">
