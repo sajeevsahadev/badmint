@@ -20,7 +20,8 @@ const { user } = useAuth()
 const clubCurrency = computed(() => currentClub.value?.clubs?.currency || 'AED')
 const aed = n => formatMoney(n, clubCurrency.value)
 
-// ── Club currency setting (managers) — lives here since it only affects Split Pay ──
+// ── Club currency setting (owner only) — lives here since it only affects Split Pay ──
+const isOwner = computed(() => currentClub.value?.role === 'owner')
 const currencyBusy = ref(false)
 const currencyNote = ref(null)
 const currencySel  = ref(clubCurrency.value)
@@ -974,8 +975,8 @@ const categoryBreakdown = computed(() => {
       </template>
     </PageHeader>
 
-    <!-- ── Club currency (managers) — moved here from Manage; only affects Split Pay ── -->
-    <div v-if="isManager()" class="flex items-center justify-end gap-2 mb-3 -mt-1">
+    <!-- ── Club currency (owner only) — moved here from Manage; only affects Split Pay ── -->
+    <div v-if="isOwner" class="flex items-center justify-end gap-2 mb-3 -mt-1">
       <span v-if="currencyNote" class="text-[11px] mr-1" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">{{ currencyNote.t }}</span>
       <label class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white pl-2.5 pr-1.5 py-1">
         <span class="text-[11px] text-slate-500">💱 Currency</span>
