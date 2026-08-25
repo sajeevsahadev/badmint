@@ -21,7 +21,15 @@ const clubCurrency = computed(() => currentClub.value?.clubs?.currency || 'AED')
 const aed = n => formatMoney(n, clubCurrency.value)
 
 // ── Club currency setting (owner only) — lives here since it only affects Split Pay ──
+// Changing currency only relabels amounts, it does NOT convert them, so it locks
+// as soon as any money is recorded (expense / wallet / opening balance). The
+// owner can still correct it while the ledger is empty.
 const isOwner = computed(() => currentClub.value?.role === 'owner')
+const currencyLocked = computed(() =>
+  expenses.value.length > 0 ||
+  (walletData.value.contributions?.length ?? 0) > 0 ||
+  openingBalances.value.length > 0
+)
 const currencyBusy = ref(false)
 const currencyNote = ref(null)
 const currencySel  = ref(clubCurrency.value)
@@ -978,14 +986,26 @@ const categoryBreakdown = computed(() => {
     <!-- ── Club currency (owner only) — moved here from Manage; only affects Split Pay ── -->
     <div v-if="isOwner" class="flex items-center justify-end gap-2 mb-3 -mt-1">
       <span v-if="currencyNote" class="text-[11px] mr-1" :class="currencyNote.ok ? 'text-emerald-500' : 'text-rose-400'">{{ currencyNote.t }}</span>
-      <label class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white pl-2.5 pr-1.5 py-1">
+
+      <!-- Editable only while the ledger is empty -->
+      <label v-if="!currencyLocked" class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white pl-2.5 pr-1.5 py-1">
         <span class="text-[11px] text-slate-500">💱 Currency</span>
         <select v-model="currencySel" :disabled="currencyBusy" @change="saveCurrency"
           class="text-xs font-semibold text-slate-700 bg-transparent pr-1 py-0.5 focus:outline-none cursor-pointer">
           <option v-for="c in CURRENCIES" :key="c.code" :value="c.code">{{ c.code }} — {{ c.label }}</option>
         </select>
       </label>
+
+      <!-- Locked once money is recorded -->
+      <span v-else
+        class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-500"
+        title="Locked once expenses are recorded. Changing the currency would only relabel existing amounts, not convert them.">
+        🔒 {{ clubCurrency }} · locked
+      </span>
     </div>
+    <p v-if="isOwner && !currencyLocked" class="text-[11px] text-amber-600 text-right -mt-2 mb-3">
+      Set your currency now — it locks once the first expense is added.
+    </p>
 
     <!-- ── Summary card ── -->
     <div class="card-neon p-4 mb-4 fade-up">
