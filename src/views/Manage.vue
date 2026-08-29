@@ -468,6 +468,30 @@ async function toggleMemberActive(member) {
   )
 }
 
+// ── Delete a player (only when no match history + no Split Pay activity) ──
+const delPlayerTarget  = ref(null)   // { id, name, guest }
+const delPlayerConfirm = ref('')
+const delPlayerBusy    = ref(false)
+const delPlayerError   = ref(null)
+const delPlayerNameOk  = computed(() =>
+  !!delPlayerTarget.value &&
+  delPlayerConfirm.value.trim().toLowerCase() === (delPlayerTarget.value.name || '').trim().toLowerCase())
+
+function askDeletePlayer(id, name, guest = false) {
+  delPlayerTarget.value = { id, name, guest }
+  delPlayerConfirm.value = ''
+  delPlayerError.value = null
+}
+async function confirmDeletePlayer() {
+  if (!delPlayerTarget.value || !delPlayerNameOk.value) return
+  delPlayerBusy.value = true; delPlayerError.value = null
+  const { error } = await supabase.rpc('delete_player', { p_player_id: delPlayerTarget.value.id })
+  delPlayerBusy.value = false
+  if (error) { delPlayerError.value = error.message; return }
+  delPlayerTarget.value = null
+  await load()
+}
+
 async function changeRole(userId, newRole, selectEl = null) {
   const member = members.value.find(m => m.user_id === userId)
   if (member?.role === 'owner' && newRole !== 'owner') {
@@ -742,6 +766,13 @@ async function leaveClub(clubId) {
         {{ activeBusy === m.user_id ? '…' : (m.is_active ? 'Deactivate' : 'Activate') }}
       </button>
 
+      <!-- Delete — only offered once a member is deactivated -->
+      <button v-if="isManager() && m.player_id && !m.is_active"
+        class="text-[11px] px-2 py-1 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 shrink-0 transition"
+        @click="askDeletePlayer(m.player_id, m.display)">
+        Delete
+      </button>
+
       <select
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
         :value="m.role"
@@ -771,12 +802,19 @@ async function leaveClub(clubId) {
             <Avatar :name="gp.display_name" :src="''" :size="32" />
             <div class="text-sm text-slate-300 truncate">{{ gp.display_name }}</div>
           </div>
-          <button
-            class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
-            style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"
-            @click="guestInviteId = gp.id; guestInviteEmail = ''; guestInviteLink = ''; guestInviteNote = null">
-            Link Account
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button v-if="isManager()"
+              class="text-[11px] px-2 py-1 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 transition"
+              @click="askDeletePlayer(gp.id, gp.display_name, true)">
+              Delete
+            </button>
+            <button
+              class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
+              style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"
+              @click="guestInviteId = gp.id; guestInviteEmail = ''; guestInviteLink = ''; guestInviteNote = null">
+              Link Account
+            </button>
+          </div>
         </div>
 
         <!-- Inline invite form for this player -->
@@ -1237,6 +1275,49 @@ async function leaveClub(clubId) {
           <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97]"
             style="background:rgba(220,38,38,.85); border:1px solid rgba(244,63,94,.4)"
             @click="deleteRequest">Yes, Delete</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── Delete player confirmation (type the name) ── -->
+  <Teleport to="body">
+    <div v-if="delPlayerTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center px-5"
+      style="background:rgba(15,23,42,.5); backdrop-filter:blur(4px)"
+      @click.self="delPlayerTarget = null">
+      <div class="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl">
+        <div class="text-center mb-4">
+          <div class="inline-flex w-14 h-14 rounded-2xl items-center justify-center text-3xl mb-3"
+            style="background:rgba(244,63,94,.1); border:1px solid rgba(244,63,94,.25)">🗑️</div>
+          <h3 class="font-display text-lg font-bold text-slate-800">Delete Player?</h3>
+          <p class="text-sm text-slate-500 mt-1 truncate">{{ delPlayerTarget.name }}</p>
+        </div>
+
+        <div class="rounded-xl p-3.5 mb-4 text-xs text-amber-700 leading-relaxed"
+          style="background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.25)">
+          ⚠️ This permanently removes the player from the club. It's only allowed when they
+          have <strong>no match history</strong> and <strong>no Split Pay activity</strong>.
+          This can't be undone.
+        </div>
+
+        <label class="block text-xs font-semibold text-slate-600 mb-1.5">
+          Type <span class="text-rose-600 font-bold">{{ delPlayerTarget.name }}</span> to confirm
+        </label>
+        <input v-model="delPlayerConfirm" type="text"
+          class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white text-slate-800 mb-1 focus:outline-none focus:border-rose-400"
+          :placeholder="delPlayerTarget.name" @keyup.enter="delPlayerNameOk && confirmDeletePlayer()" />
+        <p v-if="delPlayerError" class="text-xs text-rose-500 mt-1 mb-1">⚠️ {{ delPlayerError }}</p>
+
+        <div class="flex gap-3 mt-4">
+          <button class="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-600 border border-slate-200 hover:border-slate-300 transition"
+            @click="delPlayerTarget = null">Cancel</button>
+          <button class="flex-1 py-3 rounded-xl text-sm font-bold text-white transition active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed"
+            style="background:rgba(220,38,38,.9); border:1px solid rgba(244,63,94,.4)"
+            :disabled="!delPlayerNameOk || delPlayerBusy"
+            @click="confirmDeletePlayer">
+            {{ delPlayerBusy ? 'Deleting…' : 'Delete' }}
+          </button>
         </div>
       </div>
     </div>
