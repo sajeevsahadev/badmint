@@ -81,13 +81,60 @@ const eloChip = (delta: number) => {
   return `<span style="display:inline-block;background:${bg};color:${color};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">${sign}${Math.abs(delta)}</span>`
 }
 
+interface DayHeroPlayer { player_id: string; name: string; games: number; wins: number; delta: number }
+interface DayAward { label: string; icon: string; color: string; soft: string; name: string; stat: string }
+
+// Three DIFFERENT standouts from the latest match day, so recognition spreads
+// beyond the single weekly MVP (mirrors the app's "Today's Heroes" card).
+function computeDayAwards(raw: { players?: DayHeroPlayer[] } | null): DayAward[] {
+  const arr = raw?.players ?? []
+  if (!arr.length) return []
+  const used = new Set<string>()
+  const out: DayAward[] = []
+  const pick = (
+    label: string, icon: string, color: string, soft: string,
+    better: (a: DayHeroPlayer, b: DayHeroPlayer) => boolean,
+    statFn: (p: DayHeroPlayer) => string,
+    guard: (p: DayHeroPlayer) => boolean,
+  ) => {
+    const cand = arr.filter(p => !used.has(p.player_id) && guard(p))
+    if (!cand.length) return
+    const win = cand.reduce((a, b) => (better(a, b) ? b : a))
+    used.add(win.player_id)
+    out.push({ label, icon, color, soft, name: win.name, stat: statFn(win) })
+  }
+  pick("Top Climber", "🚀", "#b45309", "#fef3c7", (a, b) => b.delta > a.delta, p => `+${p.delta} Elo`, p => p.delta > 0)
+  pick("Most Wins", "🏆", "#0e7490", "#cffafe", (a, b) => b.wins > a.wins || (b.wins === a.wins && b.delta > a.delta), p => `${p.wins} win${p.wins === 1 ? "" : "s"}`, p => p.wins > 0)
+  pick("Most Active", "🎯", "#7c3aed", "#f3e8ff", (a, b) => b.games > a.games || (b.games === a.games && b.wins > a.wins), p => `${p.games} games`, p => p.games >= 1)
+  return out
+}
+
+function heroesSection(heroes: DayAward[], dateLabel: string): string {
+  if (!heroes.length) return ""
+  const cells = heroes.map(h => `
+    <td width="33%" align="center" valign="top" style="padding:16px 6px;">
+      <div style="font-size:20px;line-height:1;">${h.icon}</div>
+      <div style="font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:${h.color};margin:6px 0 9px;">${esc(h.label)}</div>
+      ${avatarCell(h.name, 40)}
+      <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:7px;">${esc(h.name)}</div>
+      <div style="display:inline-block;margin-top:5px;font-size:11px;font-weight:800;color:${h.color};background:${h.soft};padding:2px 10px;border-radius:10px;">${esc(h.stat)}</div>
+    </td>`).join("")
+  return `
+    <div style="font-size:13px;font-weight:800;color:#0f172a;margin:4px 0 10px;">🎉 Latest Session Heroes${dateLabel ? ` <span style="font-weight:600;color:#94a3b8;font-size:11px;">· ${esc(dateLabel)}</span>` : ""}</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:26px;background:#fbfcff;">
+      <tr>${cells}</tr>
+    </table>`
+}
+
 function buildDigestHtml(opts: {
   club_name: string
   nickname: string
   top5: LeaderboardRow[]
   weekly: WeeklyRow[]
+  heroes: DayAward[]
+  heroDate: string
 }): string {
-  const { club_name, nickname, top5, weekly } = opts
+  const { club_name, nickname, top5, weekly, heroes, heroDate } = opts
   const mvp = weekly[0]
   const greeting = nickname ? `Hi ${esc(nickname)},` : "Hi,"
 
@@ -183,6 +230,7 @@ function buildDigestHtml(opts: {
     <p style="margin:0 0 16px;font-size:14px;color:#334155;line-height:1.65;">${greeting}</p>
     <p style="margin:0 0 24px;font-size:14px;color:#334155;line-height:1.7;">${story}</p>
 
+    ${heroesSection(heroes, heroDate)}
     ${weeklySection}
     ${standingsSection}
 
@@ -224,8 +272,17 @@ async function getClubData(admin: ReturnType<typeof createClient>, clubId: strin
     .slice(0, 5)
   const { data: wk } = await admin.rpc("get_club_weekly_summary", { p_club_id: clubId, p_days: 7 })
   const weekly: WeeklyRow[] = (wk ?? []).slice(0, 6)
+  const { data: heroesRaw } = await admin.rpc("get_day_heroes", { p_club_id: clubId })
+  const heroes = computeDayAwards(heroesRaw as { players?: DayHeroPlayer[] } | null)
+  let heroDate = ""
+  const rawDate = (heroesRaw as { date?: string } | null)?.date
+  if (rawDate) {
+    try {
+      heroDate = new Date(rawDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
+    } catch { heroDate = rawDate }
+  }
   if (!top5.length && !weekly.length) return null
-  return { top5, weekly }
+  return { top5, weekly, heroes, heroDate }
 }
 
 async function sendEmail(RESEND_API_KEY: string, to: string, subject: string, html: string): Promise<string | null> {
@@ -286,7 +343,7 @@ serve(async (req: Request) => {
       for (const club of candidates) {
         const cd = await getClubData(admin, club.id)
         if (!cd) continue
-        const html = buildDigestHtml({ club_name: club.name, nickname: "", top5: cd.top5, weekly: cd.weekly })
+        const html = buildDigestHtml({ club_name: club.name, nickname: "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate })
         const mvpName = cd.weekly[0]?.display_name ?? cd.top5[0]?.display_name ?? club.name
         const err = await sendEmail(RESEND_API_KEY, testEmail, `🏆 Weekly Rankings — ${club.name} (preview)`, html)
         return new Response(JSON.stringify({ ok: !err, test: testEmail, club: club.name, mvp: mvpName, error: err }), {
@@ -344,7 +401,7 @@ serve(async (req: Request) => {
         const wantsDigest = !prefs || (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
         if (!wantsDigest) continue
 
-        const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly })
+        const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate })
         const err = await sendEmail(RESEND_API_KEY, email, `🏆 ${mvpName} tops ${club.name} — Weekly Rankings`, html)
         if (err) allErrors.push(`${email}(${club.name}): ${err}`)
         else totalSent++

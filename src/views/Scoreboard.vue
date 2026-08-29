@@ -137,11 +137,17 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
       <!-- ── Top 3 Podium ──────────────────────────────────────────────── -->
       <div class="grid grid-cols-3 gap-2">
         <div v-for="(p, i) in podium" :key="p.id"
-          class="rounded-2xl border p-3 flex flex-col items-center text-center"
-          :class="[medalBg(i), isMe(p) ? 'ring-2 ring-cyan-400/50' : '']">
+          class="podium-card rounded-2xl border p-3 flex flex-col items-center text-center"
+          :class="[medalBg(i), `podium-${i}`, isMe(p) ? 'ring-2 ring-cyan-400/50' : '']"
+          :style="`--medal:${medalColor(i)}`">
+
+          <!-- moving sheen (champion gets it strongest) -->
+          <span class="podium-sheen"></span>
+          <span v-if="i === 0" class="podium-spark ps1">✨</span>
+          <span v-if="i === 0" class="podium-spark ps2">✦</span>
 
           <!-- Medal badge with rank number -->
-          <div class="relative mb-2">
+          <div class="relative mb-2 podium-medal">
             <span class="text-2xl">{{ medals[i] }}</span>
             <div class="absolute -bottom-1 -right-2 w-5 h-5 rounded-full flex items-center justify-center
                         text-[9px] font-bold text-white shadow-sm"
@@ -151,7 +157,10 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
           </div>
 
           <!-- Avatar -->
-          <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="44" class="mb-1.5" />
+          <div class="podium-avatar-wrap mb-1.5">
+            <span class="podium-halo"></span>
+            <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="44" class="relative z-[1]" />
+          </div>
 
           <!-- Name -->
           <RouterLink :to="'/player/' + p.id"
@@ -399,9 +408,36 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
   padding: 2px 9px; border-radius: 9999px;
 }
 
+/* ── Podium (top 3) moving graphics ── */
+.podium-card { position: relative; overflow: hidden; }
+.podium-avatar-wrap {
+  position: relative; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.podium-halo {
+  position: absolute; inset: -8px; border-radius: 9999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--medal) 42%, transparent) 0%, transparent 68%);
+  animation: heroPulse 2.8s ease-in-out infinite;
+}
+.podium-medal { animation: crownBob 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+/* diagonal sheen sweeping across each card, champion brightest + fastest */
+.podium-sheen {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(120deg, transparent 38%, rgba(255,255,255,.45) 50%, transparent 62%);
+  transform: translateX(-130%);
+  animation: heroShine 5s ease-in-out infinite;
+}
+.podium-0 .podium-sheen { animation-duration: 3.4s; background: linear-gradient(120deg, transparent 38%, rgba(255,255,255,.65) 50%, transparent 62%); }
+.podium-1 .podium-sheen { animation-delay: .6s; }
+.podium-2 .podium-sheen { animation-delay: 1.1s; }
+.podium-spark { position: absolute; z-index: 2; font-size: 11px; opacity: 0; animation: twinkle 2.6s ease-in-out infinite; }
+.podium-spark.ps1 { top: 8px;  right: 12px; animation-delay: .3s; }
+.podium-spark.ps2 { top: 40px; left: 12px;  animation-delay: 1.3s; }
+
 @media (prefers-reduced-motion: reduce) {
-  .hero-card, .hero-header::after, .confetti, .hero-glow, .hero-crown, .hero-spark { animation: none; }
-  .confetti, .hero-spark { opacity: 0; }
-  .hero-glow { opacity: .6; }
+  .hero-card, .hero-header::after, .confetti, .hero-glow, .hero-crown, .hero-spark,
+  .podium-halo, .podium-medal, .podium-sheen, .podium-spark { animation: none; }
+  .confetti, .hero-spark, .podium-sheen, .podium-spark { opacity: 0; }
+  .hero-glow, .podium-halo { opacity: .6; }
 }
 </style>

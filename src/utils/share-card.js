@@ -14,6 +14,18 @@ function loadImg(url) {
   })
 }
 
+// Cap the sparkline to a fixed number of points so the card renders in
+// constant time and the line stays clean no matter how many matches exist
+// (first + last are always kept so the trend endpoints are accurate).
+function downsample(arr, max = 140) {
+  if (arr.length <= max) return arr
+  const out = [arr[0]]
+  const step = (arr.length - 1) / (max - 1)
+  for (let i = 1; i < max - 1; i++) out.push(arr[Math.round(i * step)])
+  out.push(arr[arr.length - 1])
+  return out
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -60,6 +72,20 @@ export async function renderPlayerCard(d) {
   }
   glow(160, 200, 420, 'rgba(34,211,238,0.20)')
   glow(940, 1150, 480, 'rgba(168,85,247,0.18)')
+  glow(W / 2, 720, 520, 'rgba(56,189,248,0.06)')
+
+  // Subtle diagonal "court line" texture for depth (very low opacity).
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.028)'; ctx.lineWidth = 2
+  for (let x = -H; x < W; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + H, H); ctx.stroke() }
+  ctx.restore()
+
+  // Faint shuttlecock watermark bottom-right.
+  ctx.save()
+  ctx.globalAlpha = 0.05; ctx.textAlign = 'center'
+  ctx.font = '360px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
+  ctx.fillText('🏸', W * 0.86, H * 0.5)
+  ctx.restore()
 
   ctx.textAlign = 'center'
 
@@ -104,6 +130,18 @@ export async function renderPlayerCard(d) {
   ctx.fillStyle = 'rgba(203,213,225,0.9)'; ctx.font = '500 30px Outfit, sans-serif'
   ctx.fillText([d.club, d.city].filter(Boolean).join('  ·  ') || '—', W / 2, 605)
 
+  // Champion ribbon for the club #1.
+  if (String(d.rank) === '1') {
+    const label = '👑  CLUB CHAMPION'
+    ctx.font = '800 24px Outfit, sans-serif'
+    const pw = ctx.measureText(label).width + 52, py0 = 626, ph = 40
+    const px0 = W / 2 - pw / 2
+    const rg = ctx.createLinearGradient(px0, 0, px0 + pw, 0)
+    rg.addColorStop(0, '#f59e0b'); rg.addColorStop(1, '#fcd34d')
+    ctx.fillStyle = rg; roundRect(ctx, px0, py0, pw, ph, 20); ctx.fill()
+    ctx.fillStyle = '#3b2600'; ctx.fillText(label, W / 2, py0 + 27)
+  }
+
   // ── Stat tiles ──
   const tiles = [
     { label: 'RANK',  value: d.rank != null ? `#${d.rank}` : '–', color: '#fbbf24' },
@@ -118,14 +156,16 @@ export async function renderPlayerCard(d) {
     roundRect(ctx, tx, ty, tw, th, 24); ctx.fill()
     ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1.5; ctx.stroke()
     ctx.fillStyle = t.color; ctx.font = '800 54px Outfit, sans-serif'
-    ctx.fillText(t.value, tx + tw / 2, ty + 82)
+    ctx.fillText(t.value, tx + tw / 2, ty + 80)
+    // colored accent underline
+    roundRect(ctx, tx + tw / 2 - 26, ty + 98, 52, 4, 2); ctx.fill()
     ctx.fillStyle = 'rgba(148,163,184,0.95)'; ctx.font = '700 22px Outfit, sans-serif'
-    ctx.fillText(t.label, tx + tw / 2, ty + 122)
+    ctx.fillText(t.label, tx + tw / 2, ty + 126)
     tx += tw + gap
   }
 
   // ── Elo sparkline ──
-  const series = (d.eloSeries || []).filter(Number.isFinite)
+  const series = downsample((d.eloSeries || []).filter(Number.isFinite))
   const sx = 80, sy = 900, sw = W - 160, sh = 220
   ctx.fillStyle = 'rgba(255,255,255,0.05)'; roundRect(ctx, sx, sy, sw, sh, 28); ctx.fill()
   ctx.textAlign = 'left'
@@ -151,6 +191,15 @@ export async function renderPlayerCard(d) {
     const ls = ctx.createLinearGradient(pl, 0, pr, 0)
     ls.addColorStop(0, '#22d3ee'); ls.addColorStop(1, '#a855f7')
     ctx.strokeStyle = ls; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.stroke()
+    // glowing endpoint marker on the latest rating
+    const lx = px(series.length - 1), lyv = py(series[series.length - 1])
+    ctx.save()
+    ctx.shadowColor = 'rgba(168,85,247,0.9)'; ctx.shadowBlur = 18
+    ctx.beginPath(); ctx.arc(lx, lyv, 9, 0, Math.PI * 2)
+    ctx.fillStyle = '#a855f7'; ctx.fill()
+    ctx.restore()
+    ctx.beginPath(); ctx.arc(lx, lyv, 9, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 3; ctx.stroke()
   } else {
     ctx.fillStyle = 'rgba(148,163,184,0.7)'; ctx.font = '500 24px Outfit, sans-serif'
     ctx.fillText('Play a few matches to see your trend', W / 2, sy + sh / 2 + 20)
