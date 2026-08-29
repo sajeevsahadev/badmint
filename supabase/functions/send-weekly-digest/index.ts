@@ -325,10 +325,13 @@ serve(async (req: Request) => {
     //  - test_email → send exactly ONE preview email to that address
     //  - force      → ignore each club's schedule and send now
     //  - club_id    → restrict to a single club
-    const body = await req.json().catch(() => ({})) as { force?: boolean; club_id?: string; test_email?: string }
+    const body = await req.json().catch(() => ({})) as { force?: boolean; club_id?: string; test_email?: string; managers_only?: boolean }
     const force = body?.force === true
     const onlyClubId = body?.club_id ?? null
     const testEmail = typeof body?.test_email === "string" ? body.test_email.trim() : null
+    // Managers-only test send: goes to owners/managers only, bypasses the opt-in
+    // (so the person testing always receives it), and always ignores the schedule.
+    const managersOnly = body?.managers_only === true
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
@@ -358,7 +361,7 @@ serve(async (req: Request) => {
     // ── Which clubs are due right now (or all, when force) ──
     const dueClubs = (clubs ?? []).filter(club => {
       if (onlyClubId && club.id !== onlyClubId) return false
-      if (force) return true
+      if (force || managersOnly) return true
       if (club.digest_enabled === false) return false
       const { dow, hour } = nowInTz(club.digest_tz || "Asia/Dubai")
       return dow === club.digest_dow && hour === club.digest_hour
@@ -382,10 +385,13 @@ serve(async (req: Request) => {
       const cd = await getClubData(admin, club.id)
       if (!cd) continue
 
-      const { data: members } = await admin.from("club_members").select("user_id").eq("club_id", club.id)
+      const { data: members } = await admin.from("club_members").select("user_id, role").eq("club_id", club.id)
       if (!members?.length) continue
 
-      const userIds = members.map((m: { user_id: string }) => m.user_id)
+      const relevant = managersOnly
+        ? members.filter((m: { role: string }) => m.role === "owner" || m.role === "manager")
+        : members
+      const userIds = relevant.map((m: { user_id: string }) => m.user_id)
       const { data: profiles } = await admin
         .from("user_profiles").select("user_id, nickname, email_prefs").in("user_id", userIds)
       const profileMap = new Map<string, { nickname: string | null; email_prefs: Record<string, unknown> | null }>()
@@ -398,11 +404,14 @@ serve(async (req: Request) => {
         if (!email) continue
         const profile = profileMap.get(uid)
         const prefs   = profile?.email_prefs ?? null
-        const wantsDigest = !prefs || (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
+        const wantsDigest = managersOnly || !prefs || (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
         if (!wantsDigest) continue
 
         const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate })
-        const err = await sendEmail(RESEND_API_KEY, email, `🏆 ${mvpName} tops ${club.name} — Weekly Rankings`, html)
+        const subject = managersOnly
+          ? `🧪 [Test] Weekly Rankings — ${club.name}`
+          : `🏆 ${mvpName} tops ${club.name} — Weekly Rankings`
+        const err = await sendEmail(RESEND_API_KEY, email, subject, html)
         if (err) allErrors.push(`${email}(${club.name}): ${err}`)
         else totalSent++
 

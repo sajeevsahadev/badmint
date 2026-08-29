@@ -101,8 +101,8 @@ async function load() {
     isManager()
       ? supabase.from('join_requests').select('*').eq('club_id', cid).order('created_at', { ascending: false }).limit(200)
       : { data: [] },
-    // player display_names for this club (linked accounts only)
-    supabase.from('players').select('user_id, display_name').eq('club_id', cid).not('user_id', 'is', null),
+    // player rows for this club (linked accounts only) — id + is_active power the Deactivate toggle
+    supabase.from('players').select('id, user_id, display_name, is_active').eq('club_id', cid).not('user_id', 'is', null),
     supabase.from('players').select('id, display_name').eq('club_id', cid).is('user_id', null).eq('is_active', true),
   ])
   cfg.value      = c
@@ -124,6 +124,8 @@ async function load() {
       profileMap[member.user_id]?.full_name ||
       playerMap[member.user_id]?.display_name ||
       '—',
+    player_id: playerMap[member.user_id]?.id ?? null,
+    is_active: playerMap[member.user_id]?.is_active ?? true,
   }))
   guestPlayers.value = guests ?? []
 
@@ -375,15 +377,24 @@ async function saveDigest() {
     : { ok: true, t: `✅ Saved. Digest sends ${digestSummary.value}.` }
 }
 
-async function sendDigestNow() {
-  digestSending.value = true; digestNote.value = null
+// managersOnly=true → preview to owners/managers only. false → all opted-in members.
+async function sendDigestNow(managersOnly) {
+  if (!managersOnly) {
+    const ok = window.confirm('Send the weekly digest to ALL opted-in members of this club right now?')
+    if (!ok) return
+  }
+  digestSending.value = managersOnly ? 'test' : 'all'
+  digestNote.value = null
   const { error } = await supabase.rpc('trigger_club_digest', {
     p_club_id: currentClub.value.club_id,
+    p_managers_only: managersOnly,
   })
   digestSending.value = false
   digestNote.value = error
     ? { ok: false, t: error.message }
-    : { ok: true, t: '📧 Sending now — the digest is on its way to opted-in members.' }
+    : managersOnly
+      ? { ok: true, t: '🧪 Test sent — check the inbox of the club\'s managers/owner.' }
+      : { ok: true, t: '📧 Sending now — the digest is on its way to all opted-in members.' }
 }
 
 // ── Facility Master functions ──
@@ -440,6 +451,21 @@ function showMemberError(msg, selectEl = null) {
   if (selectEl) selectEl.value = members.value.find(m => m.user_id === selectEl.dataset.uid)?.role ?? selectEl.value
   clearTimeout(_memberErrTimer)
   _memberErrTimer = setTimeout(() => { memberError.value = null }, 5000)
+}
+
+// Activate / deactivate a member's player from the Members list (same effect as
+// the toggle on the Players page — inactive players drop off the leaderboard,
+// top scorers and the Add Match picker, but keep their history).
+const activeBusy = ref(null)
+async function toggleMemberActive(member) {
+  if (!member.player_id || activeBusy.value) return
+  activeBusy.value = member.user_id
+  const { data, error } = await supabase.rpc('toggle_player_active', { p_player_id: member.player_id })
+  activeBusy.value = null
+  if (error) { showMemberError('Could not update: ' + error.message, null); return }
+  members.value = members.value.map(m =>
+    m.user_id === member.user_id ? { ...m, is_active: data } : m
+  )
 }
 
 async function changeRole(userId, newRole, selectEl = null) {
@@ -700,13 +726,26 @@ async function leaveClub(clubId) {
     <div v-for="m in members" :key="m.user_id"
       class="flex items-center justify-between py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0 gap-2">
       <div class="flex items-center gap-2 flex-1 min-w-0">
-        <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" />
-        <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
+        <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" :class="m.is_active ? '' : 'opacity-50'" />
+        <div class="text-sm font-semibold truncate" :class="m.is_active ? 'text-slate-100' : 'text-slate-400'">{{ m.display }}</div>
+        <span v-if="!m.is_active" class="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">Inactive</span>
       </div>
+
+      <!-- Activate / Deactivate (managers) — same effect as the Players page toggle -->
+      <button v-if="isManager() && m.player_id"
+        class="text-[11px] px-2 py-1 rounded-lg border shrink-0 transition"
+        :class="m.is_active
+          ? 'border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-300'
+          : 'border-emerald-300 text-emerald-600 bg-emerald-50 hover:bg-emerald-100'"
+        :disabled="activeBusy === m.user_id"
+        @click="toggleMemberActive(m)">
+        {{ activeBusy === m.user_id ? '…' : (m.is_active ? 'Deactivate' : 'Activate') }}
+      </button>
+
       <select
         v-if="currentClub.role === 'owner' || (currentClub.role === 'manager' && m.role !== 'owner')"
         :value="m.role"
-        class="text-xs rounded-lg border border-[rgba(15,23,42,0.10)] bg-[rgba(15,23,42,0.05)] px-2 py-1 outline-none cursor-pointer"
+        class="text-xs rounded-lg border border-[rgba(15,23,42,0.10)] bg-[rgba(15,23,42,0.05)] px-2 py-1 outline-none cursor-pointer shrink-0"
         @change="changeRole(m.user_id, $event.target.value, $event.target)">
         <option value="player">🏸 Player</option>
         <option value="manager">🛠 Manager</option>
@@ -892,14 +931,20 @@ async function leaveClub(clubId) {
 
     <p v-if="digest.enabled" class="text-[11px] text-slate-500 mb-3">Sends <strong>{{ digestSummary }}</strong>.</p>
 
+    <button class="btn-primary w-full py-2.5 text-sm mb-2" :disabled="digestBusy" @click="saveDigest">
+      {{ digestBusy ? '…' : 'Save Schedule' }}
+    </button>
     <div class="flex gap-2">
-      <button class="btn-primary flex-1 py-2.5 text-sm" :disabled="digestBusy" @click="saveDigest">
-        {{ digestBusy ? '…' : 'Save Schedule' }}
+      <button class="btn-ghost flex-1 py-2.5 text-sm" :disabled="!!digestSending" @click="sendDigestNow(true)">
+        {{ digestSending === 'test' ? '…' : '🧪 Send test to managers' }}
       </button>
-      <button class="btn-ghost px-4 text-sm shrink-0" :disabled="digestSending" @click="sendDigestNow">
-        {{ digestSending ? '…' : '📧 Send test now' }}
+      <button class="btn-success flex-1 py-2.5 text-sm" :disabled="!!digestSending" @click="sendDigestNow(false)">
+        {{ digestSending === 'all' ? '…' : '📧 Send now to all' }}
       </button>
     </div>
+    <p class="text-[11px] text-slate-400 mt-1.5">
+      Test goes only to this club's managers/owner. “Send now” emails every member who opted in — regardless of the schedule.
+    </p>
     <p v-if="digestNote" class="mt-2 text-xs" :class="digestNote.ok ? 'text-emerald-500' : 'text-rose-400'">
       {{ digestNote.t }}
     </p>
