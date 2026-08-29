@@ -53,11 +53,17 @@ export function generatePlan({
   //   R2: 5,6 join · 1,2 stay · 3,4 rest
   //   R3: 3,4 join · 5,6 stay · 1,2 rest …
   // so nobody plays 3–4 in a row and nobody sits for two rounds while others
-  // play two. Seed the line by fewest carried games first (a late joiner or a
-  // mid-session regeneration puts whoever is "behind" up front), random only as
-  // a tie-break for a fresh shuffle at the start.
+  // play two. Seed the line DETERMINISTICALLY: fewest carried games first (a late
+  // joiner or a mid-session regeneration puts whoever is "behind" up front), then
+  // higher Elo, then a stable id tie-break. No randomness — so the same attendees
+  // always yield the same plan, and it matches the "Suggested Next Match" engine
+  // (suggest_lineup_by_date), which uses the identical rule.
   let queue = [...pool]
-    .sort((a, b) => (gp[a.id] - gp[b.id]) || (rng() - 0.5))
+    .sort((a, b) =>
+      (gp[a.id] - gp[b.id]) ||
+      (elo[b.id] - elo[a.id]) ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+    )
     .map(p => p.id)
 
   const matches = []

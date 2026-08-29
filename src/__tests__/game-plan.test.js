@@ -84,6 +84,16 @@ describe('generatePlan — friendly fair rotation', () => {
     expect(defaultMatchCount(1.5)).toBe(9)
   })
 
+  it('is deterministic — same attendees always give the identical plan', () => {
+    const players = mkPlayers(7)
+    const a = generatePlan({ players, courts: 1, matchCount: 8 })
+    const b = generatePlan({ players, courts: 1, matchCount: 8 })
+    expect(JSON.stringify(a.matches)).toBe(JSON.stringify(b.matches))
+    // First match is the 4 highest-Elo (all tied on games=0) → stable, not random.
+    const first = [...a.matches[0].sideA, ...a.matches[0].sideB]
+    expect(new Set(first)).toEqual(new Set(['p7', 'p6', 'p5', 'p4']))
+  })
+
   it('6 players / 1 court: clean rotation — never 3 in a row, never rests twice in a row', () => {
     const players = mkPlayers(6)
     const { matches } = generatePlan({ players, courts: 1, matchCount: 9, rng: seeded(11) })
