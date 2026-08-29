@@ -813,39 +813,31 @@ const statItems = computed(() => !stats.value ? [] : [
           No logins match the current filters.
         </div>
 
-        <div v-else class="card overflow-x-auto">
-          <table class="w-full text-xs min-w-[720px]">
-            <thead>
-              <tr class="text-left text-slate-500 border-b border-slate-100">
-                <th class="py-2.5 px-3 font-semibold">User</th>
-                <th class="py-2.5 px-3 font-semibold">Contact</th>
-                <th class="py-2.5 px-3 font-semibold">IP address</th>
-                <th class="py-2.5 px-3 font-semibold">Device</th>
-                <th class="py-2.5 px-3 font-semibold">Location</th>
-                <th class="py-2.5 px-3 font-semibold">Club</th>
-                <th class="py-2.5 px-3 font-semibold text-right">Logged in</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="s in filteredSessions" :key="s.session_id" class="border-b border-slate-50 last:border-0 align-top">
-                <td class="py-2.5 px-3">
-                  <div class="font-semibold text-slate-800 whitespace-nowrap">{{ s.full_name || '—' }}</div>
-                  <span v-if="s.is_active" class="inline-block mt-0.5 text-[9px] font-bold text-emerald-600">● active</span>
-                </td>
-                <td class="py-2.5 px-3">
-                  <div class="text-slate-600 truncate max-w-[180px]">{{ s.email || '—' }}</div>
-                  <div class="text-slate-400">{{ s.phone || '—' }}</div>
-                </td>
-                <td class="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">{{ s.ip_address || '—' }}</td>
-                <td class="py-2.5 px-3 whitespace-nowrap">
-                  <span class="mr-1">{{ deviceIcon(s.user_agent) }}</span>{{ deviceName(s.user_agent) }}
-                </td>
-                <td class="py-2.5 px-3 text-slate-600">{{ sessionLocation(s) }}</td>
-                <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">{{ s.club_name || '—' }}</td>
-                <td class="py-2.5 px-3 text-right text-slate-500 whitespace-nowrap">{{ fmtDateTime(s.logged_in_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else class="card divide-y divide-slate-100">
+          <div v-for="s in filteredSessions" :key="s.session_id" class="p-3">
+            <!-- Top line: user + active badge · timestamp -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-sm font-semibold text-slate-800 truncate">
+                  {{ s.full_name || '—' }}
+                  <span v-if="s.is_active" class="text-[9px] font-bold text-emerald-600 ml-1 align-middle">● active</span>
+                </div>
+                <div class="text-[11px] text-slate-500 truncate">
+                  {{ s.email || '—' }}<span v-if="s.phone" class="text-slate-400"> · {{ s.phone }}</span>
+                </div>
+              </div>
+              <div class="text-[10px] text-slate-400 text-right shrink-0 whitespace-nowrap">
+                {{ fmtDateTime(s.logged_in_at) }}
+              </div>
+            </div>
+            <!-- Meta chips: device · location · club · IP — wrap instead of scroll -->
+            <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+              <span class="whitespace-nowrap">{{ deviceIcon(s.user_agent) }} {{ deviceName(s.user_agent) }}</span>
+              <span class="whitespace-nowrap">📍 {{ sessionLocation(s) }}</span>
+              <span class="whitespace-nowrap">🏸 {{ s.club_name || '—' }}</span>
+              <span class="font-mono text-slate-400 whitespace-nowrap">{{ s.ip_address || '—' }}</span>
+            </div>
+          </div>
         </div>
         <p class="text-[10px] text-slate-400 px-1">
           IP location is approximate (from the device's network at login) and for security review only.

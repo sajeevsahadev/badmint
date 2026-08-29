@@ -179,9 +179,8 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
             <div class="text-xs font-bold text-slate-700">
               {{ heroesToday ? "🎉 Today's Heroes" : "🎉 Last Session Heroes" }}
             </div>
-            <div class="text-[10px] text-slate-500 mt-0.5">{{ heroDateLabel }}</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">{{ heroDateLabel }} · standouts from your latest match day</div>
           </div>
-          <InfoTip text="Standouts from the club's most recent match day — Elo gained, wins and games played. Refreshes every time you play, so there's a new hero to chase each session." />
         </div>
         <div class="grid" :style="`grid-template-columns:repeat(${dayAwards.length},minmax(0,1fr))`">
           <RouterLink v-for="(a, i) in dayAwards" :key="a.label" :to="'/player/' + a.p.player_id"
@@ -211,15 +210,22 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
           <InfoTip text="Ranked by Elo rating — updated after every match. Win against stronger players to climb faster." />
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div>
+          <table class="w-full text-sm table-fixed">
+            <colgroup>
+              <col style="width:34px" />
+              <col />
+              <col style="width:52px" />
+              <col style="width:42px" />
+              <col style="width:44px" />
+            </colgroup>
             <thead>
               <tr class="border-b border-slate-100 bg-slate-50/60">
-                <th class="pl-4 pr-2 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400 font-semibold">#</th>
-                <th class="pl-2 pr-3 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Player</th>
-                <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Elo</th>
-                <th class="px-2 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">W%</th>
-                <th class="pl-2 pr-4 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Days</th>
+                <th class="pl-3 pr-1 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400 font-semibold">#</th>
+                <th class="pl-1 pr-2 py-2.5 text-left text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Player</th>
+                <th class="px-1 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Elo</th>
+                <th class="px-1 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">W%</th>
+                <th class="pl-1 pr-3 py-2.5 text-right text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Days</th>
               </tr>
             </thead>
             <tbody>
@@ -227,21 +233,20 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
               <tr v-for="(p, i) in podium" :key="p.id"
                 class="border-b border-slate-50 transition-colors"
                 :class="isMe(p) ? 'bg-cyan-50/70' : i === 0 ? 'bg-amber-50/40' : 'hover:bg-slate-50'">
-                <td class="pl-4 pr-2 py-3 text-base leading-none">{{ medals[i] }}</td>
-                <td class="pl-2 pr-3 py-3">
-                  <div class="flex items-center gap-2">
-                    <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" />
+                <td class="pl-3 pr-1 py-3 text-base leading-none">{{ medals[i] }}</td>
+                <td class="pl-1 pr-2 py-3">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" class="shrink-0" />
                     <RouterLink :to="'/player/' + p.id"
-                      class="font-semibold hover:text-neon transition-colors"
+                      class="font-semibold hover:text-neon transition-colors block truncate"
                       :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
-                      {{ p.display_name }}
-                      <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
+                      {{ p.display_name }}<span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
                     </RouterLink>
                   </div>
                 </td>
-                <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
-                <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
-                <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
+                <td class="px-1 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
+                <td class="px-1 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
+                <td class="pl-1 pr-3 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
               </tr>
 
               <!-- Rest: shown only when expanded -->
@@ -249,21 +254,20 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
                 <tr v-for="(p, i) in rest" :key="p.id"
                   class="border-b border-slate-50 last:border-0 transition-colors"
                   :class="isMe(p) ? 'bg-cyan-50/70' : 'hover:bg-slate-50'">
-                  <td class="pl-4 pr-2 py-3 text-xs font-bold text-slate-400">{{ i + 4 }}</td>
-                  <td class="pl-2 pr-3 py-3">
-                    <div class="flex items-center gap-2">
-                      <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" />
+                  <td class="pl-3 pr-1 py-3 text-xs font-bold text-slate-400">{{ i + 4 }}</td>
+                  <td class="pl-1 pr-2 py-3">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="28" class="shrink-0" />
                       <RouterLink :to="'/player/' + p.id"
-                        class="font-semibold hover:text-neon transition-colors"
+                        class="font-semibold hover:text-neon transition-colors block truncate"
                         :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
-                        {{ p.display_name }}
-                        <span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
+                        {{ p.display_name }}<span v-if="isMe(p)" class="text-[10px] text-cyan-500 font-normal ml-1">you</span>
                       </RouterLink>
                     </div>
                   </td>
-                  <td class="px-2 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
-                  <td class="px-2 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
-                  <td class="pl-2 pr-4 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
+                  <td class="px-1 py-3 text-right text-xs font-semibold" :class="trendColor(p.elo)">{{ p.elo }}</td>
+                  <td class="px-1 py-3 text-right text-xs text-slate-400">{{ p.win_pct }}%</td>
+                  <td class="pl-1 pr-3 py-3 text-right text-xs text-slate-400">{{ p.days_played }}</td>
                 </tr>
               </template>
 
