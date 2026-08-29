@@ -92,6 +92,14 @@ const dayAwards = computed(() => {
     p => `${p.games} games`, p => p.games >= 1)
   return out
 })
+
+// Per-award celebration colours (accent text, glow halo, soft stat pill).
+const HERO_STYLE = {
+  'Top Climber': { accent: '#d97706', glow: 'rgba(245,158,11,.40)', soft: 'rgba(245,158,11,.14)' },
+  'Most Wins':   { accent: '#0891a8', glow: 'rgba(0,180,216,.40)',  soft: 'rgba(0,180,216,.14)' },
+  'Most Active': { accent: '#8b5cf6', glow: 'rgba(168,85,247,.40)', soft: 'rgba(168,85,247,.14)' },
+}
+const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
 </script>
 
 <template>
@@ -161,12 +169,15 @@ const dayAwards = computed(() => {
       </div>
 
       <!-- ── Today's Heroes (latest match day) ─────────────────────────── -->
-      <div v-if="dayAwards.length" class="card overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between"
-          style="background:linear-gradient(90deg,rgba(0,180,216,.10),rgba(168,85,247,.07),rgba(251,191,36,.10))">
-          <div>
+      <div v-if="dayAwards.length" class="card overflow-hidden hero-card">
+        <div class="hero-header px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <!-- floating confetti bits -->
+          <span class="confetti c1"></span><span class="confetti c2"></span>
+          <span class="confetti c3"></span><span class="confetti c4"></span>
+          <span class="confetti c5"></span><span class="confetti c6"></span>
+          <div class="relative z-[1]">
             <div class="text-xs font-bold text-slate-700">
-              {{ heroesToday ? "🔥 Today's Heroes" : '🔥 Last Session Heroes' }}
+              {{ heroesToday ? "🎉 Today's Heroes" : "🎉 Last Session Heroes" }}
             </div>
             <div class="text-[10px] text-slate-500 mt-0.5">{{ heroDateLabel }}</div>
           </div>
@@ -174,13 +185,21 @@ const dayAwards = computed(() => {
         </div>
         <div class="grid" :style="`grid-template-columns:repeat(${dayAwards.length},minmax(0,1fr))`">
           <RouterLink v-for="(a, i) in dayAwards" :key="a.label" :to="'/player/' + a.p.player_id"
-            class="flex flex-col items-center text-center px-2 py-4 hover:bg-slate-50 transition"
-            :class="i > 0 ? 'border-l border-slate-100' : ''">
-            <div class="text-xl leading-none mb-1">{{ a.icon }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-2">{{ a.label }}</div>
-            <Avatar :name="a.p.name" :src="avatarMap[a.p.user_id]" :size="40" class="mb-1.5" />
-            <div class="text-xs font-bold text-slate-700 leading-tight line-clamp-1 w-full">{{ a.p.name }}</div>
-            <div class="text-[11px] font-extrabold text-neon mt-0.5">{{ a.stat }}</div>
+            class="hero-cell flex flex-col items-center text-center px-2 py-5"
+            :class="i > 0 ? 'border-l border-slate-100' : ''"
+            :style="`--accent:${heroStyle(a.label).accent};--glow:${heroStyle(a.label).glow};--soft:${heroStyle(a.label).soft}`">
+            <div class="text-lg leading-none mb-1">{{ a.icon }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wide mb-2.5" :style="`color:${heroStyle(a.label).accent}`">{{ a.label }}</div>
+            <div class="hero-avatar-wrap">
+              <span class="hero-glow"></span>
+              <span v-if="i === 0" class="hero-crown">👑</span>
+              <span class="hero-spark s1">✨</span>
+              <span class="hero-spark s2">✦</span>
+              <span class="hero-spark s3">✧</span>
+              <Avatar :name="a.p.name" :src="avatarMap[a.p.user_id]" :size="46" class="hero-avatar" />
+            </div>
+            <div class="text-xs font-bold text-slate-700 leading-tight line-clamp-1 w-full mt-2">{{ a.p.name }}</div>
+            <div class="hero-stat">{{ a.stat }}</div>
           </RouterLink>
         </div>
       </div>
@@ -294,3 +313,91 @@ const dayAwards = computed(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* ── Today's Heroes celebration ── */
+.hero-card { animation: heroPop .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes heroPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.hero-header {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(0,180,216,.12), rgba(168,85,247,.09), rgba(251,191,36,.13));
+}
+/* diagonal shine sweep */
+.hero-header::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: heroShine 4.5s ease-in-out infinite;
+}
+@keyframes heroShine { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(120%); } }
+
+/* confetti dots drifting down inside the header */
+.confetti {
+  position: absolute; top: -8px; width: 6px; height: 6px; border-radius: 1px;
+  opacity: 0; animation: confettiFall 3.8s linear infinite;
+}
+.confetti.c1 { left: 12%; background: #00b4d8; animation-delay: 0s;   }
+.confetti.c2 { left: 28%; background: #a855f7; animation-delay: .7s;  transform: rotate(20deg); }
+.confetti.c3 { left: 44%; background: #f59e0b; animation-delay: 1.4s; }
+.confetti.c4 { left: 60%; background: #10b981; animation-delay: 2.1s; transform: rotate(35deg); }
+.confetti.c5 { left: 76%; background: #f43f5e; animation-delay: 1s;   }
+.confetti.c6 { left: 90%; background: #00b4d8; animation-delay: 2.6s; transform: rotate(15deg); }
+@keyframes confettiFall {
+  0%   { opacity: 0; transform: translateY(-6px) rotate(0deg); }
+  10%  { opacity: .9; }
+  100% { opacity: 0; transform: translateY(46px) rotate(220deg); }
+}
+
+.hero-cell { position: relative; transition: background .15s; }
+.hero-cell:hover { background: rgba(0,0,0,.02); }
+
+.hero-avatar-wrap {
+  position: relative;
+  width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+}
+.hero-glow {
+  position: absolute; inset: -12px; border-radius: 9999px;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 68%);
+  animation: heroPulse 2.4s ease-in-out infinite;
+}
+@keyframes heroPulse { 0%,100% { transform: scale(.8);  opacity: .5; } 50% { transform: scale(1.15); opacity: .95; } }
+
+.hero-avatar {
+  position: relative; z-index: 1;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent);
+}
+
+.hero-crown {
+  position: absolute; top: -15px; left: 50%; z-index: 3;
+  font-size: 15px; transform: translateX(-50%) rotate(-12deg);
+  animation: crownBob 2.2s ease-in-out infinite;
+}
+@keyframes crownBob {
+  0%,100% { transform: translateX(-50%) rotate(-12deg) translateY(0); }
+  50%     { transform: translateX(-50%) rotate(-7deg) translateY(-2px); }
+}
+
+.hero-spark { position: absolute; z-index: 2; font-size: 10px; opacity: 0; animation: twinkle 2.6s ease-in-out infinite; }
+.hero-spark.s1 { top: -6px;  right: -8px; animation-delay: .2s; }
+.hero-spark.s2 { bottom: -4px; left: -9px; animation-delay: 1s;  }
+.hero-spark.s3 { top: 12px;  right: -13px; animation-delay: 1.7s; }
+@keyframes twinkle { 0%,100% { opacity: 0; transform: scale(.5); } 50% { opacity: 1; transform: scale(1.1); } }
+
+.hero-stat {
+  margin-top: 6px;
+  font-size: 11px; font-weight: 800; color: var(--accent);
+  background: var(--soft);
+  padding: 2px 9px; border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-card, .hero-header::after, .confetti, .hero-glow, .hero-crown, .hero-spark { animation: none; }
+  .confetti, .hero-spark { opacity: 0; }
+  .hero-glow { opacity: .6; }
+}
+</style>
