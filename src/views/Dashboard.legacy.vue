@@ -224,73 +224,105 @@ const fmtDate = d => d
     <div class="h-40 shimmer rounded-2xl" />
   </div>
 
-  <div v-else class="space-y-5 fade-up">
+  <div v-else class="space-y-4 fade-up">
 
-    <!-- ── Hero: you at a glance ─────────────────────────────────────── -->
-    <div class="card-neon p-5">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-xs text-slate-500">{{ greetText }} {{ greetEmoji }}</p>
-          <h1 class="font-display text-2xl font-extrabold gradient-text truncate leading-tight">{{ nickName }}</h1>
-          <p v-if="currentClub" class="text-xs text-slate-400 mt-0.5 truncate">
-            {{ clubName }} · <span class="capitalize">{{ currentClub.role }}</span>
-          </p>
+    <!-- ── 1. Greeting card ──────────────────────────────────────────── -->
+    <div class="card-neon p-4">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-slate-500 mb-0.5">{{ greetText }}, {{ greetEmoji }}</p>
+          <h1 class="font-display text-2xl font-extrabold gradient-text truncate">
+            {{ nickName }}
+          </h1>
+
+          <!-- My rank + Elo -->
+          <div v-if="myPlayer" class="mt-2 flex flex-wrap items-center gap-3">
+            <div>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">Your Rank</p>
+              <p class="text-lg font-extrabold text-neon leading-none">
+                #{{ myRank ?? myPlayer.club_rank }}
+                <span class="text-xs text-slate-400 font-normal ml-0.5">in {{ clubName }}</span>
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">Elo</p>
+              <p class="text-lg font-extrabold text-slate-700 leading-none">
+                {{ myPlayer.elo }}
+                <span v-if="weeklyDelta !== null"
+                  class="text-xs font-semibold ml-1"
+                  :class="weeklyDelta >= 0 ? 'text-emerald-600' : 'text-rose-500'">
+                  {{ weeklyDelta >= 0 ? '+' : '' }}{{ weeklyDelta }} this week
+                </span>
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 uppercase tracking-widest">W%</p>
+              <p class="text-lg font-extrabold text-slate-700 leading-none">{{ myPlayer.win_pct }}%</p>
+            </div>
+          </div>
+
+          <div v-else class="mt-2 text-sm text-slate-400">
+            <span v-if="currentClub">Play your first match to appear on the leaderboard!</span>
+            <span v-else>Join a club to see your stats here.</span>
+          </div>
         </div>
+
+        <!-- Club profile link -->
         <RouterLink v-if="currentClub" :to="'/club/' + currentClub.club_id"
-          class="shrink-0 text-xs font-medium text-neon hover:opacity-75 transition mt-0.5">
+          class="shrink-0 text-xs text-neon hover:opacity-75 transition mt-1">
           Club Profile →
         </RouterLink>
       </div>
-
-      <!-- Stat panel -->
-      <div v-if="myPlayer" class="mt-4 grid grid-cols-3 rounded-2xl border border-slate-100 bg-slate-50/70 overflow-hidden">
-        <div class="px-2 py-3 text-center">
-          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Rank</div>
-          <div class="text-xl font-extrabold text-slate-800 leading-none">#{{ myRank ?? myPlayer.club_rank }}</div>
-        </div>
-        <div class="px-2 py-3 text-center border-x border-slate-100">
-          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Elo</div>
-          <div class="text-xl font-extrabold text-neon leading-none">{{ myPlayer.elo }}</div>
-          <div v-if="weeklyDelta !== null" class="text-[10px] font-semibold mt-1"
-            :class="weeklyDelta >= 0 ? 'text-emerald-600' : 'text-rose-500'">
-            {{ weeklyDelta >= 0 ? '▲ +' : '▼ ' }}{{ Math.abs(weeklyDelta) }} <span class="text-slate-400 font-normal">wk</span>
-          </div>
-        </div>
-        <div class="px-2 py-3 text-center">
-          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Win&nbsp;%</div>
-          <div class="text-xl font-extrabold text-slate-800 leading-none">{{ myPlayer.win_pct }}%</div>
-        </div>
-      </div>
-
-      <div v-else class="mt-3 text-sm text-slate-400">
-        <span v-if="currentClub">Play your first match to appear on the leaderboard.</span>
-        <span v-else>Join a club to see your stats here.</span>
-      </div>
     </div>
 
-    <!-- ── Today's session — time-sensitive, only when scheduled ─────── -->
+    <!-- ── 1a. Club chat quick link ─────────────────────────────────────── -->
+    <RouterLink v-if="currentClub" to="/chat"
+      class="card p-4 flex items-center gap-3 fade-up hover:border-violet-400/50 transition-all active:scale-[0.99]">
+      <div class="relative shrink-0">
+        <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">💬</div>
+        <span v-if="chatUnread > 0"
+          class="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center ring-2 ring-white">
+          {{ chatUnread > 99 ? '99+' : chatUnread }}
+        </span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold text-slate-800">Club Chat</p>
+        <p class="text-xs" :class="chatUnread > 0 ? 'text-rose-500 font-semibold' : 'text-slate-400'">
+          {{ chatUnread > 0 ? `${chatUnread} new message${chatUnread > 1 ? 's' : ''}` : 'Message your club members' }}
+        </p>
+      </div>
+      <span class="text-slate-300 shrink-0">→</span>
+    </RouterLink>
+
+    <!-- ── 1b. Who's playing today/tomorrow? — quick link straight to the poll ── -->
     <RouterLink v-for="s in upcomingSchedule" :key="s.id"
       :to="`/schedule?date=${s.scheduled_date}`"
-      class="card-amber p-4 flex items-center gap-3">
+      class="card-amber p-4 flex items-center gap-3 fade-up">
+      <!-- Real date badge (day + month) instead of a static calendar emoji -->
       <div class="icon-tile icon-tile-amber w-11 h-11 flex-col leading-none">
         <span class="text-base font-extrabold text-amber-700">{{ dayNum(s.scheduled_date) }}</span>
         <span class="text-[8px] font-bold text-amber-600 tracking-wide">{{ monthAbbr(s.scheduled_date) }}</span>
       </div>
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-bold text-slate-800">Playing {{ s.label }}</p>
+        <p class="text-sm font-bold text-slate-800">See who's playing {{ s.label }}</p>
         <p class="text-xs text-slate-400">Tap to view or cast your attendance vote</p>
       </div>
-      <button class="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition"
+      <button class="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300
+                     hover:text-rose-500 hover:bg-rose-50 transition"
         title="Hide this" aria-label="Hide"
         @click.stop.prevent="hideSchedule(s.scheduled_date)">✕</button>
     </RouterLink>
 
-    <!-- ── Getting Started (new club, no matches yet) ───────────────── -->
-    <div v-if="currentClub && !board.length" class="card p-4">
+    <!-- ── 2. Getting Started — shown until this club has its first match ──
+         Directly addresses "where do I start" confusion after login: a clear,
+         prioritized 3-step path instead of a flat grid of equal-weight actions.
+         Disappears on its own once board.length > 0 (first match recorded). -->
+    <div v-if="currentClub && !board.length" class="card-neon p-4 fade-up">
       <p class="text-sm font-bold text-slate-800 mb-0.5">👋 New here? Start with these steps</p>
-      <p class="text-xs text-slate-400 mb-3">This goes away once your club's first match is recorded.</p>
+      <p class="text-xs text-slate-400 mb-3">This card goes away once your club's first match is recorded.</p>
       <div class="space-y-1">
-        <RouterLink to="/players" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-cyan-50/60 transition-colors">
+        <RouterLink to="/players"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-cyan-50/60 transition-colors">
           <div class="icon-tile icon-tile-cyan w-9 h-9 text-sm font-extrabold text-cyan-700">1</div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-slate-800">Add your players</p>
@@ -298,7 +330,8 @@ const fmtDate = d => d
           </div>
           <span class="text-slate-300 shrink-0">→</span>
         </RouterLink>
-        <RouterLink to="/match" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-violet-50/60 transition-colors">
+        <RouterLink to="/match"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-violet-50/60 transition-colors">
           <div class="icon-tile icon-tile-violet w-9 h-9 text-sm font-extrabold text-violet-700">2</div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-slate-800">Record your first match</p>
@@ -306,7 +339,8 @@ const fmtDate = d => d
           </div>
           <span class="text-slate-300 shrink-0">→</span>
         </RouterLink>
-        <RouterLink to="/splits" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
+        <RouterLink to="/splits"
+          class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-emerald-50/60 transition-colors">
           <div class="icon-tile icon-tile-emerald w-9 h-9 text-sm font-extrabold text-emerald-700">3</div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold text-slate-800">Split court costs</p>
@@ -317,41 +351,63 @@ const fmtDate = d => d
       </div>
     </div>
 
-    <!-- ── Actions: one primary + three secondary ───────────────────── -->
-    <div v-if="currentClub" class="space-y-2">
-      <button class="btn-primary w-full py-3.5 text-sm gap-2 justify-center" @click="router.push('/match')">
-        ➕ Record a Match
-      </button>
-      <div class="grid grid-cols-3 gap-2">
-        <button class="card p-3 flex flex-col items-center gap-1.5 text-center hover:border-slate-300 active:scale-[0.97] transition-all"
+    <!-- ── 3. Quick Actions ──────────────────────────────────────────── -->
+    <div>
+      <p class="label mb-2">⚡ Quick Actions</p>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="card p-4 flex items-center gap-3 hover:border-cyan-400/50 transition-all active:scale-[0.97]"
+          @click="router.push('/match')">
+          <div class="icon-tile icon-tile-cyan w-11 h-11 text-xl">➕</div>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Record Match</p>
+            <p class="text-xs text-slate-400">Log a doubles result</p>
+          </div>
+        </button>
+        <button class="card p-4 flex items-center gap-3 hover:border-violet-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/matches')">
-          <div class="icon-tile icon-tile-violet w-10 h-10 text-lg">📋</div>
-          <span class="text-xs font-semibold text-slate-700">Matches</span>
+          <div class="icon-tile icon-tile-violet w-11 h-11 text-xl">📋</div>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Matches</p>
+            <p class="text-xs text-slate-400">Match history</p>
+          </div>
         </button>
-        <button class="card p-3 flex flex-col items-center gap-1.5 text-center hover:border-slate-300 active:scale-[0.97] transition-all"
+        <button class="card p-4 flex items-center gap-3 hover:border-emerald-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/splits?tab=balance')">
-          <div class="icon-tile icon-tile-emerald w-10 h-10 text-lg">💰</div>
-          <span class="text-xs font-semibold text-slate-700">Split Pay</span>
+          <div class="icon-tile icon-tile-emerald w-11 h-11 text-xl">💰</div>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Split Pay</p>
+            <p class="text-xs text-slate-400">Your balance</p>
+          </div>
         </button>
-        <button class="card p-3 flex flex-col items-center gap-1.5 text-center hover:border-slate-300 active:scale-[0.97] transition-all"
+        <button class="card p-4 flex items-center gap-3 hover:border-amber-400/50 transition-all active:scale-[0.97]"
           @click="router.push('/schedule')">
-          <div class="icon-tile icon-tile-amber w-10 h-10 text-lg">📅</div>
-          <span class="text-xs font-semibold text-slate-700">Schedule</span>
+          <div class="icon-tile icon-tile-amber w-11 h-11 text-xl">📅</div>
+          <div class="text-left min-w-0">
+            <p class="text-sm font-bold text-slate-800 truncate">Who's Playing?</p>
+            <p class="text-xs text-slate-400">Match day attendance poll</p>
+          </div>
         </button>
       </div>
     </div>
 
-    <!-- ── Rankings snapshot (top 3 + you) ──────────────────────────── -->
-    <div v-if="currentClub && board.length">
+    <!-- ── 4. Your Club mini-leaderboard ────────────────────────────── -->
+    <div v-if="currentClub">
       <div class="flex items-center justify-between mb-2">
-        <p class="label">Rankings · {{ clubName }}</p>
-        <RouterLink to="/scoreboard" class="text-xs font-medium text-neon hover:opacity-75 transition">
-          See all →
+        <p class="label">🏸 {{ clubName }}</p>
+        <RouterLink to="/scoreboard" class="text-xs text-neon hover:opacity-75 transition">
+          See Full Rankings →
         </RouterLink>
       </div>
-      <div class="card overflow-hidden">
+
+      <div v-if="!board.length" class="card p-6 text-center text-sm text-slate-400">
+        No matches yet — record one to start the leaderboard.
+      </div>
+
+      <div v-else class="card overflow-hidden">
+        <!-- Mini top 3 + me -->
         <div v-for="(p, i) in miniBoard" :key="p.id">
-          <div v-if="p._gap" class="px-4 py-1 text-center text-xs text-slate-300 border-t border-slate-100 tracking-widest">
+          <!-- Gap separator before "you" if not in top 3 -->
+          <div v-if="p._gap" class="px-4 py-1 text-center text-xs text-slate-400 border-t border-slate-100 tracking-widest">
             · · ·
           </div>
           <RouterLink :to="'/player/' + p.id"
@@ -362,7 +418,8 @@ const fmtDate = d => d
             </span>
             <Avatar :name="p.display_name" :src="avatarMap[p.user_id]" :size="32" />
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold truncate" :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
+              <p class="text-sm font-semibold truncate"
+                :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
                 {{ p.display_name }}
                 <span v-if="isMe(p)" class="text-xs font-normal text-cyan-500 ml-1">you</span>
               </p>
@@ -376,30 +433,38 @@ const fmtDate = d => d
       </div>
     </div>
 
-    <!-- ── Club chat (slim) ─────────────────────────────────────────── -->
-    <RouterLink v-if="currentClub" to="/chat"
-      class="card px-4 py-3 flex items-center gap-3 hover:border-violet-400/40 transition-all active:scale-[0.99]">
-      <div class="relative shrink-0">
-        <div class="icon-tile icon-tile-violet w-9 h-9 text-base">💬</div>
-        <span v-if="chatUnread > 0"
-          class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
-          {{ chatUnread > 99 ? '99+' : chatUnread }}
-        </span>
+    <!-- ── 5b. Live Tournaments ──────────────────────────────────────── -->
+    <div v-if="TOURNAMENTS_ENABLED && liveTournaments.length">
+      <p class="label mb-2">🔴 Live Tournaments</p>
+      <div class="space-y-2">
+        <div v-for="t in liveTournaments" :key="t.id"
+          class="card p-4 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
+          @click="router.push('/tournament/' + t.id)">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">
+                {{ t.club_name }}
+                <span v-if="t.format === 'single_elimination'"> · Knock-out</span>
+                <span v-else> · Round Robin</span>
+              </p>
+            </div>
+            <div class="shrink-0 flex items-center gap-2">
+              <span class="badge bg-rose-50 text-rose-600 border border-rose-200">🔴 Live</span>
+              <span class="text-slate-300 text-sm">→</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm font-semibold text-slate-800">Club Chat</p>
-        <p class="text-xs" :class="chatUnread > 0 ? 'text-rose-500 font-semibold' : 'text-slate-400'">
-          {{ chatUnread > 0 ? `${chatUnread} new message${chatUnread > 1 ? 's' : ''}` : 'Message your club members' }}
-        </p>
-      </div>
-      <span class="text-slate-300 shrink-0">→</span>
-    </RouterLink>
+    </div>
 
-    <!-- ── Your clubs ───────────────────────────────────────────────── -->
+    <!-- ── 7. Your Clubs ────────────────────────────────────────────── -->
     <div>
       <div class="flex items-center justify-between mb-2">
-        <p class="label">Your Clubs</p>
-        <RouterLink to="/join" class="text-xs font-medium text-neon hover:opacity-75 transition">+ Join</RouterLink>
+        <p class="label">👥 Your Clubs</p>
+        <RouterLink to="/join" class="text-xs text-neon hover:opacity-75 transition">
+          + Join
+        </RouterLink>
       </div>
 
       <div v-if="!clubs.length" class="card p-6 text-center text-sm text-slate-400">
@@ -407,18 +472,23 @@ const fmtDate = d => d
         <RouterLink to="/explore" class="text-neon underline ml-1">Browse clubs →</RouterLink>
       </div>
 
-      <div v-else class="card overflow-hidden">
+      <div v-else class="space-y-2">
         <div v-for="c in clubs" :key="c.club_id"
-          class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 cursor-pointer transition-colors"
-          :class="currentClub?.club_id === c.club_id ? 'bg-cyan-50/60' : 'hover:bg-slate-50'"
+          class="card p-4 flex items-center gap-3 cursor-pointer transition-all active:scale-[0.99]"
+          :class="currentClub?.club_id === c.club_id
+            ? 'border-cyan-400/50 bg-cyan-50/30'
+            : 'hover:border-slate-300'"
           @click="router.push('/club/' + c.club_id)">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
-            :class="currentClub?.club_id === c.club_id ? 'bg-cyan-100' : 'bg-slate-100'">🏸</div>
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+            :class="currentClub?.club_id === c.club_id ? 'bg-cyan-100' : 'bg-slate-100'">
+            🏸
+          </div>
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-slate-800 text-sm truncate">{{ c.clubs?.name }}</p>
             <p class="text-xs text-slate-400 capitalize">{{ c.role }}</p>
           </div>
-          <span v-if="currentClub?.club_id === c.club_id" class="shrink-0 text-[11px] font-bold text-cyan-600">Active</span>
+          <span v-if="currentClub?.club_id === c.club_id"
+            class="shrink-0 text-xs font-bold text-cyan-600">Active</span>
           <span v-else class="shrink-0 text-slate-300 text-sm">→</span>
         </div>
       </div>

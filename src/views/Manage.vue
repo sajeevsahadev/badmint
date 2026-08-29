@@ -520,6 +520,10 @@ async function changeRole(userId, newRole, selectEl = null) {
 
 const roleLabel = r => ({ owner: '👑 Owner', manager: '🛠 Manager', player: '🏸 Player' }[r] ?? r)
 
+// Active members up top; deactivated ones drop into their own section below.
+const activeMembers   = computed(() => members.value.filter(m => m.is_active))
+const inactiveMembers = computed(() => members.value.filter(m => !m.is_active))
+
 // ── Leave club ──
 const leaving   = ref(null)   // club_id in progress
 const leaveNote = ref(null)
@@ -747,30 +751,19 @@ async function leaveClub(clubId) {
       <span>{{ memberError }}</span>
     </div>
 
-    <div v-for="m in members" :key="m.user_id"
+    <!-- Active members -->
+    <div v-for="m in activeMembers" :key="m.user_id"
       class="flex items-center justify-between py-2.5 border-b border-[rgba(15,23,42,0.05)] last:border-0 gap-2">
       <div class="flex items-center gap-2 flex-1 min-w-0">
-        <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" :class="m.is_active ? '' : 'opacity-50'" />
-        <div class="text-sm font-semibold truncate" :class="m.is_active ? 'text-slate-100' : 'text-slate-400'">{{ m.display }}</div>
-        <span v-if="!m.is_active" class="text-[9px] font-bold uppercase tracking-wide text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0">Inactive</span>
+        <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" />
+        <div class="text-sm font-semibold text-slate-100 truncate">{{ m.display }}</div>
       </div>
 
-      <!-- Activate / Deactivate (managers) — same effect as the Players page toggle -->
       <button v-if="isManager() && m.player_id"
-        class="text-[11px] px-2 py-1 rounded-lg border shrink-0 transition"
-        :class="m.is_active
-          ? 'border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-300'
-          : 'border-emerald-300 text-emerald-600 bg-emerald-50 hover:bg-emerald-100'"
+        class="text-[11px] px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-300 shrink-0 transition"
         :disabled="activeBusy === m.user_id"
         @click="toggleMemberActive(m)">
-        {{ activeBusy === m.user_id ? '…' : (m.is_active ? 'Deactivate' : 'Activate') }}
-      </button>
-
-      <!-- Delete — only offered once a member is deactivated -->
-      <button v-if="isManager() && m.player_id && !m.is_active"
-        class="text-[11px] px-2 py-1 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 shrink-0 transition"
-        @click="askDeletePlayer(m.player_id, m.display)">
-        Delete
+        {{ activeBusy === m.user_id ? '…' : 'Deactivate' }}
       </button>
 
       <select
@@ -783,6 +776,29 @@ async function leaveClub(clubId) {
         <option v-if="currentClub.role === 'owner'" value="owner">👑 Owner</option>
       </select>
       <span v-else class="text-xs shrink-0">{{ roleLabel(m.role) }}</span>
+    </div>
+
+    <!-- Deactivated members — their own section, activate or delete from here -->
+    <div v-if="inactiveMembers.length" class="mt-1 pt-3 border-t border-[rgba(15,23,42,0.06)]">
+      <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Deactivated players</div>
+      <div v-for="m in inactiveMembers" :key="m.user_id"
+        class="flex items-center justify-between py-2.5 gap-2">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <Avatar :name="m.display" :src="avatarMap[m.user_id]" :size="32" class="opacity-50" />
+          <div class="text-sm font-semibold text-slate-400 truncate">{{ m.display }}</div>
+        </div>
+        <button v-if="isManager() && m.player_id"
+          class="text-[11px] px-2 py-1 rounded-lg border border-emerald-300 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 shrink-0 transition"
+          :disabled="activeBusy === m.user_id"
+          @click="toggleMemberActive(m)">
+          {{ activeBusy === m.user_id ? '…' : 'Activate' }}
+        </button>
+        <button v-if="isManager() && m.player_id"
+          class="text-[11px] px-2 py-1 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 shrink-0 transition"
+          @click="askDeletePlayer(m.player_id, m.display)">
+          Delete
+        </button>
+      </div>
     </div>
 
     <!-- Guest link success (shown even after the row moves to Members) -->
