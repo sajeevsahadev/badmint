@@ -7,6 +7,7 @@ import { useClub } from '../composables/useClub'
 import InfoTip from '../components/InfoTip.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
+import { TOURNAMENTS_ENABLED } from '../config/features'
 
 const router = useRouter()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -142,6 +143,7 @@ async function loadClubData() {
 }
 
 async function loadTournaments() {
+  if (!TOURNAMENTS_ENABLED) return
   const { data } = await supabase.rpc('get_tournaments', {
     p_club_id: null, p_status: null, p_emirate: null
   })
@@ -432,7 +434,7 @@ const fmtDate = d => d
     </div>
 
     <!-- ── 5b. Live Tournaments ──────────────────────────────────────── -->
-    <div v-if="liveTournaments.length">
+    <div v-if="TOURNAMENTS_ENABLED && liveTournaments.length">
       <p class="label mb-2">🔴 Live Tournaments</p>
       <div class="space-y-2">
         <div v-for="t in liveTournaments" :key="t.id"
