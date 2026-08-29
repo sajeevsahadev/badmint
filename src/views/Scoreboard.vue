@@ -15,6 +15,7 @@ const { avatarMap, loadAvatars } = usePlayerAvatars()
 
 const board     = ref([])
 const bestPairs = ref([])
+const dayHeroes = ref({ date: null, players: [] })
 const loading   = ref(true)
 const showFull  = ref(true)
 
@@ -34,14 +35,16 @@ async function load() {
   const key = ++_loadKey
   loading.value = true
   const cid = currentClub.value.club_id
-  const [{ data: lb }, { data: bp }] = await Promise.all([
+  const [{ data: lb }, { data: bp }, { data: heroes }] = await Promise.all([
     supabase.from('v_leaderboard').select('*').eq('club_id', cid).gt('games', 0).order('club_rank'),
     supabase.from('v_best_pairs').select('*').eq('club_id', cid)
       .order('win_pct', { ascending: false }).order('games', { ascending: false }).limit(5),
+    supabase.rpc('get_day_heroes', { p_club_id: cid }),
   ])
   if (key !== _loadKey) return
   board.value     = lb ?? []
   bestPairs.value = bp ?? []
+  dayHeroes.value = heroes ?? { date: null, players: [] }
   loading.value   = false
   loadAvatars([
     ...board.value.map(p => p.user_id),
@@ -55,6 +58,40 @@ watch(currentClub, load)
 const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 const podium   = computed(() => board.value.slice(0, 3))
 const rest     = computed(() => board.value.slice(3))
+
+// ── Today's Heroes — standouts from the club's most recent match day ──
+const todayStr = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})()
+const heroesDate   = computed(() => dayHeroes.value?.date || null)
+const heroesToday  = computed(() => heroesDate.value === todayStr)
+const heroDateLabel = computed(() => heroesDate.value
+  ? new Date(heroesDate.value + 'T00:00:00').toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'short' })
+  : '')
+
+// Pick up to three DIFFERENT people so recognition is spread around, not all
+// heaped on one player. Top Climber → Most Wins → Most Active, each excluding
+// anyone already awarded.
+const dayAwards = computed(() => {
+  const arr = dayHeroes.value?.players || []
+  if (!arr.length) return []
+  const used = new Set()
+  const out = []
+  const pick = (label, icon, better, statFn, guard) => {
+    const cand = arr.filter(p => !used.has(p.player_id) && guard(p))
+    if (!cand.length) return
+    const win = cand.reduce((a, b) => (better(a, b) ? b : a))
+    used.add(win.player_id)
+    out.push({ label, icon, p: win, stat: statFn(win) })
+  }
+  pick('Top Climber', '🚀', (a, b) => b.delta > a.delta, p => `+${p.delta} Elo`, p => p.delta > 0)
+  pick('Most Wins', '🏆', (a, b) => b.wins > a.wins || (b.wins === a.wins && b.delta > a.delta),
+    p => `${p.wins} ${p.wins === 1 ? 'win' : 'wins'}`, p => p.wins > 0)
+  pick('Most Active', '🎯', (a, b) => b.games > a.games || (b.games === a.games && b.wins > a.wins),
+    p => `${p.games} games`, p => p.games >= 1)
+  return out
+})
 </script>
 
 <template>
@@ -120,6 +157,31 @@ const rest     = computed(() => board.value.slice(3))
             {{ p.elo }} <span class="text-[10px] font-semibold text-slate-400">Elo</span>
           </div>
           <div class="text-[10px] text-slate-400 mt-0.5">{{ p.win_pct }}% win</div>
+        </div>
+      </div>
+
+      <!-- ── Today's Heroes (latest match day) ─────────────────────────── -->
+      <div v-if="dayAwards.length" class="card overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between"
+          style="background:linear-gradient(90deg,rgba(0,180,216,.10),rgba(168,85,247,.07),rgba(251,191,36,.10))">
+          <div>
+            <div class="text-xs font-bold text-slate-700">
+              {{ heroesToday ? "🔥 Today's Heroes" : '🔥 Last Session Heroes' }}
+            </div>
+            <div class="text-[10px] text-slate-500 mt-0.5">{{ heroDateLabel }}</div>
+          </div>
+          <InfoTip text="Standouts from the club's most recent match day — Elo gained, wins and games played. Refreshes every time you play, so there's a new hero to chase each session." />
+        </div>
+        <div class="grid" :style="`grid-template-columns:repeat(${dayAwards.length},minmax(0,1fr))`">
+          <RouterLink v-for="(a, i) in dayAwards" :key="a.label" :to="'/player/' + a.p.player_id"
+            class="flex flex-col items-center text-center px-2 py-4 hover:bg-slate-50 transition"
+            :class="i > 0 ? 'border-l border-slate-100' : ''">
+            <div class="text-xl leading-none mb-1">{{ a.icon }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-2">{{ a.label }}</div>
+            <Avatar :name="a.p.name" :src="avatarMap[a.p.user_id]" :size="40" class="mb-1.5" />
+            <div class="text-xs font-bold text-slate-700 leading-tight line-clamp-1 w-full">{{ a.p.name }}</div>
+            <div class="text-[11px] font-extrabold text-neon mt-0.5">{{ a.stat }}</div>
+          </RouterLink>
         </div>
       </div>
 
