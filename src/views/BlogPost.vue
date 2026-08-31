@@ -6,6 +6,7 @@ import { applySeo, setJsonLd, SEO_BASE } from '../lib/seo'
 
 const route   = useRoute()
 const post    = ref(null)
+const related = ref([])
 const loading = ref(true)
 const notFound = ref(false)
 
@@ -22,6 +23,17 @@ async function load() {
   loading.value = false
   if (!data) { notFound.value = true; return }
   post.value = data
+
+  // Related reads — internal links on every post (live posts only)
+  supabase
+    .from('blog_posts')
+    .select('slug, title, excerpt, cover_url')
+    .eq('published', true)
+    .neq('slug', route.params.slug)
+    .lte('publish_at', new Date().toISOString())
+    .order('publish_at', { ascending: false })
+    .limit(4)
+    .then(({ data: rel }) => { related.value = rel ?? [] })
 
   applySeo({
     title: `${data.title} | Badminton 360`,
@@ -136,6 +148,21 @@ const shareLinks = computed(() => {
             <p class="font-display font-bold gradient-text">Put this into practice — free</p>
             <p class="text-sm text-slate-500 mt-1 mb-3">Track scores, get automatic Elo rankings and run your club in one app.</p>
             <RouterLink to="/login" class="btn-primary inline-flex px-6 py-2.5">Start free →</RouterLink>
+          </div>
+
+          <!-- Related reads — internal links -->
+          <div v-if="related.length" class="mt-10">
+            <h2 class="font-display text-lg font-bold text-slate-800 mb-3">Related badminton reads</h2>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <RouterLink v-for="r in related" :key="r.slug" :to="'/blog/' + r.slug"
+                class="card p-4 flex gap-3 items-center hover:border-neon/40 transition-all active:scale-[0.99] no-underline">
+                <img v-if="r.cover_url" :src="r.cover_url" :alt="r.title" class="w-16 h-16 rounded-lg object-cover shrink-0" loading="lazy" />
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-slate-800 line-clamp-2">{{ r.title }}</p>
+                  <p class="text-xs text-slate-400 line-clamp-1 mt-0.5">{{ r.excerpt }}</p>
+                </div>
+              </RouterLink>
+            </div>
           </div>
         </div>
 

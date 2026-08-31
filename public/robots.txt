@@ -1,4 +1,36 @@
+# Badminton 360 — allow all search + AI answer engines to read the site.
 User-agent: *
+Allow: /
+
+# AI answer engines / assistants (explicitly welcomed so they can cite our guides)
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
 Allow: /
 
 Sitemap: https://badminton360.app/sitemap.xml

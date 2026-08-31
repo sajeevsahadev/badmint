@@ -126,8 +126,21 @@ function switchMyClub(clubId) {
 
 function goLogin() { router.push('/login') }
 
+// Latest published blog posts — shown to logged-out visitors (SEO + engagement)
+const latestPosts = ref([])
+async function loadLatestPosts() {
+  const { data } = await supabase
+    .from('blog_posts')
+    .select('slug, title, excerpt, cover_url')
+    .eq('published', true)
+    .lte('publish_at', new Date().toISOString())
+    .order('publish_at', { ascending: false })
+    .limit(3)
+  latestPosts.value = data ?? []
+}
+
 onMounted(() => {
-  load(); detectCountry()
+  load(); detectCountry(); loadLatestPosts()
   applySeo({
     title: 'Badminton 360 — Free Badminton App for Match & Score Tracking',
     description: 'Free badminton app for clubs and players: track matches and scores, get automatic Elo rankings, chat, split court fees and run tournaments. Works on any court, anywhere.',
@@ -338,17 +351,27 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- ── From the blog ── -->
-          <RouterLink to="/blog" class="card overflow-hidden flex flex-col sm:flex-row items-stretch mt-6 fade-up hover:-translate-y-0.5 hover:shadow-lg transition-all group">
-            <img src="/blog/track-badminton-matches.png" alt="How to track your badminton matches" loading="lazy"
-              class="w-full sm:w-40 h-32 sm:h-auto object-cover shrink-0" />
-            <div class="p-4">
-              <p class="text-[11px] font-semibold text-neon mb-0.5">FROM THE BLOG</p>
-              <p class="font-display font-bold text-slate-800 leading-snug group-hover:text-neon transition">How to Track Your Badminton Matches (and Actually Improve)</p>
-              <p class="text-xs text-slate-500 mt-1 line-clamp-2">Keep score properly, rank players fairly with Elo, and stop losing your results to the group chat.</p>
-              <span class="inline-block mt-2 text-xs font-semibold text-neon">Read all articles →</span>
+          <!-- ── From the blog (latest posts) ── -->
+          <div class="mt-8 fade-up">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">From the Blog</h2>
+              <RouterLink to="/blog" class="text-xs text-neon hover:opacity-75 transition">Read all →</RouterLink>
             </div>
-          </RouterLink>
+            <div v-if="latestPosts.length" class="space-y-2">
+              <RouterLink v-for="p in latestPosts" :key="p.slug" :to="'/blog/' + p.slug"
+                class="card overflow-hidden flex items-stretch hover:-translate-y-0.5 hover:shadow-lg transition-all group no-underline">
+                <img v-if="p.cover_url" :src="p.cover_url" :alt="p.title" loading="lazy"
+                  class="w-28 sm:w-40 h-24 object-cover shrink-0" />
+                <div class="p-3 sm:p-4 min-w-0 flex flex-col justify-center">
+                  <p class="font-display font-bold text-slate-800 leading-snug group-hover:text-neon transition line-clamp-2 text-sm">{{ p.title }}</p>
+                  <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ p.excerpt }}</p>
+                </div>
+              </RouterLink>
+            </div>
+            <RouterLink v-else to="/blog" class="card p-4 block text-center text-sm font-semibold text-neon">
+              Read the badminton blog →
+            </RouterLink>
+          </div>
         </div>
       </template>
 

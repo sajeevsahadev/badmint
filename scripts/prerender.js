@@ -101,7 +101,13 @@ async function main() {
   for (const p of posts) {
     const url = `${BASE}/blog/${p.slug}`
     const desc = p.meta_description || p.excerpt || ''
-    const appHtml = `<article><h1>${escHtml(p.title)}</h1>${p.cover_url ? `<img src="${escAttr(p.cover_url)}" alt="${escAttr(p.title)}" width="1200" height="630">` : ''}<div>${p.body}</div></article>`
+    // Internal links on every post: up to 6 other articles + a link back to the
+    // blog index. Crawlable in the static HTML (before JS boots).
+    const related = posts.filter(x => x.slug !== p.slug).slice(0, 6)
+    const relatedHtml = related.length
+      ? `<nav aria-label="Related articles"><h2>Related badminton articles</h2><ul>${related.map(r => `<li><a href="/blog/${escAttr(r.slug)}">${escHtml(r.title)}</a></li>`).join('')}</ul></nav>`
+      : ''
+    const appHtml = `<article><h1>${escHtml(p.title)}</h1>${p.cover_url ? `<img src="${escAttr(p.cover_url)}" alt="${escAttr(p.title)}" width="1200" height="630">` : ''}<div>${p.body}</div>${relatedHtml}<p><a href="/blog">← All badminton articles</a></p></article>`
     const page = renderPage(shell, {
       title: `${p.title} | Badminton 360`,
       head: headBlock({

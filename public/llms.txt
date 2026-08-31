@@ -1,0 +1,24 @@
+# Badminton 360
+
+> Badminton 360 (B360) is a free web app for badminton clubs and players worldwide: record doubles matches, rank players with Elo ratings, run fair game-day rotations, manage attendance, and split court costs. It also publishes practical guides on badminton technique, coaching and running a club.
+
+Badminton 360 is a Progressive Web App at https://badminton360.app. It is free to use and works on any device.
+
+## Key pages
+- [Home](https://badminton360.app/): what Badminton 360 does — Elo rankings, match tracking, club management.
+- [Blog](https://badminton360.app/blog): badminton tips, coaching guides, scoring and club-management articles.
+- [Explore](https://badminton360.app/explore): discover badminton clubs and facilities.
+
+## Badminton coaching guides
+- [Badminton Coaching in the UAE: Complete Guide](https://badminton360.app/blog/badminton-coaching-uae-guide): what a coach does, BWF levels, costs, ideal age.
+- [BWF Level 1 (Foundation) Coaching](https://badminton360.app/blog/bwf-level-1-badminton-coaching)
+- [BWF Level 2 (Advanced) Coaching](https://badminton360.app/blog/bwf-level-2-badminton-coaching)
+- [BWF Level 3 (High Performance) Coaching](https://badminton360.app/blog/bwf-level-3-badminton-coaching)
+- [Badminton Coaching in Dubai](https://badminton360.app/blog/badminton-coaching-dubai)
+- [Badminton Coaching in Sharjah](https://badminton360.app/blog/badminton-coaching-sharjah)
+- [Badminton Coaching in Abu Dhabi](https://badminton360.app/blog/badminton-coaching-abu-dhabi)
+- [Kids' Badminton Coaching in the UAE](https://badminton360.app/blog/kids-badminton-coaching-uae)
+
+## About
+- Free for clubs and players. Google sign-in. Features: Elo ranking, match history, best pairs, game-day planner, Split Pay (cost sharing), club chat, weekly ranking email.
+- The full, always-current list of articles is in the sitemap: https://badminton360.app/sitemap.xml
