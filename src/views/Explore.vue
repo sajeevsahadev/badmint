@@ -188,6 +188,9 @@ const activityColor = (m30) =>
 </script>
 
 <template>
+  <!-- Centered column so content doesn't sprawl full-width on desktop
+       (max-w is wider than any phone, so mobile layout is unchanged). -->
+  <div class="mx-auto max-w-3xl">
   <!-- Search bar + country filter (clubs only) -->
   <div class="flex gap-2 mb-4 fade-up">
     <div class="relative flex-1">
@@ -373,6 +376,7 @@ const activityColor = (m30) =>
       </button>
     </div>
   </div>
+  </div><!-- /centered column -->
 
   <!-- ── Join Confirmation modal ── -->
   <Teleport to="body">

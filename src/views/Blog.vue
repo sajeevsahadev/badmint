@@ -42,7 +42,7 @@ onMounted(async () => {
       style="background:linear-gradient(135deg,#0b1220 0%,#0f2a4a 55%,#0a5b74 100%);">
       <div class="absolute inset-0 opacity-20" aria-hidden="true"
         style="background-image:radial-gradient(circle at 20% 30%, #22d3ee55, transparent 40%), radial-gradient(circle at 80% 20%, #a855f755, transparent 40%);"></div>
-      <div class="relative max-w-3xl mx-auto px-5 pt-8 pb-10 safe-area-pt">
+      <div class="relative max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-10 safe-area-pt">
         <RouterLink to="/" class="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition mb-6">‹ Badminton 360</RouterLink>
         <img src="/icon-192.png" alt="Badminton 360" class="w-14 h-14 rounded-2xl mb-3 shadow-lg" />
         <h1 class="font-display text-3xl sm:text-4xl font-extrabold leading-tight">The Badminton 360 Blog</h1>
@@ -50,9 +50,9 @@ onMounted(async () => {
       </div>
     </header>
 
-    <main class="max-w-3xl mx-auto px-5 py-8">
-      <div v-if="loading" class="grid gap-5 sm:grid-cols-2">
-        <div v-for="i in 4" :key="i" class="h-64 shimmer rounded-2xl" />
+    <main class="max-w-6xl mx-auto px-5 sm:px-8 py-8">
+      <div v-if="loading" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="i in 6" :key="i" class="h-64 shimmer rounded-2xl" />
       </div>
 
       <div v-else-if="!posts.length" class="card p-10 text-center">
@@ -61,7 +61,7 @@ onMounted(async () => {
         <p class="text-sm text-slate-400">Check back soon for badminton tips and guides.</p>
       </div>
 
-      <div v-else class="grid gap-5 sm:grid-cols-2">
+      <div v-else class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <RouterLink v-for="p in posts" :key="p.slug" :to="`/blog/${p.slug}`"
           class="card overflow-hidden hover:-translate-y-0.5 hover:shadow-lg transition-all group">
           <div class="aspect-[16/9] bg-slate-100 overflow-hidden">
