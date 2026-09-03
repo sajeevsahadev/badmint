@@ -2,12 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 import DateField from '../components/DateField.vue'
 
 const router = useRouter()
 const route  = useRoute()
+const { user } = useAuth()
 const { currentClub } = useClub()
 const cur = computed(() => currentClub.value?.clubs?.currency || 'AED')
 
@@ -46,12 +48,14 @@ const creating = ref(false)
 const createErr = ref('')
 
 const statusOptions = [
-  { v: 'all',              l: 'All',   icon: '🏆' },
-  { v: 'draft',            l: 'Draft', icon: '📝' },
-  { v: 'registration_open', l: 'Open', icon: '📬' },
-  { v: 'live',             l: 'Live',  icon: '🔴' },
-  { v: 'completed',        l: 'Done',  icon: '✅' },
+  { v: 'all',               l: 'All',         admin: false },
+  { v: 'draft',             l: 'Draft',       admin: true  },  // unpublished — admins only
+  { v: 'registration_open', l: 'Registering', admin: false },  // sign-ups open
+  { v: 'live',              l: 'Live',        admin: false },  // matches being played
+  { v: 'completed',         l: 'Finished',    admin: false },  // results are in
 ]
+// Draft (unpublished) tournaments are only visible to app admins.
+const visibleStatuses = computed(() => statusOptions.filter(o => !o.admin || isAppAdmin.value))
 
 const emirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
@@ -108,9 +112,9 @@ async function create() {
 }
 
 const statusLabel = s => ({
-  draft: 'Draft', registration_open: 'Registration Open',
-  registration_closed: 'Closed', live: '🔴 Live',
-  completed: 'Completed', cancelled: 'Cancelled'
+  draft: 'Draft', registration_open: 'Registering',
+  registration_closed: 'Registration closed', live: '🔴 Live now',
+  completed: 'Finished', cancelled: 'Cancelled'
 }[s] ?? s)
 
 const statusClass = s => ({
@@ -125,11 +129,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 </script>
 
 <template>
-  <div>
-    <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-3 fade-up" @click="router.back()">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
-      Back
-    </button>
+  <div class="mx-auto max-w-2xl px-4 pb-4" :class="user ? 'pt-16' : 'pt-5'">
     <PageHeader icon="🏆" title="Tournaments" subtitle="Doubles elimination & round-robin events">
       <template #help>
         <div class="text-xs space-y-1.5">
@@ -140,15 +140,15 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
       </template>
     </PageHeader>
 
-    <!-- Status filter — segmented control -->
-    <div class="flex gap-1 p-1 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-x-auto mb-3 fade-up">
-      <button v-for="opt in statusOptions" :key="opt.v"
-        class="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
-        :class="filterStatus === opt.v
-          ? 'bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow'
-          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'"
+    <!-- Status filter — underline tabs -->
+    <div class="flex items-center gap-6 border-b border-slate-200 mb-4 overflow-x-auto fade-up">
+      <button v-for="opt in visibleStatuses" :key="opt.v"
+        class="relative shrink-0 pb-2.5 text-sm font-semibold whitespace-nowrap transition-colors"
+        :class="filterStatus === opt.v ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'"
         @click="filterStatus = opt.v; load()">
-        <span>{{ opt.icon }}</span>{{ opt.l }}
+        {{ opt.l }}
+        <span v-if="filterStatus === opt.v"
+          class="absolute left-0 right-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500" />
       </button>
     </div>
 
