@@ -113,9 +113,9 @@ describe('seedAdvancers + buildKnockoutFromGroups', () => {
     { label: 'A', teams: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] },
     { label: 'B', teams: [{ id: 'b1' }, { id: 'b2' }, { id: 'b3' }] },
   ]
-  it('cross-seeds winners then runners-up in reversed order', () => {
-    // rank0 (winners) in group order: a1,b1 ; rank1 (runners-up) reversed: b2,a2
-    expect(seedAdvancers(groups, 2).map(t => t.id)).toEqual(['a1', 'b1', 'b2', 'a2'])
+  it('seeds winners then runners-up in group order', () => {
+    // winners in group order: a1,b1 ; then runners-up in group order: a2,b2
+    expect(seedAdvancers(groups, 2).map(t => t.id)).toEqual(['a1', 'b1', 'a2', 'b2'])
   })
   it('builds a knockout of the advancers (4 teams → 3 matches, 1 final)', () => {
     const m = buildKnockoutFromGroups(groups, 2)
@@ -124,6 +124,15 @@ describe('seedAdvancers + buildKnockoutFromGroups', () => {
     // only advancers appear
     const teamIds = new Set(m.flatMap(ids).filter(Boolean))
     expect([...teamIds].sort()).toEqual(['a1', 'a2', 'b1', 'b2'])
+  })
+  it('never pairs two teams from the same group in the first knockout round', () => {
+    const m = buildKnockoutFromGroups(groups, 2)  // 4 teams → 2 first-round matches
+    const grp = id => (id && id[0])               // 'a'/'b' from the id
+    for (const match of m.filter(x => x.round === 1)) {
+      if (match.team_a_id && match.team_b_id) {
+        expect(grp(match.team_a_id)).not.toBe(grp(match.team_b_id))
+      }
+    }
   })
   it('needs at least 2 advancers', () => {
     expect(buildKnockoutFromGroups([{ label: 'A', teams: [{ id: 'x' }] }], 2)).toHaveLength(0)

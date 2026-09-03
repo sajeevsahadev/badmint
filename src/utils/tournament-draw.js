@@ -208,16 +208,15 @@ export function computeGroupStandings(matches) {
 
 // ── Seed the teams that advance out of the group stage ──
 // groups: [{ label, teams: [teamObj ordered BEST→worst by standings] }].
-// Cross-seeds so a group winner and its runner-up land on opposite halves and
-// two teams from the same group can only meet in the final. Returns the
-// advancers with explicit seeds 1..N (so the knockout preserves this order).
+// Group winners take the top seeds (in group order), then runners-up, etc.
+// Combined with the standard bracket seed spread (seedOrder), this pairs each
+// group winner against a runner-up from a DIFFERENT group in the first knockout
+// round, so two teams from the same group cannot meet before the semifinals.
 export function seedAdvancers(groups, advancePerGroup = 2) {
   const per = Math.max(1, advancePerGroup | 0)
   const out = []
   for (let rank = 0; rank < per; rank++) {
-    // Alternate group order each rank so winners and runners-up interleave.
-    const order = rank % 2 === 0 ? groups : [...groups].reverse()
-    for (const g of order) if (g.teams && g.teams[rank]) out.push(g.teams[rank])
+    for (const g of groups) if (g.teams && g.teams[rank]) out.push(g.teams[rank])
   }
   return out.map((t, i) => ({ id: t.id, seed: i + 1 }))
 }
