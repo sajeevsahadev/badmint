@@ -130,12 +130,23 @@ async function main() {
     writeFileSync(`dist/blog/${p.slug}/index.html`, page)
   }
 
+  // Public tournaments (for the sitemap) — only is_public ones, via SECURITY DEFINER RPC.
+  let tournaments = []
+  try {
+    const tr = await fetch(`${URL}/rest/v1/rpc/get_public_tournaments`, {
+      method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }, body: '{}',
+    })
+    if (tr.ok) tournaments = await tr.json()
+  } catch { /* ignore */ }
+  console.log(`[prerender] ${tournaments.length} public tournaments`)
+
   // sitemap
   const urls = [
     { loc: `${BASE}/`, freq: 'weekly', pri: '1.0' },
     { loc: `${BASE}/explore`, freq: 'daily', pri: '0.9' },
     { loc: `${BASE}/blog`, freq: 'weekly', pri: '0.8' },
     ...posts.map(p => ({ loc: `${BASE}/blog/${p.slug}`, freq: 'monthly', pri: '0.7', lastmod: (p.updated_at || p.publish_at || '').slice(0, 10) })),
+    ...tournaments.map(t => ({ loc: `${BASE}/t/${t.share_code}`, freq: 'daily', pri: '0.7', lastmod: (t.updated_at || '').slice(0, 10) })),
     { loc: `${BASE}/login`, freq: 'monthly', pri: '0.6' },
   ]
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(u => `  <url>\n    <loc>${u.loc}</loc>${u.lastmod ? `\n    <lastmod>${u.lastmod}</lastmod>` : ''}\n    <changefreq>${u.freq}</changefreq>\n    <priority>${u.pri}</priority>\n  </url>`).join('\n')}\n</urlset>\n`

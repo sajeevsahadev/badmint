@@ -302,7 +302,14 @@ async function deleteTournament() {
                   <p class="text-xs text-slate-500 mt-0.5">
                     {{ r.player_a_name }}<span v-if="r.player_b_name"> · {{ r.player_b_name }}</span>
                   </p>
+                  <p v-if="r.contact_phone" class="text-xs text-slate-500 mt-1">
+                    📞 <a :href="'tel:' + r.contact_phone" class="text-neon">{{ r.contact_phone }}</a>
+                  </p>
                   <p v-if="r.notes" class="text-xs text-slate-400 mt-1 italic">{{ r.notes }}</p>
+                  <span class="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5"
+                    :class="r.payment_status === 'confirmed' ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'">
+                    {{ r.payment_status === 'confirmed' ? 'Paid' : 'Payment pending' }}
+                  </span>
                 </div>
                 <div class="flex gap-2 shrink-0">
                   <button class="btn-success text-xs px-3 py-1.5"

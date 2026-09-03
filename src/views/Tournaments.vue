@@ -21,8 +21,8 @@ const showCreate  = ref(false)
 
 // Create form
 const form = ref({
-  name: '', format: 'single_elimination', max_teams: 8,
-  entry_fee: '', prize_info: '', venue: '', emirate: '',
+  name: '', draw_type: 'knockout', max_teams: 8, courts: 1, is_public: true,
+  entry_fee: '', prize_info: '', venue: '', venue_address: '', maps_url: '', emirate: '',
   registration_end: '', start_date: '', description: ''
 })
 const creating = ref(false)
@@ -77,12 +77,16 @@ async function create() {
   const { data, error } = await supabase.rpc('create_tournament', {
     p_club_id:         currentClub.value.club_id,
     p_name:            form.value.name.trim(),
-    p_format:          form.value.format,
+    p_draw_type:       form.value.draw_type,
     p_max_teams:       Number(form.value.max_teams) || 8,
+    p_courts:          Number(form.value.courts) || 1,
+    p_is_public:       form.value.is_public,
+    p_maps_url:        form.value.maps_url || null,
     p_description:     form.value.description || null,
     p_entry_fee:       form.value.entry_fee ? Number(form.value.entry_fee) : null,
     p_prize_info:      form.value.prize_info || null,
     p_venue:           form.value.venue || null,
+    p_venue_address:   form.value.venue_address || null,
     p_emirate:         form.value.emirate || null,
     p_registration_end: form.value.registration_end || null,
     p_start_date:      form.value.start_date || null,
@@ -240,16 +244,31 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Format</label>
-              <select v-model="form.format" class="input">
-                <option value="single_elimination">Knock-out</option>
-                <option value="round_robin">Round Robin</option>
+              <label class="label">Draw type</label>
+              <select v-model="form.draw_type" class="input">
+                <option value="knockout">Knock-out (eliminator)</option>
+                <option value="groups_knockout">Round-robin + knock-out</option>
+                <option value="round_robin">Round-robin only</option>
               </select>
             </div>
             <div>
               <label class="label">Max Teams</label>
               <select v-model="form.max_teams" class="input">
                 <option v-for="n in [4,8,12,16,24,32]" :key="n" :value="n">{{ n }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Courts (parallel)</label>
+              <input v-model="form.courts" type="number" min="1" max="12" class="input" />
+            </div>
+            <div>
+              <label class="label">Visibility</label>
+              <select v-model="form.is_public" class="input">
+                <option :value="true">🌍 Public page</option>
+                <option :value="false">🔒 Private (link only)</option>
               </select>
             </div>
           </div>
@@ -271,6 +290,15 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
           <div>
             <label class="label">Venue</label>
             <input v-model="form.venue" class="input" placeholder="Sports complex, court name…" />
+          </div>
+          <div>
+            <label class="label">Address</label>
+            <input v-model="form.venue_address" class="input" placeholder="Street / area, city" />
+          </div>
+          <div>
+            <label class="label">Google Maps link (location) <span class="text-slate-400 font-normal">— optional</span></label>
+            <input v-model="form.maps_url" class="input" placeholder="Paste the Google Maps share link" />
+            <p class="text-[11px] text-slate-400 mt-1">In Google Maps: search the venue → Share → Copy link → paste here. Players get a “Get directions” button.</p>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
