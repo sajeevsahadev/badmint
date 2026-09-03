@@ -74,9 +74,13 @@ const statusClass = computed(() => ({
 const shareUrl = computed(() => t.value ? `${SEO_BASE}/t/${t.value.share_code}` : SEO_BASE)
 const teamName = id => teams.value.find(x => x.id === id)?.team_name
 
+// This page serves both /t/:code (share link) and /tournament/:id (in-app);
+// get_public_tournament resolves either a share_code or a raw id.
+const routeKey = () => route.params.code || route.params.id
+
 async function load(silent = false) {
   if (!silent) { loading.value = true; notFound.value = false }
-  const { data: res } = await supabase.rpc('get_public_tournament', { p_code: route.params.code })
+  const { data: res } = await supabase.rpc('get_public_tournament', { p_code: routeKey() })
   if (!silent) loading.value = false
   if (!res) { if (!silent) notFound.value = true; return }
   data.value = res
@@ -105,7 +109,19 @@ function tick() {
 }
 onMounted(() => { load(); pollTimer = setInterval(tick, 12000) })
 onUnmounted(() => clearInterval(pollTimer))
-watch(() => route.params.code, () => load())
+watch(() => routeKey(), () => load())
+
+const canManage      = computed(() => !!data.value?.can_manage)
+const myRegistration = computed(() => data.value?.my_registration ?? null)
+const withdrawing = ref(false)
+async function withdrawTeam() {
+  if (!myRegistration.value || withdrawing.value) return
+  if (!confirm('Withdraw your team from this tournament?')) return
+  withdrawing.value = true
+  const { error } = await supabase.rpc('withdraw_registration', { p_reg_id: myRegistration.value.id })
+  withdrawing.value = false
+  if (!error) load()
+}
 
 async function copyLink() {
   try { await navigator.clipboard.writeText(shareUrl.value); copied.value = true; setTimeout(() => copied.value = false, 1800) } catch { /* ignore */ }
@@ -195,8 +211,38 @@ const lightbox = ref(null)
           </button>
         </div>
 
+        <!-- Director manage bar -->
+        <RouterLink v-if="canManage" :to="`/tournament/${t.id}/manage`"
+          class="card card-violet p-4 flex items-center gap-3 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
+          <div class="text-2xl shrink-0">⚙️</div>
+          <div class="flex-1 min-w-0">
+            <p class="font-display font-bold text-violet">Manage tournament</p>
+            <p class="text-xs text-slate-500 mt-0.5">Approvals, draw, live scores & results</p>
+          </div>
+          <span class="text-violet text-sm shrink-0">→</span>
+        </RouterLink>
+
+        <!-- My registration status -->
+        <div v-if="myRegistration" class="card p-4">
+          <div class="flex items-center gap-3">
+            <div class="text-2xl shrink-0">📝</div>
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-slate-800 text-sm truncate">Your team: {{ myRegistration.team_name }}</p>
+              <p class="text-xs mt-0.5"
+                :class="myRegistration.status === 'confirmed' ? 'text-emerald-600' : 'text-amber-600'">
+                {{ myRegistration.status === 'confirmed' ? '✓ Confirmed' : '⏳ Awaiting approval' }}
+                <span v-if="myRegistration.payment_status !== 'confirmed'" class="text-slate-400"> · payment pending</span>
+              </p>
+            </div>
+            <button v-if="['registration_open','draft'].includes(t.status)"
+              class="btn-ghost text-xs px-3 py-1.5 shrink-0" :disabled="withdrawing" @click="withdrawTeam">
+              {{ withdrawing ? '…' : 'Withdraw' }}
+            </button>
+          </div>
+        </div>
+
         <!-- Register CTA -->
-        <RouterLink v-if="t.status === 'registration_open'" :to="`/tournament/${t.id}/register`"
+        <RouterLink v-if="t.status === 'registration_open' && !myRegistration" :to="`/tournament/${t.id}/register`"
           class="card-neon p-5 flex items-center gap-4 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
           <div class="text-3xl shrink-0">📝</div>
           <div class="flex-1 min-w-0">

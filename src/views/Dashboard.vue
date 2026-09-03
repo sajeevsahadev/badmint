@@ -7,12 +7,13 @@ import { useClub } from '../composables/useClub'
 import InfoTip from '../components/InfoTip.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
-import { TOURNAMENTS_ENABLED } from '../config/features'
+import { useFeatures } from '../composables/useFeatures'
 
 const router = useRouter()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
+const { flags } = useFeatures()
 
 // ── Data ──────────────────────────────────────────────────────────────
 const board           = ref([])
@@ -143,7 +144,7 @@ async function loadClubData() {
 }
 
 async function loadTournaments() {
-  if (!TOURNAMENTS_ENABLED) return
+  if (!flags.tournaments_enabled) return
   const { data } = await supabase.rpc('get_tournaments', {
     p_club_id: null, p_status: null, p_emirate: null
   })
@@ -156,6 +157,8 @@ async function loadTournaments() {
 
 onMounted(load)
 watch(currentClub, load)
+// Feature flags load asynchronously; once tournaments turn on, pull the list.
+watch(() => flags.tournaments_enabled, on => { if (on) loadTournaments() })
 
 // ── Computed ──────────────────────────────────────────────────────────
 const isMe = p => p.user_id === user.value?.id
@@ -394,6 +397,47 @@ const fmtDate = d => d
       </div>
       <span class="text-slate-300 shrink-0">→</span>
     </RouterLink>
+
+    <!-- ── Tournaments (runtime feature flag) ───────────────────────── -->
+    <div v-if="flags.tournaments_enabled">
+      <div class="flex items-center justify-between mb-2">
+        <p class="label">🏆 Tournaments</p>
+        <RouterLink to="/tournaments" class="text-xs font-medium text-neon hover:opacity-75 transition">View all →</RouterLink>
+      </div>
+
+      <div v-if="myClubTournaments.length" class="space-y-2">
+        <div v-for="t in myClubTournaments" :key="t.id"
+          class="card p-4 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
+          @click="router.push('/tournament/' + t.id)">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">
+                {{ t.confirmed_teams ?? 0 }}/{{ t.max_teams }} teams
+                <span v-if="t.start_date"> · {{ new Date(t.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) }}</span>
+              </p>
+            </div>
+            <span class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border"
+              :class="t.status === 'live' ? 'bg-rose-50 text-rose-600 border-rose-200'
+                : t.status === 'registration_open' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                : t.status === 'completed' ? 'bg-slate-100 text-slate-500 border-slate-200'
+                : 'bg-amber-50 text-amber-600 border-amber-200'">
+              {{ (t.status || '').replace('_', ' ') }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <RouterLink v-else to="/tournaments"
+        class="card p-4 flex items-center gap-3 no-underline hover:border-cyan-400/40 transition-all">
+        <div class="text-2xl shrink-0">🏆</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-slate-800 text-sm">Run or join a tournament</p>
+          <p class="text-xs text-slate-500">Doubles knock-out & round-robin events</p>
+        </div>
+        <span class="text-slate-300 text-sm">→</span>
+      </RouterLink>
+    </div>
 
     <!-- ── Your clubs ───────────────────────────────────────────────── -->
     <div>

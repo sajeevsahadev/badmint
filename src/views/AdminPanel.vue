@@ -3,10 +3,21 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import { useFeatures } from '../composables/useFeatures'
 import { deviceIcon, deviceName } from '../utils/formatters'
 
 const router = useRouter()
 const { user } = useAuth()
+const { flags, reloadFeatures } = useFeatures()
+
+// ── Feature flags ──
+const flagBusy = ref('')
+async function toggleFlag(key) {
+  flagBusy.value = key
+  const { error } = await supabase.rpc('set_feature_flag', { p_key: key, p_enabled: !flags[key] })
+  if (!error) await reloadFeatures()
+  flagBusy.value = ''
+}
 
 // ── Tab state ──
 const tab = ref('stats')
@@ -471,6 +482,25 @@ const statItems = computed(() => !stats.value ? [] : [
 
       <!-- ── STATS ─────────────────────────────────────────────────────── -->
       <div v-if="tab === 'stats'" class="space-y-4 fade-up">
+        <!-- Feature flags -->
+        <div class="card p-4">
+          <p class="text-xs font-bold text-slate-600 mb-3">🚩 Feature flags</p>
+          <div class="flex items-center gap-3">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-slate-800">Tournaments</p>
+              <p class="text-[11px] text-slate-400">Show the tournament module to all users.</p>
+            </div>
+            <button
+              class="relative w-12 h-7 rounded-full transition-colors shrink-0"
+              :class="flags.tournaments_enabled ? 'bg-emerald-500' : 'bg-slate-300'"
+              :disabled="flagBusy === 'tournaments_enabled'"
+              @click="toggleFlag('tournaments_enabled')">
+              <span class="absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all"
+                :class="flags.tournaments_enabled ? 'left-6' : 'left-1'" />
+            </button>
+          </div>
+        </div>
+
         <div v-if="!stats" class="card p-8 text-center text-slate-400">Loading stats…</div>
         <template v-else>
           <div class="grid grid-cols-2 gap-3">

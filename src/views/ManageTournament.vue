@@ -7,6 +7,7 @@ import { useClub } from '../composables/useClub'
 import DateField from '../components/DateField.vue'
 import { generateDraw, buildKnockoutFromGroups, assignCourts, computeGroupStandings } from '../utils/tournament-draw'
 import { championCard, announcementCard, downloadDataUrl } from '../utils/tournament-share'
+import { uploadClubImage } from '../lib/r2Upload'
 
 const route  = useRoute()
 const router = useRouter()
@@ -322,40 +323,51 @@ const matchStatusClass = s => ({
   scheduled: 'border-cyan-200/50 bg-white',
 }[s] ?? 'border-slate-200 bg-white')
 
-// ── Photos & media ──
-const photos    = computed(() => data.value?.photos ?? [])
-const newPhoto  = ref({ url: '', caption: '' })
-const photoBusy = ref(false)
-const media     = ref({ cover: '', group: '' })
-const mediaBusy = ref(false)
+// ── Photos & media (Cloudflare R2 upload, compressed like chat) ──
+const photos       = computed(() => data.value?.photos ?? [])
+const media        = ref({ cover: '', group: '' })
+const photoCaption = ref('')
+const photoBusy    = ref(false)
+const mediaBusy    = ref('')   // '' | 'cover' | 'group'
 
-async function addPhoto() {
-  if (!newPhoto.value.url.trim()) return
+async function onPickPhoto(e) {
+  const file = e.target.files?.[0]; e.target.value = ''
+  if (!file) return
   photoBusy.value = true; err.value = ''
-  const { error } = await supabase.rpc('add_tournament_photo', {
-    p_tournament_id: tour.value.id, p_url: newPhoto.value.url.trim(),
-    p_caption: newPhoto.value.caption.trim() || null, p_kind: 'gallery',
-  })
-  photoBusy.value = false
-  if (error) { err.value = error.message; return }
-  newPhoto.value = { url: '', caption: '' }
-  await load()
+  try {
+    const { url, thumbUrl } = await uploadClubImage(file, tour.value.club_id)
+    const { error } = await supabase.rpc('add_tournament_photo', {
+      p_tournament_id: tour.value.id, p_url: url, p_thumb_url: thumbUrl,
+      p_caption: photoCaption.value.trim() || null, p_kind: 'gallery',
+    })
+    if (error) throw new Error(error.message)
+    photoCaption.value = ''
+    await load()
+  } catch (e2) { err.value = e2.message || 'Upload failed' }
+  finally { photoBusy.value = false }
 }
 async function removePhoto(id) {
   const { error } = await supabase.rpc('delete_tournament_photo', { p_photo_id: id })
   if (error) { err.value = error.message; return }
   await load()
 }
-async function saveMedia() {
-  mediaBusy.value = true; err.value = ''; ok.value = ''
-  const { error } = await supabase.rpc('set_tournament_media', {
-    p_tournament_id: tour.value.id,
-    p_cover_url: media.value.cover.trim() || null,
-    p_group_url: media.value.group.trim() || null,
-  })
-  mediaBusy.value = false
-  if (error) { err.value = error.message; return }
-  ok.value = 'Media saved'; await load()
+async function onPickMedia(e, which) {
+  const file = e.target.files?.[0]; e.target.value = ''
+  if (!file) return
+  mediaBusy.value = which; err.value = ''; ok.value = ''
+  try {
+    const { url } = await uploadClubImage(file, tour.value.club_id)
+    const { error } = await supabase.rpc('set_tournament_media', {
+      p_tournament_id: tour.value.id,
+      p_cover_url: which === 'cover' ? url : (media.value.cover || null),
+      p_group_url: which === 'group' ? url : (media.value.group || null),
+    })
+    if (error) throw new Error(error.message)
+    media.value[which] = url
+    ok.value = (which === 'cover' ? 'Cover' : 'Group') + ' photo saved'
+    await load()
+  } catch (e2) { err.value = e2.message || 'Upload failed' }
+  finally { mediaBusy.value = '' }
 }
 
 // ── Share images ──
@@ -776,36 +788,48 @@ async function deleteTournament() {
           {{ settingsBusy ? 'Saving…' : 'Save Changes' }}
         </button>
 
-        <!-- Photos & media -->
+        <!-- Photos & media (uploaded to Cloudflare R2, compressed) -->
         <div class="card p-4 space-y-4">
           <p class="text-xs font-bold text-slate-600">📸 Photos & Media</p>
-          <div>
-            <label class="label">Cover image URL</label>
-            <input v-model="media.cover" class="input" placeholder="https://…  (used for share previews)" />
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Cover image</label>
+              <div class="aspect-video rounded-xl bg-slate-100 overflow-hidden mb-2 flex items-center justify-center">
+                <img v-if="media.cover" :src="media.cover" alt="Cover" class="w-full h-full object-cover" />
+                <span v-else class="text-2xl text-slate-300">🖼️</span>
+              </div>
+              <label class="btn-ghost w-full text-xs text-center cursor-pointer block">
+                {{ mediaBusy === 'cover' ? 'Uploading…' : (media.cover ? 'Replace' : 'Upload') }}
+                <input type="file" accept="image/*" class="hidden" :disabled="mediaBusy === 'cover'" @change="e => onPickMedia(e, 'cover')" />
+              </label>
+            </div>
+            <div>
+              <label class="label">Group photo</label>
+              <div class="aspect-video rounded-xl bg-slate-100 overflow-hidden mb-2 flex items-center justify-center">
+                <img v-if="media.group" :src="media.group" alt="Group" class="w-full h-full object-cover" />
+                <span v-else class="text-2xl text-slate-300">👥</span>
+              </div>
+              <label class="btn-ghost w-full text-xs text-center cursor-pointer block">
+                {{ mediaBusy === 'group' ? 'Uploading…' : (media.group ? 'Replace' : 'Upload') }}
+                <input type="file" accept="image/*" class="hidden" :disabled="mediaBusy === 'group'" @change="e => onPickMedia(e, 'group')" />
+              </label>
+            </div>
           </div>
-          <div>
-            <label class="label">Group photo URL</label>
-            <input v-model="media.group" class="input" placeholder="https://…  (shown large on the public page)" />
-          </div>
-          <button class="btn-ghost w-full text-sm" :disabled="mediaBusy" @click="saveMedia">
-            {{ mediaBusy ? 'Saving…' : 'Save cover / group photo' }}
-          </button>
 
           <div class="border-t border-slate-100 pt-3">
-            <label class="label">Add gallery photo</label>
-            <input v-model="newPhoto.url" class="input mb-2" placeholder="Image URL" />
-            <div class="flex gap-2">
-              <input v-model="newPhoto.caption" class="input flex-1" placeholder="Caption (optional)" />
-              <button class="btn-primary px-4 text-sm shrink-0" :disabled="photoBusy || !newPhoto.url" @click="addPhoto">
-                {{ photoBusy ? '…' : 'Add' }}
-              </button>
-            </div>
-            <p class="text-[10px] text-slate-400 mt-1">Paste an image link (e.g. from Google Photos, Imgur). Uploads coming soon.</p>
+            <label class="label">Gallery photos</label>
+            <input v-model="photoCaption" class="input mb-2" placeholder="Caption for the next photo (optional)" />
+            <label class="btn-primary w-full text-sm text-center cursor-pointer block">
+              {{ photoBusy ? '⏳ Uploading…' : '＋ Add photo' }}
+              <input type="file" accept="image/*" class="hidden" :disabled="photoBusy" @change="onPickPhoto" />
+            </label>
+            <p class="text-[10px] text-slate-400 mt-1">Photos are compressed automatically before upload.</p>
           </div>
 
           <div v-if="photos.length" class="grid grid-cols-3 gap-2">
-            <div v-for="p in photos" :key="p.id" class="relative aspect-square rounded-lg overflow-hidden bg-slate-100 group">
-              <img :src="p.url" :alt="p.caption || ''" class="w-full h-full object-cover" loading="lazy" />
+            <div v-for="p in photos" :key="p.id" class="relative aspect-square rounded-lg overflow-hidden bg-slate-100">
+              <img :src="p.thumb_url || p.url" :alt="p.caption || ''" class="w-full h-full object-cover" loading="lazy" />
               <button class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center"
                 @click="removePhoto(p.id)">✕</button>
             </div>

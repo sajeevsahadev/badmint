@@ -10,6 +10,7 @@ import { useSession } from './composables/useSession'
 import { useTheme } from './composables/useTheme'
 import { useBiometricLock } from './composables/useBiometricLock'
 import { usePushNotifications } from './composables/usePushNotifications'
+import { loadFeatures } from './composables/useFeatures'
 import { migrateOwnAvatarIfNeeded } from './lib/avatarStorage'
 import OnboardingGuide  from './components/OnboardingGuide.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
@@ -24,6 +25,8 @@ const { isLocked, armOnBoot, unlock } = useBiometricLock()
 const { resyncIfNeeded } = usePushNotifications()
 const route  = useRoute()
 const router = useRouter()
+
+loadFeatures()   // fetch runtime feature flags once on boot (public + logged-in)
 
 const unlocking = ref(false)
 const unlockErr = ref('')
