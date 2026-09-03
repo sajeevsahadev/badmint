@@ -1,11 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import DateField from '../components/DateField.vue'
-import { generateDraw } from '../utils/tournament-draw'
+import { generateDraw, buildKnockoutFromGroups, assignCourts, computeGroupStandings } from '../utils/tournament-draw'
+import { championCard, announcementCard, downloadDataUrl } from '../utils/tournament-share'
 
 const route  = useRoute()
 const router = useRouter()
@@ -50,11 +51,37 @@ async function load() {
       end_date:         d.tournament.end_date ?? '',
       max_teams:        d.tournament.max_teams ?? 8,
     }
+    media.value = {
+      cover: d.tournament.cover_photo_url ?? '',
+      group: d.tournament.group_photo_url ?? '',
+    }
   }
   loading.value = false
 }
 
-onMounted(load)
+// ── Live updates: reload (debounced) when matches/tournament change ──
+let channel = null
+let reloadTimer = null
+function scheduleReload() {
+  clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => { load() }, 400)
+}
+onMounted(() => {
+  load()
+  channel = supabase
+    .channel('tour-manage-' + route.params.id)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'tournament_matches', filter: 'tournament_id=eq.' + route.params.id },
+      scheduleReload)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'tournaments', filter: 'id=eq.' + route.params.id },
+      scheduleReload)
+    .subscribe()
+})
+onUnmounted(() => {
+  clearTimeout(reloadTimer)
+  if (channel) supabase.removeChannel(channel)
+})
 
 const tour          = computed(() => data.value?.tournament)
 const registrations = computed(() => data.value?.registrations ?? [])
@@ -62,6 +89,33 @@ const matches       = computed(() => data.value?.matches ?? [])
 
 const confirmed = computed(() => registrations.value.filter(r => r.status === 'confirmed'))
 const pending   = computed(() => registrations.value.filter(r => r.status === 'pending'))
+
+// ── Group stage (groups_knockout) ──
+const isGroups        = computed(() => tour.value?.draw_type === 'groups_knockout')
+const groupMatches    = computed(() => matches.value.filter(m => m.stage === 'group'))
+const knockoutMatches = computed(() => matches.value.filter(m => m.stage && m.stage !== 'group'))
+const knockoutExists  = computed(() => knockoutMatches.value.length > 0)
+const groupStageDone  = computed(() =>
+  groupMatches.value.length > 0 && groupMatches.value.every(m => m.status === 'completed' || m.status === 'bye'))
+const nameFor = id => registrations.value.find(r => r.id === id)?.team_name || 'TBD'
+const groupStandings = computed(() =>
+  computeGroupStandings(matches.value).map(g => ({
+    ...g,
+    teams: g.teams.map(t => ({ ...t, name: nameFor(t.id) })),
+  })))
+
+// Sectioned match list for round_robin / groups_knockout rendering.
+const flatSections = computed(() => {
+  if (isGroups.value) {
+    const secs = groupStandings.value.map(g => ({
+      key: 'g-' + g.label, title: 'Group ' + g.label,
+      matches: groupMatches.value.filter(m => m.group_label === g.label),
+    }))
+    if (knockoutExists.value) secs.push({ key: 'ko', title: 'Knockout', matches: knockoutMatches.value })
+    return secs
+  }
+  return [{ key: 'all', title: '', matches: matches.value }]
+})
 
 const roundsMap = computed(() => {
   const m = {}
@@ -140,6 +194,24 @@ async function generateBracket() {
     ? 'Group stage generated! Tournament is now Live.'
     : 'Draw generated! Tournament is now Live.'
   tab.value = 'bracket'
+  await load()
+}
+
+// ── Generate the knockout stage from finished group standings ──
+async function generateKnockout() {
+  err.value = ''; ok.value = ''; busy.value = 'knockout'
+  const standings = computeGroupStandings(matches.value)
+    .map(g => ({ label: g.label, teams: g.teams.map(t => ({ id: t.id })) }))
+  const per = tour.value.advance_per_group || 2
+  let ko = buildKnockoutFromGroups(standings, per, { stage: 'knockout' })
+  if (!ko.length) { busy.value = ''; err.value = 'Not enough teams advanced to build a knockout.'; return }
+  assignCourts(ko, tour.value.courts || 1)
+  const { error } = await supabase.rpc('save_knockout_stage', {
+    p_tournament_id: tour.value.id, p_matches: ko,
+  })
+  busy.value = ''
+  if (error) { err.value = error.message; return }
+  ok.value = 'Knockout stage generated from group standings!'
   await load()
 }
 
@@ -250,6 +322,70 @@ const matchStatusClass = s => ({
   scheduled: 'border-cyan-200/50 bg-white',
 }[s] ?? 'border-slate-200 bg-white')
 
+// ── Photos & media ──
+const photos    = computed(() => data.value?.photos ?? [])
+const newPhoto  = ref({ url: '', caption: '' })
+const photoBusy = ref(false)
+const media     = ref({ cover: '', group: '' })
+const mediaBusy = ref(false)
+
+async function addPhoto() {
+  if (!newPhoto.value.url.trim()) return
+  photoBusy.value = true; err.value = ''
+  const { error } = await supabase.rpc('add_tournament_photo', {
+    p_tournament_id: tour.value.id, p_url: newPhoto.value.url.trim(),
+    p_caption: newPhoto.value.caption.trim() || null, p_kind: 'gallery',
+  })
+  photoBusy.value = false
+  if (error) { err.value = error.message; return }
+  newPhoto.value = { url: '', caption: '' }
+  await load()
+}
+async function removePhoto(id) {
+  const { error } = await supabase.rpc('delete_tournament_photo', { p_photo_id: id })
+  if (error) { err.value = error.message; return }
+  await load()
+}
+async function saveMedia() {
+  mediaBusy.value = true; err.value = ''; ok.value = ''
+  const { error } = await supabase.rpc('set_tournament_media', {
+    p_tournament_id: tour.value.id,
+    p_cover_url: media.value.cover.trim() || null,
+    p_group_url: media.value.group.trim() || null,
+  })
+  mediaBusy.value = false
+  if (error) { err.value = error.message; return }
+  ok.value = 'Media saved'; await load()
+}
+
+// ── Share images ──
+const makingImg = ref('')
+async function makeAnnouncement() {
+  makingImg.value = 'announce'; try { await document.fonts.ready } catch { /* ignore */ }
+  try {
+    const url = announcementCard({
+      name: tour.value.name, clubName: tour.value.club_name,
+      dateLabel: tour.value.start_date || 'Date TBC', venue: tour.value.venue,
+      entryFee: tour.value.entry_fee, shareUrl: `https://badminton360.app/t/${tour.value.share_code}`,
+      statusText: tour.value.status === 'registration_open' ? 'REGISTRATION OPEN' : 'TOURNAMENT',
+    })
+    downloadDataUrl(url, `${tour.value.name}-announcement.png`)
+  } finally { makingImg.value = '' }
+}
+async function makeChampionCard() {
+  makingImg.value = 'champ'; try { await document.fonts.ready } catch { /* ignore */ }
+  const nm = id => registrations.value.find(r => r.id === id)?.team_name
+  try {
+    const url = championCard({
+      name: tour.value.name, clubName: tour.value.club_name, dateLabel: tour.value.start_date || '',
+      winner: nm(tour.value.winner_registration_id),
+      runnerUp: nm(tour.value.runner_up_registration_id),
+      third: nm(tour.value.third_registration_id),
+    })
+    downloadDataUrl(url, `${tour.value.name}-champions.png`)
+  } finally { makingImg.value = '' }
+}
+
 // ── Delete tournament ──
 const showDeleteModal   = ref(false)
 const deleteConfirmText = ref('')
@@ -328,6 +464,23 @@ async function deleteTournament() {
             {{ busy === 'bracket' ? '⏳ Generating…' : '🎯 Generate Bracket & Go Live' }}
           </button>
         </div>
+      </div>
+
+      <!-- Results + share images -->
+      <div v-if="tour.status === 'completed' && tour.winner_registration_id" class="card card-amber p-4 mb-4">
+        <p class="text-xs font-bold text-slate-600 mb-2">🏆 Final results</p>
+        <div class="space-y-1 text-sm">
+          <p class="font-bold text-slate-800">🥇 {{ tour.winner_team_name || registrations.find(r => r.id === tour.winner_registration_id)?.team_name }}</p>
+        </div>
+        <button class="btn-primary w-full mt-3 py-2 text-sm" :disabled="makingImg" @click="makeChampionCard">
+          {{ makingImg === 'champ' ? '…' : '🏆 Download champion card' }}
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="makeAnnouncement">
+          {{ makingImg === 'announce' ? '…' : '📣 Announcement image' }}
+        </button>
+        <a class="btn-ghost text-xs px-3 py-1.5" :href="'/t/' + tour.share_code" target="_blank" rel="noopener">🔗 Public page ↗</a>
       </div>
 
       <!-- Tabs -->
@@ -436,36 +589,69 @@ async function deleteTournament() {
         </div>
 
         <!-- Round-robin / group-stage list with score entry -->
-        <div v-else-if="tour.draw_type === 'round_robin' || tour.draw_type === 'groups_knockout'" class="space-y-2">
-          <div v-for="m in matches" :key="m.id"
-            class="card p-3 border transition"
-            :class="m.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-cyan-200/40'">
-            <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
-              {{ m.stage === 'group' ? 'Group ' + m.group_label : 'Round ' + m.round }}<span v-if="m.court"> · Court {{ m.court }}</span>
+        <div v-else-if="tour.draw_type === 'round_robin' || tour.draw_type === 'groups_knockout'" class="space-y-4">
+
+          <!-- Group standings (groups_knockout) -->
+          <div v-if="isGroups && groupStandings.length" class="space-y-3">
+            <div v-for="g in groupStandings" :key="'st-' + g.label" class="card p-3">
+              <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Group {{ g.label }} · Standings</div>
+              <div class="space-y-1">
+                <div v-for="(t, i) in g.teams" :key="t.id"
+                  class="flex items-center gap-2 text-xs"
+                  :class="i < (tour.advance_per_group || 2) ? 'text-slate-800 font-semibold' : 'text-slate-400'">
+                  <span class="w-4 text-center">{{ i + 1 }}</span>
+                  <span v-if="i < (tour.advance_per_group || 2)" class="text-emerald-500">▲</span>
+                  <span v-else class="w-3" />
+                  <span class="flex-1 min-w-0 truncate">{{ t.name }}</span>
+                  <span class="tabular-nums">{{ t.wins }}W–{{ t.losses }}L</span>
+                  <span class="tabular-nums text-slate-400 w-10 text-right">{{ t.setDiff >= 0 ? '+' : '' }}{{ t.setDiff }}</span>
+                </div>
+              </div>
             </div>
-            <div class="flex items-center gap-3">
-              <div class="flex-1 min-w-0 text-xs font-semibold text-slate-700 truncate">
-                {{ m.team_a_name ?? 'TBD' }}
+          </div>
+
+          <!-- Generate knockout when groups are done -->
+          <div v-if="isGroups && groupStageDone && !knockoutExists" class="card card-violet p-4 text-center">
+            <p class="text-sm font-semibold text-slate-700 mb-1">Group stage complete 🎉</p>
+            <p class="text-xs text-slate-500 mb-3">Top {{ tour.advance_per_group || 2 }} of each group advance.</p>
+            <button class="btn-primary w-full py-2.5 text-sm" :disabled="busy === 'knockout'" @click="generateKnockout">
+              {{ busy === 'knockout' ? '⏳ Generating…' : '🏆 Generate Knockout Bracket' }}
+            </button>
+          </div>
+
+          <!-- Match sections -->
+          <div v-for="sec in flatSections" :key="sec.key" class="space-y-2">
+            <h3 v-if="sec.title" class="label">{{ sec.title }}</h3>
+            <div v-for="m in sec.matches" :key="m.id"
+              class="card p-3 border transition"
+              :class="m.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-cyan-200/40'">
+              <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+                {{ m.stage === 'group' ? 'Group ' + m.group_label : 'Round ' + m.round }}<span v-if="m.court"> · Court {{ m.court }}</span>
               </div>
-              <div class="shrink-0 flex items-center gap-2 font-extrabold text-sm">
-                <span :class="m.winner_id === m.team_a_id ? 'text-emerald-700' : 'text-slate-400'">
-                  {{ m.score_a ?? '—' }}
-                </span>
-                <span class="text-slate-300 font-normal text-xs">vs</span>
-                <span :class="m.winner_id === m.team_b_id ? 'text-emerald-700' : 'text-slate-400'">
-                  {{ m.score_b ?? '—' }}
-                </span>
+              <div class="flex items-center gap-3">
+                <div class="flex-1 min-w-0 text-xs font-semibold text-slate-700 truncate">
+                  {{ m.team_a_name ?? 'TBD' }}
+                </div>
+                <div class="shrink-0 flex items-center gap-2 font-extrabold text-sm">
+                  <span :class="m.winner_id === m.team_a_id ? 'text-emerald-700' : 'text-slate-400'">
+                    {{ m.score_a ?? '—' }}
+                  </span>
+                  <span class="text-slate-300 font-normal text-xs">vs</span>
+                  <span :class="m.winner_id === m.team_b_id ? 'text-emerald-700' : 'text-slate-400'">
+                    {{ m.score_b ?? '—' }}
+                  </span>
+                </div>
+                <div class="flex-1 min-w-0 text-right text-xs font-semibold text-slate-700 truncate">
+                  {{ m.team_b_name ?? 'TBD' }}
+                </div>
+                <button v-if="m.team_a_id && m.team_b_id && m.status !== 'completed' && m.status !== 'bye'"
+                  class="shrink-0 btn-ghost text-xs px-2 py-1"
+                  @click="openScoreModal(m)">
+                  Score
+                </button>
+                <span v-else-if="m.status === 'completed'"
+                  class="shrink-0 text-[10px] text-emerald-600 font-bold">Done</span>
               </div>
-              <div class="flex-1 min-w-0 text-right text-xs font-semibold text-slate-700 truncate">
-                {{ m.team_b_name ?? 'TBD' }}
-              </div>
-              <button v-if="m.status !== 'completed' && m.status !== 'bye'"
-                class="shrink-0 btn-ghost text-xs px-2 py-1"
-                @click="openScoreModal(m)">
-                Score
-              </button>
-              <span v-else-if="m.status === 'completed'"
-                class="shrink-0 text-[10px] text-emerald-600 font-bold">Done</span>
             </div>
           </div>
         </div>
@@ -589,6 +775,42 @@ async function deleteTournament() {
         <button class="btn-primary w-full" :disabled="settingsBusy" @click="saveSettings">
           {{ settingsBusy ? 'Saving…' : 'Save Changes' }}
         </button>
+
+        <!-- Photos & media -->
+        <div class="card p-4 space-y-4">
+          <p class="text-xs font-bold text-slate-600">📸 Photos & Media</p>
+          <div>
+            <label class="label">Cover image URL</label>
+            <input v-model="media.cover" class="input" placeholder="https://…  (used for share previews)" />
+          </div>
+          <div>
+            <label class="label">Group photo URL</label>
+            <input v-model="media.group" class="input" placeholder="https://…  (shown large on the public page)" />
+          </div>
+          <button class="btn-ghost w-full text-sm" :disabled="mediaBusy" @click="saveMedia">
+            {{ mediaBusy ? 'Saving…' : 'Save cover / group photo' }}
+          </button>
+
+          <div class="border-t border-slate-100 pt-3">
+            <label class="label">Add gallery photo</label>
+            <input v-model="newPhoto.url" class="input mb-2" placeholder="Image URL" />
+            <div class="flex gap-2">
+              <input v-model="newPhoto.caption" class="input flex-1" placeholder="Caption (optional)" />
+              <button class="btn-primary px-4 text-sm shrink-0" :disabled="photoBusy || !newPhoto.url" @click="addPhoto">
+                {{ photoBusy ? '…' : 'Add' }}
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">Paste an image link (e.g. from Google Photos, Imgur). Uploads coming soon.</p>
+          </div>
+
+          <div v-if="photos.length" class="grid grid-cols-3 gap-2">
+            <div v-for="p in photos" :key="p.id" class="relative aspect-square rounded-lg overflow-hidden bg-slate-100 group">
+              <img :src="p.url" :alt="p.caption || ''" class="w-full h-full object-cover" loading="lazy" />
+              <button class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center"
+                @click="removePhoto(p.id)">✕</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Danger zone -->
         <div class="border-t border-red-100 pt-4 mt-2">

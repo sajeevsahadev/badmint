@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { applySeo, setJsonLd, SEO_BASE } from '../lib/seo'
+import { computeGroupStandings } from '../utils/tournament-draw'
+import { championCard, announcementCard, downloadDataUrl } from '../utils/tournament-share'
 
 const route = useRoute()
 const data   = ref(null)
@@ -12,6 +14,47 @@ const copied = ref(false)
 
 const t     = computed(() => data.value?.tournament ?? null)
 const teams = computed(() => data.value?.teams ?? [])
+const matches   = computed(() => data.value?.matches ?? [])
+const standings = computed(() => data.value?.standings ?? [])
+const photos    = computed(() => data.value?.photos ?? [])
+const isGroups     = computed(() => t.value?.draw_type === 'groups_knockout')
+const isRoundRobin = computed(() => t.value?.draw_type === 'round_robin')
+
+const byPos = (a, b) => a.position - b.position
+const roundName = (r, total) => {
+  const fromEnd = total - r
+  if (fromEnd === 0) return 'Final'
+  if (fromEnd === 1) return 'Semi-finals'
+  if (fromEnd === 2) return 'Quarter-finals'
+  return 'Round ' + r
+}
+const groupStandings = computed(() =>
+  computeGroupStandings(matches.value).map(g => ({
+    ...g, teams: g.teams.map(x => ({ ...x, name: teamName(x.id) })),
+  })))
+const matchSections = computed(() => {
+  const ms = matches.value.filter(m => m.status !== 'bye')
+  if (!ms.length) return []
+  const rounds = (list) => {
+    const total = Math.max(...list.map(m => m.round))
+    const byR = {}
+    list.forEach(m => { (byR[m.round] ||= []).push(m) })
+    return Object.keys(byR).sort((a, b) => a - b)
+      .map(r => ({ title: roundName(+r, total), matches: byR[r].slice().sort(byPos) }))
+  }
+  if (isRoundRobin.value) return [{ title: 'Matches', matches: ms.slice().sort((a, b) => a.round - b.round || byPos(a, b)) }]
+  if (isGroups.value) {
+    const secs = groupStandings.value.map(g => ({
+      title: 'Group ' + g.label,
+      matches: ms.filter(m => m.stage === 'group' && m.group_label === g.label).sort((a, b) => a.round - b.round || byPos(a, b)),
+    })).filter(s => s.matches.length)
+    const ko = ms.filter(m => m.stage && m.stage !== 'group')
+    if (ko.length) secs.push(...rounds(ko))
+    return secs
+  }
+  return rounds(ms)
+})
+const hasResults = computed(() => matches.value.some(m => m.status === 'completed'))
 
 const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : null
 const dateLabel = computed(() => {
@@ -31,11 +74,11 @@ const statusClass = computed(() => ({
 const shareUrl = computed(() => t.value ? `${SEO_BASE}/t/${t.value.share_code}` : SEO_BASE)
 const teamName = id => teams.value.find(x => x.id === id)?.team_name
 
-async function load() {
-  loading.value = true; notFound.value = false
+async function load(silent = false) {
+  if (!silent) { loading.value = true; notFound.value = false }
   const { data: res } = await supabase.rpc('get_public_tournament', { p_code: route.params.code })
-  loading.value = false
-  if (!res) { notFound.value = true; return }
+  if (!silent) loading.value = false
+  if (!res) { if (!silent) notFound.value = true; return }
   data.value = res
   applySeo({
     title: `${t.value.name} — ${t.value.club_name} | Badminton 360`,
@@ -54,14 +97,53 @@ async function load() {
     url: shareUrl.value,
   })
 }
-onMounted(load)
-watch(() => route.params.code, load)
+// Live: while the tournament is live, silently refresh so followers see scores
+// update without a manual reload. Pauses when the tab is hidden.
+let pollTimer = null
+function tick() {
+  if (document.visibilityState === 'visible' && t.value?.status === 'live') load(true)
+}
+onMounted(() => { load(); pollTimer = setInterval(tick, 12000) })
+onUnmounted(() => clearInterval(pollTimer))
+watch(() => route.params.code, () => load())
 
 async function copyLink() {
   try { await navigator.clipboard.writeText(shareUrl.value); copied.value = true; setTimeout(() => copied.value = false, 1800) } catch { /* ignore */ }
 }
 const waShare = computed(() =>
   `https://wa.me/?text=${encodeURIComponent(`🏸 ${t.value?.name} — ${t.value?.club_name}\n${dateLabel.value}\nFollow the tournament: ${shareUrl.value}`)}`)
+
+// ── Shareable images (Phase 4) ──
+const makingImg = ref('')
+async function ensureFonts() { try { await document.fonts.ready } catch { /* ignore */ } }
+async function shareChampionCard() {
+  makingImg.value = 'champ'; await ensureFonts()
+  try {
+    const url = championCard({
+      name: t.value.name, clubName: t.value.club_name, dateLabel: dateLabel.value,
+      winner: teamName(t.value.winner_registration_id),
+      runnerUp: teamName(t.value.runner_up_registration_id),
+      third: teamName(t.value.third_registration_id),
+    })
+    downloadDataUrl(url, `${t.value.name}-champions.png`)
+  } finally { makingImg.value = '' }
+}
+const announceStatus = computed(() => ({
+  registration_open: 'REGISTRATION OPEN', live: 'LIVE NOW', completed: 'CHAMPIONS CROWNED',
+}[t.value?.status] || 'TOURNAMENT'))
+async function shareAnnouncement() {
+  makingImg.value = 'announce'; await ensureFonts()
+  try {
+    const url = announcementCard({
+      name: t.value.name, clubName: t.value.club_name, dateLabel: dateLabel.value,
+      venue: t.value.venue, entryFee: t.value.entry_fee, shareUrl: shareUrl.value,
+      statusText: announceStatus.value,
+    })
+    downloadDataUrl(url, `${t.value.name}-announcement.png`)
+  } finally { makingImg.value = '' }
+}
+
+const lightbox = ref(null)
 </script>
 
 <template>
@@ -104,6 +186,13 @@ const waShare = computed(() =>
           <span class="text-xs font-semibold text-slate-500 mr-auto">Share this tournament</span>
           <a :href="waShare" target="_blank" rel="noopener" class="btn-ghost text-xs px-3 py-1.5">🟢 WhatsApp</a>
           <button class="btn-ghost text-xs px-3 py-1.5" @click="copyLink">{{ copied ? '✓ Copied' : '🔗 Copy link' }}</button>
+          <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareAnnouncement">
+            {{ makingImg === 'announce' ? '…' : '📣 Poster' }}
+          </button>
+          <button v-if="t.status === 'completed' && t.winner_registration_id"
+            class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareChampionCard">
+            {{ makingImg === 'champ' ? '…' : '🏆 Champion card' }}
+          </button>
         </div>
 
         <!-- Register CTA -->
@@ -151,6 +240,70 @@ const waShare = computed(() =>
           </div>
         </div>
 
+        <!-- Group standings (groups_knockout) -->
+        <div v-if="isGroups && groupStandings.length" class="space-y-3">
+          <p class="label">Group standings</p>
+          <div v-for="g in groupStandings" :key="'g' + g.label" class="card p-3">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">Group {{ g.label }}</div>
+            <div class="space-y-1">
+              <div v-for="(tm, i) in g.teams" :key="tm.id" class="flex items-center gap-2 text-xs"
+                :class="i < (t.advance_per_group || 2) ? 'text-slate-800 font-semibold' : 'text-slate-500'">
+                <span class="w-4 text-center text-slate-400">{{ i + 1 }}</span>
+                <span class="flex-1 min-w-0 truncate">{{ tm.name }}</span>
+                <span class="tabular-nums">{{ tm.wins }}W–{{ tm.losses }}L</span>
+                <span class="tabular-nums text-slate-400 w-10 text-right">{{ tm.setDiff >= 0 ? '+' : '' }}{{ tm.setDiff }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Standings (round robin) -->
+        <div v-else-if="isRoundRobin && standings.length && hasResults" class="card overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 text-xs font-bold text-slate-600">📊 Standings</div>
+          <div class="divide-y divide-slate-50">
+            <div v-for="(s, i) in standings" :key="s.registration_id" class="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span class="w-5 text-center text-xs font-bold" :class="i === 0 ? 'text-amber-500' : 'text-slate-400'">{{ i + 1 }}</span>
+              <span class="flex-1 min-w-0 truncate font-semibold text-slate-700">{{ s.team_name }}</span>
+              <span class="text-xs tabular-nums text-slate-500">{{ s.wins }}W–{{ s.losses }}L</span>
+              <span class="text-xs tabular-nums text-slate-400 w-12 text-right">{{ (s.sets_for - s.sets_against) >= 0 ? '+' : '' }}{{ s.sets_for - s.sets_against }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live results / draw -->
+        <div v-if="matchSections.length">
+          <div class="flex items-center gap-2 mb-2">
+            <p class="label mb-0">{{ hasResults ? 'Results & fixtures' : 'Draw' }}</p>
+            <span v-if="t.status === 'live'" class="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" /> LIVE
+            </span>
+          </div>
+          <div class="space-y-4">
+            <div v-for="sec in matchSections" :key="sec.title" class="space-y-1.5">
+              <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ sec.title }}</p>
+              <div v-for="m in sec.matches" :key="m.id" class="card px-3 py-2.5"
+                :class="m.status === 'completed' ? 'border-emerald-100' : ''">
+                <div class="flex items-center gap-2">
+                  <span v-if="m.court" class="text-[9px] text-slate-400 w-10 shrink-0">Court {{ m.court }}</span>
+                  <span class="flex-1 min-w-0 truncate text-xs font-semibold"
+                    :class="m.winner_id === m.team_a_id ? 'text-emerald-700' : 'text-slate-700'">
+                    {{ m.team_a_name || 'TBD' }}<span v-if="m.winner_id === m.team_a_id"> 🏆</span>
+                  </span>
+                  <span class="shrink-0 flex items-center gap-1.5 font-extrabold text-sm tabular-nums">
+                    <span :class="m.winner_id === m.team_a_id ? 'text-emerald-700' : 'text-slate-400'">{{ m.score_a ?? '–' }}</span>
+                    <span class="text-slate-300 font-normal text-[10px]">vs</span>
+                    <span :class="m.winner_id === m.team_b_id ? 'text-emerald-700' : 'text-slate-400'">{{ m.score_b ?? '–' }}</span>
+                  </span>
+                  <span class="flex-1 min-w-0 truncate text-right text-xs font-semibold"
+                    :class="m.winner_id === m.team_b_id ? 'text-emerald-700' : 'text-slate-700'">
+                    <span v-if="m.winner_id === m.team_b_id">🏆 </span>{{ m.team_b_name || 'TBD' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Teams -->
         <div>
           <div class="flex items-center justify-between mb-2">
@@ -172,10 +325,31 @@ const waShare = computed(() =>
           </div>
         </div>
 
+        <!-- Photos -->
+        <div v-if="t.group_photo_url || photos.length">
+          <p class="label mb-2">📸 Photos</p>
+          <img v-if="t.group_photo_url" :src="t.group_photo_url" alt="Group photo"
+            class="w-full rounded-2xl mb-2 cursor-zoom-in object-cover" loading="lazy"
+            @click="lightbox = t.group_photo_url" />
+          <div v-if="photos.length" class="grid grid-cols-3 gap-2">
+            <button v-for="p in photos" :key="p.id" class="aspect-square rounded-xl overflow-hidden bg-slate-100"
+              @click="lightbox = p.url">
+              <img :src="p.url" :alt="p.caption || 'Tournament photo'" class="w-full h-full object-cover cursor-zoom-in" loading="lazy" />
+            </button>
+          </div>
+        </div>
+
         <div class="text-center py-6">
           <RouterLink to="/" class="text-xs text-slate-400 hover:text-neon transition">Powered by <span class="font-semibold gradient-text">Badminton 360</span> →</RouterLink>
         </div>
       </main>
     </template>
+
+    <!-- Photo lightbox -->
+    <div v-if="lightbox" class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style="background:rgba(0,0,0,.85)" @click="lightbox = null">
+      <img :src="lightbox" alt="" class="max-w-full max-h-full rounded-lg" />
+      <button class="absolute top-4 right-4 text-white/80 text-2xl">✕</button>
+    </div>
   </div>
 </template>

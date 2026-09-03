@@ -113,6 +113,15 @@ export function buildKnockout(orderedTeams, opts = {}) {
       }
     }
   }
+
+  // Status vocabulary (kept in sync with the DB + Manage UI):
+  //   'scheduled' = both teams known, ready to be scored
+  //   'pending'   = a later-round slot still waiting to be fed by a match (TBD)
+  //   'bye'       = walkover, already auto-advanced
+  for (const m of matches) {
+    if (m.status === 'bye') continue
+    m.status = (m.team_a_id && m.team_b_id) ? 'scheduled' : 'pending'
+  }
   return matches
 }
 
@@ -133,7 +142,7 @@ export function buildRoundRobin(orderedTeams, opts = {}) {
       if (a && b) {
         matches.push({
           id: uuid(), round: r + 1, position: pos++, stage,
-          team_a_id: a.id, team_b_id: b.id, winner_id: null, status: 'pending',
+          team_a_id: a.id, team_b_id: b.id, winner_id: null, status: 'scheduled',
           next_match_id: null, next_match_slot: null, group_label: opts.group_label || null,
         })
       }
@@ -163,6 +172,62 @@ export function buildGroups(orderedTeams, groupsCount) {
     groups: groups.map((grp, idx) => ({ label: String.fromCharCode(65 + idx), teamIds: grp.map(t => t.id) })),
     matches,
   }
+}
+
+// ── Compute per-group standings from played group matches ──
+// matches: the tournament's match objects. Returns groups ordered A,B,C…, each
+// with teams ranked best→worst by wins, then set difference, then sets for.
+// Only 'group'-stage matches count. Teams are discovered from the matches so a
+// team with zero games still appears (via any match it's slotted into).
+export function computeGroupStandings(matches) {
+  const groupMap = {}
+  for (const m of (matches || [])) {
+    if (m.stage !== 'group') continue
+    const label = m.group_label || '?'
+    const g = (groupMap[label] ||= {})
+    for (const tid of [m.team_a_id, m.team_b_id]) {
+      if (tid && !g[tid]) g[tid] = { id: tid, wins: 0, losses: 0, played: 0, setsFor: 0, setsAgainst: 0 }
+    }
+    if (m.status === 'completed' && m.team_a_id && m.team_b_id) {
+      const a = g[m.team_a_id], b = g[m.team_b_id]
+      const sa = m.score_a ?? 0, sb = m.score_b ?? 0
+      a.played++; b.played++
+      a.setsFor += sa; a.setsAgainst += sb
+      b.setsFor += sb; b.setsAgainst += sa
+      if (m.winner_id === a.id) { a.wins++; b.losses++ } else { b.wins++; a.losses++ }
+    }
+  }
+  return Object.keys(groupMap).sort().map(label => ({
+    label,
+    teams: Object.values(groupMap[label])
+      .map(t => ({ ...t, setDiff: t.setsFor - t.setsAgainst }))
+      .sort((x, y) => y.wins - x.wins || y.setDiff - x.setDiff || y.setsFor - x.setsFor
+        || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0)),
+  }))
+}
+
+// ── Seed the teams that advance out of the group stage ──
+// groups: [{ label, teams: [teamObj ordered BEST→worst by standings] }].
+// Cross-seeds so a group winner and its runner-up land on opposite halves and
+// two teams from the same group can only meet in the final. Returns the
+// advancers with explicit seeds 1..N (so the knockout preserves this order).
+export function seedAdvancers(groups, advancePerGroup = 2) {
+  const per = Math.max(1, advancePerGroup | 0)
+  const out = []
+  for (let rank = 0; rank < per; rank++) {
+    // Alternate group order each rank so winners and runners-up interleave.
+    const order = rank % 2 === 0 ? groups : [...groups].reverse()
+    for (const g of order) if (g.teams && g.teams[rank]) out.push(g.teams[rank])
+  }
+  return out.map((t, i) => ({ id: t.id, seed: i + 1 }))
+}
+
+// Build the knockout bracket from finished group standings.
+export function buildKnockoutFromGroups(groups, advancePerGroup = 2, opts = {}) {
+  const adv = seedAdvancers(groups, advancePerGroup)
+  if (adv.length < 2) return []
+  const ordered = orderTeams(adv)                 // distinct seeds → ordered by seed asc
+  return buildKnockout(ordered, { stage: 'knockout', ...opts })
 }
 
 // Assign courts within each round so simultaneous matches get different courts.

@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { buildProfileMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
@@ -18,6 +18,7 @@ const adminView  = ref(false)
 const player      = ref(null)
 const profile     = ref(null)
 const stats       = ref(null)
+const honours     = ref([])
 const displayRank = ref(null)   // position within games>0 board — matches /scoreboard
 const matches     = ref([])
 
@@ -227,6 +228,16 @@ async function load() {
   }
 }
 
+// Load tournament honours whenever the player's linked account resolves.
+watch(() => player.value?.user_id, async (uid) => {
+  honours.value = []
+  if (!uid) return
+  const { data } = await supabase.rpc('get_player_tournament_honours', { p_user_id: uid })
+  honours.value = data ?? []
+})
+const medalFor = p => (p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : '🎖️')
+const placeLabel = p => (p === 1 ? 'Champion' : p === 2 ? 'Runner-up' : p === 3 ? 'Third place' : 'Finalist')
+
 onMounted(load)
 
 function loadMoreDates() { visibleDateCount.value += 10 }
@@ -421,6 +432,22 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
       <div class="card p-3 text-center">
         <div class="text-lg font-extrabold text-violet">{{ stats.win_pct }}%</div>
         <div class="text-[9px] text-slate-600 uppercase tracking-wider mt-0.5">Win%</div>
+      </div>
+    </div>
+
+    <!-- Tournament honours -->
+    <div v-if="honours.length" class="card p-4 mb-4 fade-up">
+      <div class="text-xs font-bold text-slate-700 mb-2">🏆 Tournament honours</div>
+      <div class="space-y-1.5">
+        <RouterLink v-for="h in honours" :key="h.tournament_id + '-' + h.placement"
+          :to="'/t/' + h.share_code"
+          class="flex items-center gap-2.5 no-underline rounded-lg px-2 py-1.5 hover:bg-slate-50 transition">
+          <span class="text-lg shrink-0">{{ medalFor(h.placement) }}</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-slate-800 truncate">{{ h.tournament_name }}</p>
+            <p class="text-[11px] text-slate-400 truncate">{{ placeLabel(h.placement) }} · {{ h.club_name }}</p>
+          </div>
+        </RouterLink>
       </div>
     </div>
 

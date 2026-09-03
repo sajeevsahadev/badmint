@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   orderTeams, buildKnockout, buildRoundRobin, buildGroups, assignCourts, generateDraw,
+  seedAdvancers, buildKnockoutFromGroups, computeGroupStandings,
 } from '../utils/tournament-draw'
 
 function seeded(seed = 1) {
@@ -93,6 +94,62 @@ describe('buildGroups', () => {
     expect(matches).toHaveLength(12)
     expect(matches.every(m => m.stage === 'group')).toBe(true)
     expect(new Set(matches.map(m => m.group_label))).toEqual(new Set(['A', 'B']))
+  })
+})
+
+describe('status vocabulary', () => {
+  it('round-1 knockout matches are scheduled, later rounds pending', () => {
+    const m = buildKnockout(mk(8))
+    expect(m.filter(x => x.round === 1).every(x => x.status === 'scheduled')).toBe(true)
+    expect(m.filter(x => x.round > 1).every(x => x.status === 'pending')).toBe(true)
+  })
+  it('round-robin matches are all scheduled', () => {
+    expect(buildRoundRobin(mk(6)).every(x => x.status === 'scheduled')).toBe(true)
+  })
+})
+
+describe('seedAdvancers + buildKnockoutFromGroups', () => {
+  const groups = [
+    { label: 'A', teams: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] },
+    { label: 'B', teams: [{ id: 'b1' }, { id: 'b2' }, { id: 'b3' }] },
+  ]
+  it('cross-seeds winners then runners-up in reversed order', () => {
+    // rank0 (winners) in group order: a1,b1 ; rank1 (runners-up) reversed: b2,a2
+    expect(seedAdvancers(groups, 2).map(t => t.id)).toEqual(['a1', 'b1', 'b2', 'a2'])
+  })
+  it('builds a knockout of the advancers (4 teams → 3 matches, 1 final)', () => {
+    const m = buildKnockoutFromGroups(groups, 2)
+    expect(m).toHaveLength(3)
+    expect(m.filter(x => x.next_match_id === null)).toHaveLength(1)
+    // only advancers appear
+    const teamIds = new Set(m.flatMap(ids).filter(Boolean))
+    expect([...teamIds].sort()).toEqual(['a1', 'a2', 'b1', 'b2'])
+  })
+  it('needs at least 2 advancers', () => {
+    expect(buildKnockoutFromGroups([{ label: 'A', teams: [{ id: 'x' }] }], 2)).toHaveLength(0)
+  })
+})
+
+describe('computeGroupStandings', () => {
+  it('ranks a group by wins then set difference', () => {
+    // Group A: x1 beats x2 (11-2), x1 beats x3 (11-9), x2 beats x3 (11-8)
+    const matches = [
+      { stage: 'group', group_label: 'A', team_a_id: 'x1', team_b_id: 'x2', score_a: 11, score_b: 2, winner_id: 'x1', status: 'completed' },
+      { stage: 'group', group_label: 'A', team_a_id: 'x1', team_b_id: 'x3', score_a: 11, score_b: 9, winner_id: 'x1', status: 'completed' },
+      { stage: 'group', group_label: 'A', team_a_id: 'x2', team_b_id: 'x3', score_a: 11, score_b: 8, winner_id: 'x2', status: 'completed' },
+    ]
+    const g = computeGroupStandings(matches)
+    expect(g).toHaveLength(1)
+    expect(g[0].teams.map(t => t.id)).toEqual(['x1', 'x2', 'x3'])
+    expect(g[0].teams[0].wins).toBe(2)
+  })
+  it('ignores knockout matches and unplayed group games', () => {
+    const matches = [
+      { stage: 'group', group_label: 'A', team_a_id: 'x1', team_b_id: 'x2', status: 'scheduled' },
+      { stage: 'knockout', team_a_id: 'x1', team_b_id: 'x2', score_a: 11, score_b: 3, winner_id: 'x1', status: 'completed' },
+    ]
+    const g = computeGroupStandings(matches)
+    expect(g[0].teams.every(t => t.played === 0)).toBe(true)
   })
 })
 
