@@ -2,16 +2,33 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import PageHeader from '../components/PageHeader.vue'
 import DateField from '../components/DateField.vue'
 
 const router = useRouter()
 const route  = useRoute()
-const { user } = useAuth()
-const { currentClub, isManager } = useClub()
+const { currentClub } = useClub()
 const cur = computed(() => currentClub.value?.clubs?.currency || 'AED')
+
+// Only app admins (super admins) may create tournaments.
+const isAppAdmin = ref(false)
+async function loadRoles() {
+  const { data } = await supabase.rpc('get_my_roles')
+  isAppAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
+  // Deep-link from a play day's Game Plan → open the create sheet (admins only).
+  if (isAppAdmin.value && route.query.create) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date || '')) {
+      form.value.start_date = route.query.date
+      form.value.registration_end = route.query.date
+    }
+    showCreate.value = true
+  }
+}
+
+const drawLabel = t => ({
+  knockout: 'Knock-out', round_robin: 'Round-robin', groups_knockout: 'Groups + KO',
+}[t.draw_type] || (t.format === 'round_robin' ? 'Round-robin' : 'Knock-out'))
 
 const tournaments = ref([])
 const loading     = ref(true)
@@ -29,11 +46,11 @@ const creating = ref(false)
 const createErr = ref('')
 
 const statusOptions = [
-  { v: 'all',              l: 'All' },
-  { v: 'draft',            l: 'Draft' },
-  { v: 'registration_open', l: 'Open' },
-  { v: 'live',             l: 'Live' },
-  { v: 'completed',        l: 'Done' },
+  { v: 'all',              l: 'All',   icon: '🏆' },
+  { v: 'draft',            l: 'Draft', icon: '📝' },
+  { v: 'registration_open', l: 'Open', icon: '📬' },
+  { v: 'live',             l: 'Live',  icon: '🔴' },
+  { v: 'completed',        l: 'Done',  icon: '✅' },
 ]
 
 const emirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
@@ -56,15 +73,7 @@ async function load() {
 
 onMounted(() => {
   load()
-  // Coming from a play day's Game Plan → open the create sheet, prefilled with
-  // that date so a tournament links straight off the session.
-  if (route.query.create && isManager()) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date || '')) {
-      form.value.start_date = route.query.date
-      form.value.registration_end = route.query.date
-    }
-    showCreate.value = true
-  }
+  loadRoles()
 })
 
 const filtered = computed(() => tournaments.value)
@@ -126,30 +135,30 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
         <div class="text-xs space-y-1.5">
           <p><strong>Registration Open</strong> — players can join, director manages registrations.</p>
           <p><strong>Live</strong> — bracket is generated, matches being played.</p>
-          <p><strong>Create</strong> — only club managers and owners can create tournaments.</p>
+          <p><strong>Create</strong> — tournaments are set up by Badminton 360 admins.</p>
         </div>
       </template>
     </PageHeader>
 
-    <!-- Top bar -->
-    <div class="flex items-center justify-between gap-3 mb-4">
-      <!-- Status filter chips -->
-      <div class="flex gap-1.5 overflow-x-auto flex-1">
-        <button v-for="opt in statusOptions" :key="opt.v"
-          class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all"
-          :class="filterStatus === opt.v
-            ? 'bg-cyan-600 text-white border-cyan-600'
-            : 'border-slate-200 text-slate-500 hover:border-cyan-400'"
-          @click="filterStatus = opt.v; load()">
-          {{ opt.l }}
-        </button>
-      </div>
-      <!-- Create button -->
-      <button v-if="isManager()" class="btn-primary shrink-0 px-4 py-2 text-sm"
-        @click="showCreate = true">
-        ＋ Create
+    <!-- Status filter — segmented control -->
+    <div class="flex gap-1 p-1 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-x-auto mb-3 fade-up">
+      <button v-for="opt in statusOptions" :key="opt.v"
+        class="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
+        :class="filterStatus === opt.v
+          ? 'bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow'
+          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'"
+        @click="filterStatus = opt.v; load()">
+        <span>{{ opt.icon }}</span>{{ opt.l }}
       </button>
     </div>
+
+    <!-- Create (super admins only) -->
+    <button v-if="isAppAdmin"
+      class="w-full mb-4 rounded-2xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2
+             bg-gradient-to-r from-cyan-500 to-violet-500 shadow hover:shadow-lg active:scale-[0.99] transition-all"
+      @click="showCreate = true">
+      <span class="text-lg leading-none">＋</span> Create Tournament
+    </button>
 
     <!-- Loading -->
     <div v-if="loading" class="space-y-3">
@@ -173,10 +182,10 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
         {{ filterStatus === 'all' ? 'No tournaments yet' : 'No ' + filterStatus.replace('_',' ') + ' tournaments' }}
       </p>
       <p class="text-slate-400 text-sm mb-3">
-        {{ filterStatus !== 'all' ? 'Try the "All" filter to see other tournaments.' : isManager() ? 'Create the first tournament for your club.' : 'Check back soon for upcoming events.' }}
+        {{ filterStatus !== 'all' ? 'Try the "All" filter to see other tournaments.' : isAppAdmin ? 'Create the first tournament.' : 'Check back soon for upcoming events.' }}
       </p>
-      <p v-if="filterStatus === 'all' && !isManager()" class="text-xs text-slate-300 italic">
-        Tournaments are created by directors. Contact your club admin if you'd like to run one.
+      <p v-if="filterStatus === 'all' && !isAppAdmin" class="text-xs text-slate-300 italic">
+        Tournaments are organised by Badminton 360. Check back soon for upcoming events.
       </p>
     </div>
 
@@ -191,7 +200,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
             <div class="flex items-center gap-2 flex-wrap mb-1">
               <span :class="statusClass(t.status)">{{ statusLabel(t.status) }}</span>
               <span class="badge bg-violet-50 text-violet-700 border border-violet-200">
-                {{ t.format === 'single_elimination' ? 'Knock-out' : 'Round Robin' }}
+                {{ drawLabel(t) }}
               </span>
             </div>
             <h3 class="font-display font-bold text-slate-800 text-base truncate">{{ t.name }}</h3>

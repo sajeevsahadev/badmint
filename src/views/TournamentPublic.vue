@@ -181,6 +181,54 @@ const lightbox = ref(null)
         style="background:linear-gradient(135deg,#0b1220 0%,#0f2a4a 55%,#0a5b74 100%)">
         <div class="absolute inset-0 opacity-20" aria-hidden="true"
           style="background-image:radial-gradient(circle at 20% 30%,#22d3ee55,transparent 40%),radial-gradient(circle at 80% 20%,#a855f755,transparent 40%)"></div>
+
+        <!-- Badminton rally illustration -->
+        <svg class="pointer-events-none absolute right-0 bottom-0 h-full w-auto opacity-50 sm:opacity-70"
+          viewBox="0 0 420 280" fill="none" aria-hidden="true" preserveAspectRatio="xMaxYMax meet">
+          <defs>
+            <linearGradient id="tpPlayer" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#67e8f9" /><stop offset="1" stop-color="#c084fc" />
+            </linearGradient>
+          </defs>
+          <!-- court net -->
+          <path d="M210 250 L210 120" stroke="#ffffff" stroke-width="2" opacity="0.12" />
+          <path d="M188 250 L232 250" stroke="#ffffff" stroke-width="2" opacity="0.12" />
+          <!-- shuttle flight arc -->
+          <path d="M120 150 Q245 20 345 60" stroke="#fde68a" stroke-width="2" stroke-dasharray="3 9"
+            stroke-linecap="round" opacity="0.7" />
+          <circle cx="150" cy="118" r="2" fill="#fde68a" opacity="0.5" />
+          <circle cx="205" cy="70" r="2" fill="#fde68a" opacity="0.6" />
+          <circle cx="270" cy="52" r="2" fill="#fde68a" opacity="0.7" />
+
+          <!-- shuttlecock near the smasher -->
+          <g transform="translate(338 44) rotate(35)">
+            <path d="M0 0 L-7 -16 M0 0 L-2 -17 M0 0 L3 -17 M0 0 L8 -15" stroke="#fef3c7" stroke-width="2" stroke-linecap="round" />
+            <circle cx="0" cy="2" r="4.5" fill="#fef9c3" />
+          </g>
+
+          <!-- Player A — ready/defence (left) -->
+          <g stroke="url(#tpPlayer)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <circle cx="120" cy="112" r="11" fill="url(#tpPlayer)" stroke="none" />
+            <path d="M120 124 L128 172" />
+            <path d="M124 138 L100 146 L82 150" />       <!-- racket arm -->
+            <path d="M124 138 L142 152" />
+            <path d="M128 172 L110 206 L100 230" />       <!-- back leg -->
+            <path d="M128 172 L152 202 L162 228" />       <!-- front leg -->
+            <ellipse cx="74" cy="150" rx="12" ry="8" transform="rotate(-28 74 150)" stroke-width="4" />
+          </g>
+
+          <!-- Player B — jump smash (right) -->
+          <g stroke="url(#tpPlayer)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <circle cx="300" cy="78" r="12" fill="url(#tpPlayer)" stroke="none" />
+            <path d="M300 90 L296 150" />
+            <path d="M300 104 L322 82 L338 58" />         <!-- raised racket arm -->
+            <path d="M300 108 L282 128" />
+            <path d="M296 150 L282 188 L276 214" />        <!-- landing leg -->
+            <path d="M296 150 L318 172 L330 156" />        <!-- tucked leg -->
+            <ellipse cx="343" cy="49" rx="13" ry="9" transform="rotate(38 343 49)" stroke-width="4" />
+          </g>
+        </svg>
+
         <div class="relative max-w-3xl mx-auto px-5 sm:px-8 pt-8 pb-9 safe-area-pt">
           <div class="flex items-center gap-2 mb-3 text-white/70 text-xs">
             <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold" :class="statusClass">{{ statusLabel }}</span>
