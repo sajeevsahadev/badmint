@@ -137,6 +137,7 @@ const initials = n => (n ?? '?').split(' ').map(w => w[0]).slice(0, 2).join('').
 
   <template v-else>
     <button class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-neon transition mb-4"
+      :class="user ? 'mt-[calc(env(safe-area-inset-top,0px)+2.75rem)]' : ''"
       @click="router.back()">← Back</button>
 
     <!-- ── Hero image ── -->

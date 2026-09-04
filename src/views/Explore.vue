@@ -190,7 +190,7 @@ const activityColor = (m30) =>
 <template>
   <!-- Centered column so content doesn't sprawl full-width on desktop
        (max-w is wider than any phone, so mobile layout is unchanged). -->
-  <div class="mx-auto max-w-3xl">
+  <div class="mx-auto max-w-3xl" :class="user ? 'pt-[calc(env(safe-area-inset-top,0px)+3.25rem)]' : ''">
   <!-- Search bar + country filter (clubs only) -->
   <div class="flex gap-2 mb-4 fade-up">
     <div class="relative flex-1">

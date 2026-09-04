@@ -171,7 +171,7 @@ onMounted(loadSchedule)
 </script>
 
 <template>
-  <div class="min-h-screen px-4 py-8 max-w-sm mx-auto">
+  <div class="min-h-screen px-4 pb-8 max-w-sm mx-auto" :class="user ? 'pt-[calc(env(safe-area-inset-top,0px)+3.25rem)]' : 'pt-8'">
 
     <!-- Loading -->
     <div v-if="loading" class="text-center py-16 text-slate-500 animate-pulse">

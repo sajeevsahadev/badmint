@@ -7,7 +7,7 @@ const { user } = useAuth()
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-4 py-6" :class="user ? 'pb-28' : ''">
+  <div class="max-w-2xl mx-auto px-4 pb-6" :class="user ? 'pb-28 pt-[calc(env(safe-area-inset-top,0px)+3.25rem)]' : 'pt-6'">
     <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-cyan-700 transition mb-6" @click="router.back()">‹ Back</button>
 
     <h1 class="font-display text-2xl font-extrabold gradient-text mb-1">Privacy Policy</h1>
