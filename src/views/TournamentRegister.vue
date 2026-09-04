@@ -70,12 +70,12 @@ async function submit() {
   done.value = true
   load()
 }
-const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confirmed', rejected: 'Not accepted' }[s] || s)
+const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confirmed', waitlisted: 'On the waitlist', rejected: 'Not accepted' }[s] || s)
 </script>
 
 <template>
   <div class="min-h-screen" style="background:#eef4ff">
-    <div class="max-w-lg mx-auto px-4 pb-6 pt-16 sm:pt-6">
+    <div class="max-w-lg mx-auto px-4 pb-6 pt-[calc(env(safe-area-inset-top,0px)+3.75rem)] sm:pt-6">
       <RouterLink :to="t ? `/t/${t.share_code}` : '/'" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4">‹ Tournament</RouterLink>
 
       <div v-if="loading" class="space-y-3"><div class="h-24 shimmer rounded-2xl" /><div class="h-64 shimmer rounded-2xl" /></div>
@@ -105,8 +105,14 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
           </div>
           <div class="rounded-xl p-3.5 mt-3 text-sm text-amber-700 leading-relaxed"
             style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25)">
-            Your registration needs to be <strong>approved by the admin</strong>. Please make sure your
-            <strong>entry-fee payment is completed</strong> — the admin will confirm your team once the payment is received.
+            <template v-if="existing && existing.status === 'waitlisted'">
+              You're on the <strong>waitlist</strong> — the tournament is currently full. The organiser will
+              confirm your team if a spot opens up.
+            </template>
+            <template v-else>
+              Your registration needs to be <strong>approved by the admin</strong>. Please make sure your
+              <strong>entry-fee payment is completed</strong> — the admin will confirm your team once the payment is received.
+            </template>
           </div>
           <p v-if="existing" class="text-xs text-slate-500 mt-3 text-center">
             Status: <strong :class="existing.status === 'confirmed' ? 'text-emerald-600' : 'text-amber-600'">{{ statusText(existing.status) }}</strong>
@@ -126,12 +132,14 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
         <div v-else-if="!regOpen" class="card p-6 text-center text-sm text-slate-500">
           Registration is not open for this tournament.
         </div>
-        <div v-else-if="spotsLeft <= 0" class="card p-6 text-center text-sm text-slate-500">
-          This tournament is full.
-        </div>
 
-        <!-- Form -->
+        <!-- Form (waitlist when full) -->
         <div v-else class="card p-5 space-y-3">
+          <div v-if="spotsLeft <= 0" class="rounded-xl p-3 text-xs text-amber-700 leading-relaxed"
+            style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25)">
+            This tournament is <strong>full</strong>. You can still sign up — your team will join the
+            <strong>waitlist</strong> and the organiser will confirm you if a spot opens.
+          </div>
           <label class="block"><span class="label">Team name</span>
             <input v-model="form.team_name" class="input" placeholder="e.g. Smash Bros" /></label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -153,7 +161,7 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
 
           <p v-if="errorMsg" class="text-xs text-rose-500">⚠️ {{ errorMsg }}</p>
           <button class="btn-primary w-full py-3 text-sm" :disabled="submitting" @click="submit">
-            {{ submitting ? 'Submitting…' : 'Submit registration' }}
+            {{ submitting ? 'Submitting…' : (spotsLeft <= 0 ? 'Join the waitlist' : 'Submit registration') }}
           </button>
         </div>
       </template>

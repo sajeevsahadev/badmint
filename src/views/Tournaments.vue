@@ -31,6 +31,8 @@ async function loadRoles() {
 const drawLabel = t => ({
   knockout: 'Knock-out', round_robin: 'Round-robin', groups_knockout: 'Groups + KO',
 }[t.draw_type] || (t.format === 'round_robin' ? 'Round-robin' : 'Knock-out'))
+const catLabel = v => ({ mens_doubles: "Men's Doubles", womens_doubles: "Women's Doubles", mixed_doubles: 'Mixed Doubles' }[v] || null)
+const skillLabel = v => v ? v.charAt(0).toUpperCase() + v.slice(1) : null
 
 const tournaments = ref([])
 const loading     = ref(true)
@@ -41,11 +43,28 @@ const showCreate  = ref(false)
 // Create form
 const form = ref({
   name: '', draw_type: 'knockout', max_teams: 8, courts: 1, is_public: true,
-  entry_fee: '', prize_info: '', venue: '', venue_address: '', maps_url: '', emirate: '',
+  entry_fee: '', currency: '', prize_info: '', venue: '', venue_address: '', maps_url: '', region: '',
+  category: '', skill_level: '', best_of_3: false,
   registration_end: '', start_date: '', description: ''
 })
 const creating = ref(false)
 const createErr = ref('')
+
+// Metadata options (shared with settings labels)
+const categories = [
+  { v: '', l: 'Open (any)' },
+  { v: 'mens_doubles',   l: "Men's Doubles" },
+  { v: 'womens_doubles', l: "Women's Doubles" },
+  { v: 'mixed_doubles',  l: 'Mixed Doubles' },
+]
+const skillLevels = [
+  { v: '', l: 'All levels' },
+  { v: 'beginner',     l: 'Beginner' },
+  { v: 'intermediate', l: 'Intermediate' },
+  { v: 'advanced',     l: 'Advanced' },
+]
+const currencyList = ['AED','USD','EUR','GBP','INR','SAR','QAR','OMR','BHD','KWD','PKR','LKR','PHP','MYR','SGD','AUD','CAD']
+const uaeEmirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
 const statusOptions = [
   { v: 'all',               l: 'All',         admin: false },
@@ -57,7 +76,6 @@ const statusOptions = [
 // Draft (unpublished) tournaments are only visible to app admins.
 const visibleStatuses = computed(() => statusOptions.filter(o => !o.admin || isAppAdmin.value))
 
-const emirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
 
 async function load() {
   loading.value = true
@@ -100,9 +118,13 @@ async function create() {
     p_prize_info:      form.value.prize_info || null,
     p_venue:           form.value.venue || null,
     p_venue_address:   form.value.venue_address || null,
-    p_emirate:         form.value.emirate || null,
+    p_emirate:         form.value.region || null,
     p_registration_end: form.value.registration_end || null,
     p_start_date:      form.value.start_date || null,
+    p_best_of_3:       form.value.best_of_3,
+    p_category:        form.value.category || null,
+    p_skill_level:     form.value.skill_level || null,
+    p_currency:        form.value.currency || cur.value || null,
   })
   creating.value = false
   if (error) { createErr.value = error.message; return }
@@ -129,7 +151,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl px-4 pb-4" :class="user ? 'pt-16' : 'pt-5'">
+  <div class="mx-auto max-w-2xl px-4 pb-4" :class="user ? 'pt-[calc(env(safe-area-inset-top,0px)+3.75rem)]' : 'pt-5'">
     <PageHeader icon="🏆" title="Tournaments" subtitle="Doubles elimination & round-robin events">
       <template #help>
         <div class="text-xs space-y-1.5">
@@ -199,9 +221,10 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap mb-1">
               <span :class="statusClass(t.status)">{{ statusLabel(t.status) }}</span>
-              <span class="badge bg-violet-50 text-violet-700 border border-violet-200">
-                {{ drawLabel(t) }}
-              </span>
+              <span class="badge bg-violet-50 text-violet-700 border border-violet-200">{{ drawLabel(t) }}</span>
+              <span v-if="catLabel(t.category)" class="badge bg-cyan-50 text-cyan-700 border border-cyan-200">{{ catLabel(t.category) }}</span>
+              <span v-if="skillLabel(t.skill_level)" class="badge bg-slate-100 text-slate-500 border border-slate-200">{{ skillLabel(t.skill_level) }}</span>
+              <span v-if="t.best_of_3" class="badge bg-amber-50 text-amber-700 border border-amber-200">Best of 3</span>
             </div>
             <h3 class="font-display font-bold text-slate-800 text-base truncate">{{ t.name }}</h3>
             <p class="text-xs text-slate-500 mt-0.5 truncate">{{ t.club_name }}</p>
@@ -216,7 +239,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
         <div class="mt-3 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
           <span v-if="t.start_date">📅 {{ fmtDate(t.start_date) }}</span>
           <span v-if="t.venue">📍 {{ t.venue }}</span>
-          <span v-if="t.emirate">🇦🇪 {{ t.emirate }}</span>
+          <span v-if="t.emirate">🌍 {{ t.emirate }}</span>
           <span v-if="t.entry_fee">💰 {{ t.currency || cur }} {{ t.entry_fee }}</span>
           <span v-if="t.registration_end && t.status === 'registration_open'"
             class="text-amber-600">
@@ -284,16 +307,44 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Entry Fee ({{ cur }})</label>
+              <label class="label">Category</label>
+              <select v-model="form.category" class="input">
+                <option v-for="c in categories" :key="c.v" :value="c.v">{{ c.l }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Skill level</label>
+              <select v-model="form.skill_level" class="input">
+                <option v-for="s in skillLevels" :key="s.v" :value="s.v">{{ s.l }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Scoring -->
+          <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer">
+            <span>
+              <span class="text-sm font-semibold text-slate-700">Best of 3 games</span>
+              <span class="block text-[11px] text-slate-400">Championship scoring (e.g. 21–18, 19–21, 21–15). Off = single score.</span>
+            </span>
+            <input type="checkbox" v-model="form.best_of_3" class="w-5 h-5 accent-cyan-600 shrink-0" />
+          </label>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Entry Fee</label>
               <input v-model="form.entry_fee" type="number" min="0" class="input" placeholder="0" />
             </div>
             <div>
-              <label class="label">Emirate</label>
-              <select v-model="form.emirate" class="input">
-                <option value="">— Any —</option>
-                <option v-for="e in emirates" :key="e" :value="e">{{ e }}</option>
-              </select>
+              <label class="label">Currency</label>
+              <input v-model="form.currency" list="tourCurrencies" class="input" :placeholder="cur" />
+              <datalist id="tourCurrencies"><option v-for="c in currencyList" :key="c" :value="c" /></datalist>
             </div>
+          </div>
+
+          <div>
+            <label class="label">City / Region</label>
+            <input v-model="form.region" list="tourRegions" class="input" placeholder="e.g. Dubai, London, Bengaluru" />
+            <datalist id="tourRegions"><option v-for="e in uaeEmirates" :key="e" :value="e" /></datalist>
           </div>
 
           <div>

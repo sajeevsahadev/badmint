@@ -55,6 +55,12 @@ const matchSections = computed(() => {
   return rounds(ms)
 })
 const hasResults = computed(() => matches.value.some(m => m.status === 'completed'))
+const catLabel = v => ({ mens_doubles: "Men's Doubles", womens_doubles: "Women's Doubles", mixed_doubles: 'Mixed Doubles' }[v] || null)
+const skillLabel = v => v ? v.charAt(0).toUpperCase() + v.slice(1) : null
+const isFull = computed(() => data.value && t.value ? (data.value.confirmed_count + data.value.pending_count) >= t.value.max_teams : false)
+// Per-game breakdown string for best-of-3 matches, e.g. "21–18, 19–21, 21–15".
+const gamesLine = m => Array.isArray(m.games) && m.games.length
+  ? m.games.map(g => `${g.a}–${g.b}`).join(', ') : ''
 
 const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : null
 const dateLabel = computed(() => {
@@ -234,10 +240,12 @@ const lightbox = ref(null)
           </g>
         </svg>
 
-        <div class="relative max-w-3xl mx-auto px-5 sm:px-8 pt-16 sm:pt-9 pb-9 safe-area-pt">
-          <div class="flex items-center gap-2 mb-3 text-white/70 text-xs">
+        <div class="relative max-w-3xl mx-auto px-5 sm:px-8 pb-9 pt-[calc(env(safe-area-inset-top,0px)+3.75rem)] md:pt-10">
+          <div class="flex items-center gap-2 mb-3 text-white/70 text-xs flex-wrap">
             <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold" :class="statusClass">{{ statusLabel }}</span>
-            <span>🏆 Doubles Tournament</span>
+            <span>🏆 {{ catLabel(t.category) || 'Doubles Tournament' }}</span>
+            <span v-if="skillLabel(t.skill_level)" class="rounded-full bg-white/10 px-2 py-0.5">{{ skillLabel(t.skill_level) }}</span>
+            <span v-if="t.best_of_3" class="rounded-full bg-white/10 px-2 py-0.5">Best of 3</span>
           </div>
           <h1 class="font-display text-3xl sm:text-4xl font-extrabold leading-tight">{{ t.name }}</h1>
           <p class="text-white/80 mt-2 font-medium">{{ t.club_name }}</p>
@@ -283,8 +291,9 @@ const lightbox = ref(null)
               <p class="font-semibold text-slate-800 text-sm truncate">Your team: {{ myRegistration.team_name }}</p>
               <p class="text-xs mt-0.5"
                 :class="myRegistration.status === 'confirmed' ? 'text-emerald-600' : 'text-amber-600'">
-                {{ myRegistration.status === 'confirmed' ? '✓ Confirmed' : '⏳ Awaiting approval' }}
-                <span v-if="myRegistration.payment_status !== 'confirmed'" class="text-slate-400"> · payment pending</span>
+                {{ myRegistration.status === 'confirmed' ? '✓ Confirmed'
+                   : myRegistration.status === 'waitlisted' ? '🕓 On the waitlist' : '⏳ Awaiting approval' }}
+                <span v-if="myRegistration.status !== 'waitlisted' && myRegistration.payment_status !== 'confirmed'" class="text-slate-400"> · payment pending</span>
               </p>
             </div>
             <button v-if="['registration_open','draft'].includes(t.status)"
@@ -299,13 +308,14 @@ const lightbox = ref(null)
           class="card-neon p-5 flex items-center gap-4 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
           <div class="text-3xl shrink-0">📝</div>
           <div class="flex-1 min-w-0">
-            <p class="font-display font-bold gradient-text">Register your team</p>
+            <p class="font-display font-bold gradient-text">{{ isFull ? 'Join the waitlist' : 'Register your team' }}</p>
             <p class="text-xs text-slate-500 mt-0.5">
-              {{ data.confirmed_count }}/{{ t.max_teams }} teams confirmed{{ t.entry_fee ? ` · Entry ${t.currency} ${t.entry_fee}` : '' }}
+              <template v-if="isFull">Tournament is full — join the waitlist</template>
+              <template v-else>{{ data.confirmed_count }}/{{ t.max_teams }} teams confirmed{{ t.entry_fee ? ` · Entry ${t.currency} ${t.entry_fee}` : '' }}</template>
             </p>
             <p v-if="t.registration_end" class="text-[11px] text-amber-600 mt-0.5">Registration closes {{ fmtDate(t.registration_end) }}</p>
           </div>
-          <span class="btn-primary text-sm px-4 py-2 shrink-0">Register →</span>
+          <span class="btn-primary text-sm px-4 py-2 shrink-0">{{ isFull ? 'Waitlist →' : 'Register →' }}</span>
         </RouterLink>
 
         <!-- Key info -->
@@ -400,6 +410,7 @@ const lightbox = ref(null)
                     <span v-if="m.winner_id === m.team_b_id">🏆 </span>{{ m.team_b_name || 'TBD' }}
                   </span>
                 </div>
+                <p v-if="gamesLine(m)" class="text-[10px] text-slate-400 text-center mt-1 tabular-nums">{{ gamesLine(m) }}</p>
               </div>
             </div>
           </div>

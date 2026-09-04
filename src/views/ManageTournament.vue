@@ -43,8 +43,12 @@ async function load() {
       name:             d.tournament.name,
       venue:            d.tournament.venue ?? '',
       venue_address:    d.tournament.venue_address ?? '',
-      emirate:          d.tournament.emirate ?? '',
+      region:           d.tournament.emirate ?? '',
       entry_fee:        d.tournament.entry_fee ?? '',
+      currency:         d.tournament.currency ?? '',
+      category:         d.tournament.category ?? '',
+      skill_level:      d.tournament.skill_level ?? '',
+      best_of_3:        !!d.tournament.best_of_3,
       prize_info:       d.tournament.prize_info ?? '',
       description:      d.tournament.description ?? '',
       registration_end: d.tournament.registration_end ?? '',
@@ -88,8 +92,9 @@ const tour          = computed(() => data.value?.tournament)
 const registrations = computed(() => data.value?.registrations ?? [])
 const matches       = computed(() => data.value?.matches ?? [])
 
-const confirmed = computed(() => registrations.value.filter(r => r.status === 'confirmed'))
-const pending   = computed(() => registrations.value.filter(r => r.status === 'pending'))
+const confirmed  = computed(() => registrations.value.filter(r => r.status === 'confirmed'))
+const pending    = computed(() => registrations.value.filter(r => r.status === 'pending'))
+const waitlisted = computed(() => registrations.value.filter(r => r.status === 'waitlisted'))
 
 // ── Group stage (groups_knockout) ──
 const isGroups        = computed(() => tour.value?.draw_type === 'groups_knockout')
@@ -142,7 +147,20 @@ const roundLabel = (r, total) => {
   return `R${r}`
 }
 
-const emirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
+const uaeEmirates = ['Abu Dhabi','Dubai','Sharjah','Ajman','Umm Al Quwain','Ras Al Khaimah','Fujairah']
+const categories = [
+  { v: '', l: 'Open (any)' },
+  { v: 'mens_doubles', l: "Men's Doubles" },
+  { v: 'womens_doubles', l: "Women's Doubles" },
+  { v: 'mixed_doubles', l: 'Mixed Doubles' },
+]
+const skillLevels = [
+  { v: '', l: 'All levels' },
+  { v: 'beginner', l: 'Beginner' },
+  { v: 'intermediate', l: 'Intermediate' },
+  { v: 'advanced', l: 'Advanced' },
+]
+const currencyList = ['AED','USD','EUR','GBP','INR','SAR','QAR','OMR','BHD','KWD','PKR','LKR','PHP','MYR','SGD','AUD','CAD']
 
 async function setStatus(newStatus) {
   err.value = ''; ok.value = ''; busy.value = 'status'
@@ -264,20 +282,33 @@ function exportDrawPdf() {
 
 function openScoreModal(m) {
   scoreErr.value = ''
-  scoreModal.value = { match: m, scoreA: '', scoreB: '' }
+  scoreModal.value = {
+    match: m,
+    bestOf3: !!tour.value?.best_of_3,
+    scoreA: '', scoreB: '',
+    games: [{ a: '', b: '' }, { a: '', b: '' }, { a: '', b: '' }],
+  }
 }
 
 async function submitScore() {
   scoreErr.value = ''
   const m = scoreModal.value
-  if (!m.scoreA || !m.scoreB) { scoreErr.value = 'Enter both scores'; return }
-  if (Number(m.scoreA) === Number(m.scoreB)) { scoreErr.value = 'Scores cannot be equal'; return }
   scoreBusy.value = true
-  const { error } = await supabase.rpc('record_tournament_result', {
-    p_match_id: m.match.id,
-    p_score_a:  Number(m.scoreA),
-    p_score_b:  Number(m.scoreB),
-  })
+  let error
+  if (m.bestOf3) {
+    const games = m.games.filter(g => g.a !== '' && g.b !== '').map(g => ({ a: Number(g.a), b: Number(g.b) }))
+    if (games.length < 2)                    { scoreErr.value = 'Enter at least 2 games'; scoreBusy.value = false; return }
+    if (games.some(g => g.a === g.b))        { scoreErr.value = 'Each game must have a winner'; scoreBusy.value = false; return }
+    let wa = 0, wb = 0; for (const g of games) (g.a > g.b ? wa++ : wb++)
+    if (Math.max(wa, wb) < 2)                { scoreErr.value = 'One team must win 2 games'; scoreBusy.value = false; return }
+    ;({ error } = await supabase.rpc('record_tournament_games', { p_match_id: m.match.id, p_games: games }))
+  } else {
+    if (m.scoreA === '' || m.scoreB === '')  { scoreErr.value = 'Enter both scores'; scoreBusy.value = false; return }
+    if (Number(m.scoreA) === Number(m.scoreB)) { scoreErr.value = 'Scores cannot be equal'; scoreBusy.value = false; return }
+    ;({ error } = await supabase.rpc('record_tournament_result', {
+      p_match_id: m.match.id, p_score_a: Number(m.scoreA), p_score_b: Number(m.scoreB),
+    }))
+  }
   scoreBusy.value = false
   if (error) { scoreErr.value = error.message; return }
   scoreModal.value = null
@@ -294,11 +325,15 @@ async function saveSettings() {
     p_prize_info:      settings.value.prize_info || null,
     p_venue:           settings.value.venue || null,
     p_venue_address:   settings.value.venue_address || null,
-    p_emirate:         settings.value.emirate || null,
+    p_emirate:         settings.value.region || null,
     p_registration_end: settings.value.registration_end || null,
     p_start_date:      settings.value.start_date || null,
     p_end_date:        settings.value.end_date || null,
     p_max_teams:       Number(settings.value.max_teams) || null,
+    p_best_of_3:       settings.value.best_of_3,
+    p_category:        settings.value.category || null,
+    p_skill_level:     settings.value.skill_level || null,
+    p_currency:        settings.value.currency || null,
   })
   settingsBusy.value = false
   if (error) { err.value = error.message; return }
@@ -571,6 +606,32 @@ async function deleteTournament() {
           </p>
         </div>
 
+        <!-- Waitlist -->
+        <div v-if="waitlisted.length">
+          <h3 class="label mb-2">Waitlist ({{ waitlisted.length }})</h3>
+          <p class="text-[11px] text-slate-400 mb-2">The tournament is full — approve a waitlisted team only after a confirmed team withdraws.</p>
+          <div class="space-y-2">
+            <div v-for="r in waitlisted" :key="r.id" class="card p-4">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-slate-800">{{ r.team_name }}</p>
+                  <p class="text-xs text-slate-500 mt-0.5">
+                    {{ r.player_a_name }}<span v-if="r.player_b_name"> · {{ r.player_b_name }}</span>
+                  </p>
+                  <p v-if="r.contact_phone" class="text-xs text-slate-500 mt-1">
+                    📞 <a :href="'tel:' + r.contact_phone" class="text-neon">{{ r.contact_phone }}</a>
+                  </p>
+                  <span class="inline-block mt-1.5 badge bg-amber-50 text-amber-700 border border-amber-200">Waitlisted</span>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="approve(r.id)">✓ Promote</button>
+                  <button class="btn-danger text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-if="!registrations.length" class="card p-8 text-center text-slate-400 text-sm">
           No registrations yet. Share the tournament link to get sign-ups.
         </div>
@@ -737,17 +798,41 @@ async function deleteTournament() {
               </select>
             </div>
             <div>
-              <label class="label">Emirate</label>
-              <select v-model="settings.emirate" class="input">
-                <option value="">— Any —</option>
-                <option v-for="e in emirates" :key="e" :value="e">{{ e }}</option>
+              <label class="label">Category</label>
+              <select v-model="settings.category" class="input">
+                <option v-for="c in categories" :key="c.v" :value="c.v">{{ c.l }}</option>
               </select>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="label">Entry Fee (AED)</label>
+              <label class="label">Skill level</label>
+              <select v-model="settings.skill_level" class="input">
+                <option v-for="s in skillLevels" :key="s.v" :value="s.v">{{ s.l }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">City / Region</label>
+              <input v-model="settings.region" list="mgrRegions" class="input" placeholder="City / State" />
+              <datalist id="mgrRegions"><option v-for="e in uaeEmirates" :key="e" :value="e" /></datalist>
+            </div>
+          </div>
+          <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer">
+            <span>
+              <span class="text-sm font-semibold text-slate-700">Best of 3 games</span>
+              <span class="block text-[11px] text-slate-400">Championship scoring (21–18, 19–21, 21–15). Off = single score.</span>
+            </span>
+            <input type="checkbox" v-model="settings.best_of_3" class="w-5 h-5 accent-cyan-600 shrink-0" />
+          </label>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="label">Entry Fee</label>
               <input v-model="settings.entry_fee" type="number" min="0" class="input" />
+            </div>
+            <div>
+              <label class="label">Currency</label>
+              <input v-model="settings.currency" list="mgrCurrencies" class="input" :placeholder="tour.currency || 'AED'" />
+              <datalist id="mgrCurrencies"><option v-for="c in currencyList" :key="c" :value="c" /></datalist>
             </div>
             <div>
               <label class="label">Reg. Closes</label>
@@ -774,7 +859,7 @@ async function deleteTournament() {
           </div>
           <div>
             <label class="label">Prize Info</label>
-            <input v-model="settings.prize_info" class="input" placeholder="1st: AED 500…" />
+            <input v-model="settings.prize_info" class="input" :placeholder="`1st: ${tour.currency || 'AED'} 500…`" />
           </div>
           <div>
             <label class="label">Description</label>
@@ -908,18 +993,33 @@ async function deleteTournament() {
         <h3 class="font-display font-bold text-slate-800 text-lg mb-1">Record Result</h3>
         <p class="text-xs text-slate-500 mb-5">
           {{ scoreModal.match.team_a_name ?? 'Team A' }} vs {{ scoreModal.match.team_b_name ?? 'Team B' }}
+          <span v-if="scoreModal.bestOf3" class="text-amber-600 font-semibold"> · Best of 3</span>
         </p>
 
-        <div class="grid grid-cols-2 gap-4 mb-4">
+        <!-- Best of 3: enter each game -->
+        <div v-if="scoreModal.bestOf3" class="space-y-2 mb-4">
+          <div class="flex items-center gap-2 text-[11px] font-semibold text-slate-400 px-1">
+            <span class="flex-1 truncate">{{ scoreModal.match.team_a_name ?? 'A' }}</span>
+            <span class="w-24 text-center">Game</span>
+            <span class="flex-1 truncate text-right">{{ scoreModal.match.team_b_name ?? 'B' }}</span>
+          </div>
+          <div v-for="(g, i) in scoreModal.games" :key="i" class="flex items-center gap-2">
+            <input v-model="g.a" type="number" min="0" class="input flex-1 text-center text-lg font-bold" placeholder="—" />
+            <span class="w-24 text-center text-[11px] text-slate-400">Game {{ i + 1 }}<span v-if="i === 2" class="block">(if needed)</span></span>
+            <input v-model="g.b" type="number" min="0" class="input flex-1 text-center text-lg font-bold" placeholder="—" />
+          </div>
+          <p class="text-[11px] text-slate-400 text-center">Enter 2 games (or 3 if it went to a decider).</p>
+        </div>
+
+        <!-- Single score -->
+        <div v-else class="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label class="label">{{ scoreModal.match.team_a_name ?? 'Team A' }}</label>
-            <input v-model="scoreModal.scoreA" type="number" min="0" class="input text-center text-xl font-bold"
-              placeholder="0" />
+            <input v-model="scoreModal.scoreA" type="number" min="0" class="input text-center text-xl font-bold" placeholder="0" />
           </div>
           <div>
             <label class="label">{{ scoreModal.match.team_b_name ?? 'Team B' }}</label>
-            <input v-model="scoreModal.scoreB" type="number" min="0" class="input text-center text-xl font-bold"
-              placeholder="0" />
+            <input v-model="scoreModal.scoreB" type="number" min="0" class="input text-center text-xl font-bold" placeholder="0" />
           </div>
         </div>
 
