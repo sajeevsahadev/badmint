@@ -161,6 +161,7 @@ const skillLevels = [
   { v: 'advanced', l: 'Advanced' },
 ]
 const currencyList = ['AED','USD','EUR','GBP','INR','SAR','QAR','OMR','BHD','KWD','PKR','LKR','PHP','MYR','SGD','AUD','CAD']
+const gamesLine = m => Array.isArray(m.games) && m.games.length ? m.games.map(g => `${g.a}–${g.b}`).join(', ') : ''
 
 async function setStatus(newStatus) {
   err.value = ''; ok.value = ''; busy.value = 'status'
@@ -725,6 +726,7 @@ async function deleteTournament() {
                 <span v-else-if="m.status === 'completed'"
                   class="shrink-0 text-[10px] text-emerald-600 font-bold">Done</span>
               </div>
+              <p v-if="gamesLine(m)" class="text-[10px] text-slate-400 text-center mt-1 tabular-nums">{{ gamesLine(m) }}</p>
             </div>
           </div>
         </div>
@@ -776,6 +778,7 @@ async function deleteTournament() {
                       Score
                     </button>
                   </div>
+                  <p v-if="gamesLine(m)" class="text-[10px] text-slate-400 text-center mt-1 tabular-nums">{{ gamesLine(m) }}</p>
                 </template>
               </div>
             </div>
