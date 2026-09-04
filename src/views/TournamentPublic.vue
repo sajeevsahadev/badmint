@@ -113,6 +113,11 @@ watch(() => routeKey(), () => load())
 
 const canManage      = computed(() => !!data.value?.can_manage)
 const myRegistration = computed(() => data.value?.my_registration ?? null)
+const regOpen = computed(() => {
+  if (t.value?.status !== 'registration_open') return false
+  if (t.value.registration_end && t.value.registration_end < new Date().toISOString().slice(0, 10)) return false
+  return true
+})
 const withdrawing = ref(false)
 async function withdrawTeam() {
   if (!myRegistration.value || withdrawing.value) return
@@ -152,7 +157,7 @@ async function shareAnnouncement() {
   try {
     const url = announcementCard({
       name: t.value.name, clubName: t.value.club_name, dateLabel: dateLabel.value,
-      venue: t.value.venue, entryFee: t.value.entry_fee, shareUrl: shareUrl.value,
+      venue: t.value.venue, entryFee: t.value.entry_fee ? `${t.value.currency} ${t.value.entry_fee}` : null, shareUrl: shareUrl.value,
       statusText: announceStatus.value,
     })
     downloadDataUrl(url, `${t.value.name}-announcement.png`)
@@ -229,7 +234,7 @@ const lightbox = ref(null)
           </g>
         </svg>
 
-        <div class="relative max-w-3xl mx-auto px-5 sm:px-8 pt-8 pb-9 safe-area-pt">
+        <div class="relative max-w-3xl mx-auto px-5 sm:px-8 pt-16 sm:pt-9 pb-9 safe-area-pt">
           <div class="flex items-center gap-2 mb-3 text-white/70 text-xs">
             <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 font-semibold" :class="statusClass">{{ statusLabel }}</span>
             <span>🏆 Doubles Tournament</span>
@@ -290,14 +295,15 @@ const lightbox = ref(null)
         </div>
 
         <!-- Register CTA -->
-        <RouterLink v-if="t.status === 'registration_open' && !myRegistration" :to="`/tournament/${t.id}/register`"
+        <RouterLink v-if="regOpen && !myRegistration" :to="`/tournament/${t.id}/register`"
           class="card-neon p-5 flex items-center gap-4 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
           <div class="text-3xl shrink-0">📝</div>
           <div class="flex-1 min-w-0">
             <p class="font-display font-bold gradient-text">Register your team</p>
             <p class="text-xs text-slate-500 mt-0.5">
-              {{ data.confirmed_count }}/{{ t.max_teams }} teams confirmed{{ t.entry_fee ? ` · Entry ${t.entry_fee}` : '' }}
+              {{ data.confirmed_count }}/{{ t.max_teams }} teams confirmed{{ t.entry_fee ? ` · Entry ${t.currency} ${t.entry_fee}` : '' }}
             </p>
+            <p v-if="t.registration_end" class="text-[11px] text-amber-600 mt-0.5">Registration closes {{ fmtDate(t.registration_end) }}</p>
           </div>
           <span class="btn-primary text-sm px-4 py-2 shrink-0">Register →</span>
         </RouterLink>
@@ -306,7 +312,8 @@ const lightbox = ref(null)
         <div class="grid sm:grid-cols-2 gap-3">
           <div v-if="t.entry_fee" class="card p-4">
             <p class="text-[11px] uppercase tracking-wide text-slate-400">Entry fee</p>
-            <p class="text-lg font-extrabold text-slate-800">{{ t.entry_fee }}</p>
+            <p class="text-lg font-extrabold text-slate-800">{{ t.currency }} {{ t.entry_fee }}</p>
+            <p class="text-[11px] text-slate-400">per team</p>
           </div>
           <div v-if="t.prize_info" class="card p-4">
             <p class="text-[11px] uppercase tracking-wide text-slate-400">Prizes</p>

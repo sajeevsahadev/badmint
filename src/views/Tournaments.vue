@@ -217,7 +217,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
           <span v-if="t.start_date">📅 {{ fmtDate(t.start_date) }}</span>
           <span v-if="t.venue">📍 {{ t.venue }}</span>
           <span v-if="t.emirate">🇦🇪 {{ t.emirate }}</span>
-          <span v-if="t.entry_fee">💰 {{ cur }} {{ t.entry_fee }}</span>
+          <span v-if="t.entry_fee">💰 {{ t.currency || cur }} {{ t.entry_fee }}</span>
           <span v-if="t.registration_end && t.status === 'registration_open'"
             class="text-amber-600">
             Reg. closes {{ fmtDate(t.registration_end) }}

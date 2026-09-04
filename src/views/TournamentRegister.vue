@@ -18,7 +18,12 @@ const done     = ref(false)
 
 const t = computed(() => data.value?.tournament ?? null)
 const spotsLeft = computed(() => t.value ? Math.max(0, t.value.max_teams - (data.value.confirmed_count + data.value.pending_count)) : 0)
-const regOpen = computed(() => t.value?.status === 'registration_open')
+const regOpen = computed(() => {
+  if (t.value?.status !== 'registration_open') return false
+  // Auto-close once the deadline passes, even if the admin left the status open.
+  if (t.value.registration_end && t.value.registration_end < new Date().toISOString().slice(0, 10)) return false
+  return true
+})
 
 const form = ref({ team_name: '', player_a: '', player_b: '', phone: '', notes: '' })
 
@@ -31,15 +36,10 @@ async function load() {
   data.value = res
   if (user.value) {
     form.value.player_a = user.value.user_metadata?.full_name || ''
-    // Best-effort: has this user already registered?
-    const { data: mine } = await supabase
-      .from('tournament_registrations')
-      .select('id, team_name, status, payment_status')
-      .eq('tournament_id', res.tournament.id)
-      .eq('registered_by', user.value.id)
-      .neq('status', 'rejected')
-      .maybeSingle()
-    existing.value = mine ?? null
+    // The public payload already carries this user's registration (server-side,
+    // RLS-safe). A rejected team may register again, so ignore that status.
+    const mine = res.my_registration
+    existing.value = mine && mine.status !== 'rejected' ? mine : null
   }
   loading.value = false
 }
@@ -75,7 +75,7 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
 
 <template>
   <div class="min-h-screen" style="background:#eef4ff">
-    <div class="max-w-lg mx-auto px-4 py-6">
+    <div class="max-w-lg mx-auto px-4 pb-6 pt-16 sm:pt-6">
       <RouterLink :to="t ? `/t/${t.share_code}` : '/'" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4">‹ Tournament</RouterLink>
 
       <div v-if="loading" class="space-y-3"><div class="h-24 shimmer rounded-2xl" /><div class="h-64 shimmer rounded-2xl" /></div>
@@ -93,7 +93,7 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
           <p class="text-xs text-slate-500 mt-0.5">{{ t.club_name }} · {{ fmtDate(t.start_date) }}</p>
           <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
             <span>{{ spotsLeft }} of {{ t.max_teams }} spots left</span>
-            <span v-if="t.entry_fee">Entry fee: <strong class="text-slate-700">{{ t.entry_fee }}</strong></span>
+            <span v-if="t.entry_fee">Entry fee: <strong class="text-slate-700">{{ t.currency }} {{ t.entry_fee }}</strong></span>
           </div>
         </div>
 
