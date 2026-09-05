@@ -176,12 +176,33 @@ async function setStatus(newStatus) {
   await load()
 }
 
-async function approve(regId) {
-  busy.value = 'reg-' + regId
-  const { error } = await supabase.rpc('approve_registration', { p_reg_id: regId })
-  busy.value = ''
-  if (error) { err.value = error.message; return }
-  await load()
+// Approve with an editable confirmation message → emails the team on confirm.
+const approveModal = ref(null)   // { reg, message }
+function openApprove(r) {
+  err.value = ''
+  approveModal.value = { reg: r, message: `Your request to ${tour.value?.name} is approved.` }
+}
+async function confirmApprove() {
+  const m = approveModal.value
+  busy.value = 'reg-' + m.reg.id
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-registration`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ reg_id: m.reg.id, message: m.message }),
+    })
+    const out = await resp.json()
+    if (!resp.ok) { err.value = out.error || 'Could not approve'; return }
+    approveModal.value = null
+    ok.value = out.emailed ? 'Team confirmed — email sent.' : 'Team confirmed.'
+    await load()
+  } catch { err.value = 'Network error — please retry.' }
+  finally { busy.value = '' }
 }
 
 async function reject(regId) {
@@ -666,7 +687,7 @@ async function deleteTournament() {
                   </span>
                 </div>
                 <div class="flex flex-col gap-2 shrink-0">
-                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="approve(r.id)">✓ Approve</button>
+                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="openApprove(r)">✓ Approve</button>
                   <div class="flex gap-2">
                     <button class="btn-ghost text-xs px-2 py-1.5 flex-1" @click="openEditTeam(r)">Edit</button>
                     <button class="btn-danger text-xs px-2.5 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
@@ -724,7 +745,7 @@ async function deleteTournament() {
                   <span class="inline-block mt-1.5 badge bg-amber-50 text-amber-700 border border-amber-200">Waitlisted</span>
                 </div>
                 <div class="flex flex-col gap-2 shrink-0">
-                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="approve(r.id)">✓ Promote</button>
+                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="openApprove(r)">✓ Promote</button>
                   <div class="flex gap-2">
                     <button class="btn-ghost text-xs px-2 py-1.5 flex-1" @click="openEditTeam(r)">Edit</button>
                     <button class="btn-danger text-xs px-2.5 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
@@ -1230,6 +1251,49 @@ async function deleteTournament() {
           <button class="btn-ghost flex-1" @click="addTeam = null">Cancel</button>
           <button class="btn-primary flex-1" :disabled="addTeamBusy" @click="submitAddTeam">
             {{ addTeamBusy ? 'Saving…' : (addTeam.id ? 'Save changes' : 'Add team') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── Approve + confirm message Modal ── -->
+  <Teleport to="body">
+    <div v-if="approveModal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
+      @click.self="approveModal = null">
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
+        style="background:#f8fafc; border:1px solid rgba(16,185,129,.3)">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-display text-lg font-bold text-emerald-700">Confirm team</h3>
+          <button class="text-slate-400 hover:text-slate-700 text-xl" @click="approveModal = null">✕</button>
+        </div>
+
+        <!-- Verify details -->
+        <div class="rounded-xl bg-white border border-slate-200 p-3 mb-3 text-sm">
+          <p class="font-semibold text-slate-800">{{ approveModal.reg.team_name }}</p>
+          <p class="text-xs text-slate-500 mt-0.5">
+            {{ approveModal.reg.player_a_name }}<span v-if="approveModal.reg.player_b_name"> · {{ approveModal.reg.player_b_name }}</span>
+          </p>
+          <div class="mt-2 space-y-0.5 text-[11px] text-slate-500">
+            <p v-if="approveModal.reg.player_a_phone || approveModal.reg.player_a_email">P1:
+              <span v-if="approveModal.reg.player_a_phone">📞 {{ approveModal.reg.player_a_phone }}</span>
+              <span v-if="approveModal.reg.player_a_email"> ✉️ {{ approveModal.reg.player_a_email }}</span></p>
+            <p v-if="approveModal.reg.player_b_phone || approveModal.reg.player_b_email">P2:
+              <span v-if="approveModal.reg.player_b_phone">📞 {{ approveModal.reg.player_b_phone }}</span>
+              <span v-if="approveModal.reg.player_b_email"> ✉️ {{ approveModal.reg.player_b_email }}</span></p>
+          </div>
+        </div>
+
+        <label class="label">Confirmation message (emailed to the team)</label>
+        <textarea v-model="approveModal.message" rows="3" class="input resize-none"></textarea>
+        <p class="text-[11px] text-slate-400 mt-1">Sent to the players' email(s). Edit the default text if you like.</p>
+
+        <div class="flex gap-3 mt-5">
+          <button class="btn-ghost flex-1" @click="approveModal = null">Cancel</button>
+          <button class="btn-success flex-1" :disabled="busy === 'reg-' + approveModal.reg.id" @click="confirmApprove">
+            {{ busy === 'reg-' + approveModal.reg.id ? 'Confirming…' : '✓ Confirm & email' }}
           </button>
         </div>
       </div>

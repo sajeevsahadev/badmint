@@ -50,6 +50,18 @@ const form = ref({
 const creating = ref(false)
 const createErr = ref('')
 
+// Storytelling intro shown when a user taps "Create Tournament".
+const showIntro = ref(false)
+const introSteps = [
+  { icon: '🏆', title: 'Set it up', text: 'Name it, pick a format — knock-out, round-robin, or groups → knock-out — and set courts, entry fee and dates.' },
+  { icon: '📣', title: 'Open registration', text: 'Share one public link. Players sign up from any phone like a Google Form — no app needed. Both players, one contact.' },
+  { icon: '✅', title: 'Approve teams', text: 'You get an email for every sign-up. Verify the details and approve with an editable confirmation that emails the team.' },
+  { icon: '🎯', title: 'Generate the draw', text: 'Seeded automatically, byes handled, courts assigned. Export the game plan as PDF or Excel.' },
+  { icon: '🔴', title: 'Go live', text: 'Record results (Win / Walkover). The bracket advances itself and followers watch the scores update live.' },
+  { icon: '🥇', title: 'Crown the champions', text: 'Winners get a shareable champion card and land on the player profiles. Add photos to the souvenir page.' },
+]
+function proceedCreate() { showIntro.value = false; showCreate.value = true }
+
 // Metadata options (shared with settings labels)
 const categories = [
   { v: '', l: 'Open (any)' },
@@ -178,7 +190,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
     <button v-if="user"
       class="w-full mb-4 rounded-2xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2
              bg-gradient-to-r from-cyan-500 to-violet-500 shadow hover:shadow-lg active:scale-[0.99] transition-all"
-      @click="showCreate = true">
+      @click="showIntro = true">
       <span class="text-lg leading-none">＋</span> Create Tournament
     </button>
 
@@ -250,6 +262,46 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
       </div>
     </div>
   </div>
+
+  <!-- ── Create Tournament: storytelling intro ── -->
+  <Teleport to="body">
+    <div v-if="showIntro"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.55); backdrop-filter:blur(4px)"
+      @click.self="showIntro = false">
+      <div class="w-full max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden"
+        style="background:#f8fafc; border:1px solid rgba(0,168,204,.25)">
+        <!-- Hero -->
+        <div class="relative text-white px-6 pt-6 pb-5" style="background:linear-gradient(120deg,#0b1220,#0f2a4a 60%,#0a5b74)">
+          <div class="absolute inset-0 opacity-25" aria-hidden="true"
+            style="background-image:radial-gradient(circle at 20% 30%,#22d3ee55,transparent 40%),radial-gradient(circle at 85% 20%,#a855f755,transparent 40%)"></div>
+          <div class="relative">
+            <p class="text-[11px] uppercase tracking-widest text-cyan-300 font-bold">Run a tournament</p>
+            <h2 class="font-display text-2xl font-extrabold leading-tight mt-1">From sign-ups to champions — in one app 🏸</h2>
+            <p class="text-white/80 text-sm mt-1">Here's the whole journey. It takes about a minute to set up.</p>
+          </div>
+        </div>
+        <!-- Steps -->
+        <div class="px-6 py-5 max-h-[52vh] overflow-y-auto">
+          <div v-for="(s, i) in introSteps" :key="i" class="flex gap-3 pb-4 last:pb-0 relative">
+            <div class="flex flex-col items-center shrink-0">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-sm"
+                style="background:linear-gradient(135deg,#00e5ff,#a855f7)">{{ s.icon }}</div>
+              <div v-if="i < introSteps.length - 1" class="w-px flex-1 bg-slate-200 mt-1"></div>
+            </div>
+            <div class="min-w-0 pb-1">
+              <p class="font-bold text-slate-800 text-sm">{{ s.title }}</p>
+              <p class="text-xs text-slate-500 leading-relaxed mt-0.5">{{ s.text }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 pb-6 pt-1 flex gap-3">
+          <button class="btn-ghost flex-1" @click="showIntro = false">Maybe later</button>
+          <button class="btn-primary flex-1" @click="proceedCreate">Create tournament →</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- ── Create Tournament Sheet ── -->
   <Teleport to="body">
