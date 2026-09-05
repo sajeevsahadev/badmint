@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
@@ -193,6 +193,9 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
       @click="showIntro = true">
       <span class="text-lg leading-none">＋</span> Create Tournament
     </button>
+    <RouterLink to="/tournament-guide" class="block text-center text-xs text-slate-400 hover:text-neon transition -mt-2 mb-4">
+      📖 How to run a tournament
+    </RouterLink>
 
     <!-- Loading -->
     <div v-if="loading" class="space-y-3">
@@ -295,9 +298,12 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
             </div>
           </div>
         </div>
-        <div class="px-6 pb-6 pt-1 flex gap-3">
+        <div class="px-6 pb-3 pt-1 flex gap-3">
           <button class="btn-ghost flex-1" @click="showIntro = false">Maybe later</button>
           <button class="btn-primary flex-1" @click="proceedCreate">Create tournament →</button>
+        </div>
+        <div class="px-6 pb-6 text-center">
+          <RouterLink to="/tournament-guide" class="text-xs text-neon font-semibold" @click="showIntro = false">📖 Read the full guide</RouterLink>
         </div>
       </div>
     </div>

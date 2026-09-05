@@ -32,6 +32,7 @@ const routes = [
   { path: '/club/:id',     component: () => import('../views/ClubProfile.vue') },
   { path: '/facility/:id',          component: () => import('../views/FacilityProfile.vue'),    meta: { public: true } },
   { path: '/tournaments',           component: () => import('../views/Tournaments.vue'),         meta: { public: true } },
+  { path: '/tournament-guide',      component: () => import('../views/TournamentGuide.vue'),     meta: { public: true } },
   { path: '/tournaments/:slug/registration', component: () => import('../views/TournamentRegister.vue'), meta: { public: true } },
   { path: '/tournaments/:slug',     component: () => import('../views/TournamentPublic.vue'),    meta: { public: true } },
   { path: '/tournament/:id',        component: () => import('../views/TournamentPublic.vue'),    meta: { public: true } },

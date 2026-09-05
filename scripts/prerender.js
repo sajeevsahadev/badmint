@@ -145,6 +145,7 @@ async function main() {
     { loc: `${BASE}/`, freq: 'weekly', pri: '1.0' },
     { loc: `${BASE}/explore`, freq: 'daily', pri: '0.9' },
     { loc: `${BASE}/blog`, freq: 'weekly', pri: '0.8' },
+    { loc: `${BASE}/tournament-guide`, freq: 'monthly', pri: '0.6' },
     ...posts.map(p => ({ loc: `${BASE}/blog/${p.slug}`, freq: 'monthly', pri: '0.7', lastmod: (p.updated_at || p.publish_at || '').slice(0, 10) })),
     ...tournaments.map(t => ({ loc: `${BASE}/t/${t.share_code}`, freq: 'daily', pri: '0.7', lastmod: (t.updated_at || '').slice(0, 10) })),
     { loc: `${BASE}/login`, freq: 'monthly', pri: '0.6' },
