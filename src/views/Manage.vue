@@ -55,9 +55,17 @@ const joinPolicyNote   = ref(null)
 
 // Shareable club join link — admin distributes this so members request to
 // join THIS specific club directly, without searching among every club.
+// Uses a readable slug (falls back to the id) so the link is trustworthy.
 const joinLinkCopied = ref(false)
+const clubSlug = ref('')
+watch(currentClub, async (c) => {
+  clubSlug.value = ''
+  if (!c?.club_id) return
+  const { data } = await supabase.from('clubs').select('slug').eq('id', c.club_id).maybeSingle()
+  clubSlug.value = data?.slug || ''
+}, { immediate: true })
 const joinLink = computed(() =>
-  currentClub.value ? `${window.location.origin}/join/${currentClub.value.club_id}` : '')
+  currentClub.value ? `${window.location.origin}/join/${clubSlug.value || currentClub.value.club_id}` : '')
 
 function copyJoinLink() {
   navigator.clipboard.writeText(joinLink.value)

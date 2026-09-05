@@ -53,22 +53,24 @@ const directClub  = ref(null)
 const directStep  = ref(null)  // null | 'loading' | 'found' | 'member' | 'pending' | 'requested' | 'error'
 const directError = ref('')
 
-async function loadDirectClub(clubId) {
+async function loadDirectClub(clubKey) {
+  // clubKey is a slug OR a uuid; the RPC resolves either and returns the club.
   directStep.value = 'loading'
-  const { data, error } = await supabase.rpc('get_public_club_by_id', { p_club_id: clubId })
-  if (error || !data?.length) {
+  const { data, error } = await supabase.rpc('get_public_club_by_id', { p_club_id: clubKey })
+  if (error || !data) {
     directStep.value = 'error'
     directError.value = 'This club link is invalid or the club no longer exists.'
     return
   }
-  directClub.value = data[0]
+  directClub.value = data
+  const cid = data.id   // the real club uuid — use it for every operation
 
   await loadClubs()
 
   // Already a member → straight to the club profile, no intro.
-  if (clubs.value.some(c => c.club_id === clubId)) {
+  if (clubs.value.some(c => c.club_id === cid)) {
     sessionStorage.removeItem('bm_skip_intro')
-    router.replace(`/club/${clubId}`)
+    router.replace(`/club/${cid}`)
     return
   }
 
@@ -76,20 +78,20 @@ async function loadDirectClub(clubId) {
   // and open the club profile, skipping the request/approve step entirely.
   if (directClub.value.join_policy === 'public') {
     directStep.value = 'joining'
-    const { error: jerr } = await supabase.rpc('join_club_public', { p_club_id: clubId })
+    const { error: jerr } = await supabase.rpc('join_club_public', { p_club_id: cid })
     if (jerr) { directError.value = jerr.message; directStep.value = 'error'; return }
     await loadClubs()
-    const joined = clubs.value.find(c => c.club_id === clubId)
+    const joined = clubs.value.find(c => c.club_id === cid)
     if (joined) selectClub(joined)
     sessionStorage.removeItem('bm_skip_intro')
-    router.replace(`/club/${clubId}`)
+    router.replace(`/club/${cid}`)
     return
   }
 
   // Open (request+approve) or closed (invite-only) → keep the manual flow.
   const { data: reqRow } = await supabase
     .from('join_requests').select('status')
-    .eq('club_id', clubId).eq('user_id', user.value.id).maybeSingle()
+    .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle()
   directStep.value = reqRow?.status === 'pending' ? 'pending' : 'found'
 }
 

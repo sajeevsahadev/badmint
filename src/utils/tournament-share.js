@@ -159,9 +159,22 @@ function footer(x) {
   x.fillText('Powered by Badminton 360  ·  badminton360.app', W / 2, W - 54)
 }
 
-// Trigger a browser download of a data URL.
+// Trigger a browser download of a data URL. Large data: URLs are blocked by
+// some browsers, so convert to a Blob object URL (much more reliable).
 export function downloadDataUrl(dataUrl, filename) {
-  const a = document.createElement('a')
-  a.href = dataUrl; a.download = filename
-  document.body.appendChild(a); a.click(); a.remove()
+  try {
+    const [head, b64] = dataUrl.split(',')
+    const mime = (head.match(/data:(.*?)(;|$)/) || [])[1] || 'image/png'
+    const bin = atob(b64)
+    const arr = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+    const url = URL.createObjectURL(new Blob([arr], { type: mime }))
+    const a = document.createElement('a')
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  } catch {
+    // Fallback: open the image in a new tab so the user can save it.
+    try { window.open(dataUrl, '_blank') } catch { /* ignore */ }
+  }
 }

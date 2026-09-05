@@ -19,7 +19,7 @@ async function loadRoles() {
   const { data } = await supabase.rpc('get_my_roles')
   isAppAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   // Deep-link from a play day's Game Plan → open the create sheet (admins only).
-  if (isAppAdmin.value && route.query.create) {
+  if (user.value && route.query.create) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date || '')) {
       form.value.start_date = route.query.date
       form.value.registration_end = route.query.date
@@ -74,7 +74,7 @@ const statusOptions = [
   { v: 'completed',         l: 'Finished',    admin: false },  // results are in
 ]
 // Draft (unpublished) tournaments are only visible to app admins.
-const visibleStatuses = computed(() => statusOptions.filter(o => !o.admin || isAppAdmin.value))
+const visibleStatuses = computed(() => statusOptions.filter(o => !o.admin || !!user.value))
 
 
 async function load() {
@@ -157,7 +157,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
         <div class="text-xs space-y-1.5">
           <p><strong>Registration Open</strong> — players can join, director manages registrations.</p>
           <p><strong>Live</strong> — bracket is generated, matches being played.</p>
-          <p><strong>Create</strong> — tournaments are set up by Badminton 360 admins.</p>
+          <p><strong>Create</strong> — any member can run a tournament for their club.</p>
         </div>
       </template>
     </PageHeader>
@@ -175,7 +175,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
     </div>
 
     <!-- Create (super admins only) -->
-    <button v-if="isAppAdmin"
+    <button v-if="user"
       class="w-full mb-4 rounded-2xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2
              bg-gradient-to-r from-cyan-500 to-violet-500 shadow hover:shadow-lg active:scale-[0.99] transition-all"
       @click="showCreate = true">
@@ -204,10 +204,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
         {{ filterStatus === 'all' ? 'No tournaments yet' : 'No ' + filterStatus.replace('_',' ') + ' tournaments' }}
       </p>
       <p class="text-slate-400 text-sm mb-3">
-        {{ filterStatus !== 'all' ? 'Try the "All" filter to see other tournaments.' : isAppAdmin ? 'Create the first tournament.' : 'Check back soon for upcoming events.' }}
-      </p>
-      <p v-if="filterStatus === 'all' && !isAppAdmin" class="text-xs text-slate-300 italic">
-        Tournaments are organised by Badminton 360. Check back soon for upcoming events.
+        {{ filterStatus !== 'all' ? 'Try the "All" filter to see other tournaments.' : user ? 'Create the first tournament for your club.' : 'Sign in to create a tournament, or check back soon.' }}
       </p>
     </div>
 
@@ -215,7 +212,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-AE', { day:'numeric'
     <div v-else class="space-y-3 fade-up">
       <div v-for="t in filtered" :key="t.id"
         class="card p-4 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
-        @click="router.push('/tournament/' + t.id)">
+        @click="router.push('/tournaments/' + (t.slug || t.id))">
 
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1 min-w-0">

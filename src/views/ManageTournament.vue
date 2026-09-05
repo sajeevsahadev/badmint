@@ -73,6 +73,7 @@ function scheduleReload() {
 }
 onMounted(() => {
   load()
+  loadRolesAndAdmins()
   channel = supabase
     .channel('tour-manage-' + route.params.id)
     .on('postgres_changes',
@@ -335,6 +336,18 @@ function openScoreModal(m) {
   }
 }
 
+// Simple outcome scoring: Win = 2, Walkover = 1, Loss = 0 (no point scores).
+async function submitOutcome(sa, sb) {
+  scoreErr.value = ''; scoreBusy.value = true
+  const { error } = await supabase.rpc('record_tournament_result', {
+    p_match_id: scoreModal.value.match.id, p_score_a: sa, p_score_b: sb,
+  })
+  scoreBusy.value = false
+  if (error) { scoreErr.value = error.message; return }
+  scoreModal.value = null
+  await load()
+}
+
 async function submitScore() {
   scoreErr.value = ''
   const m = scoreModal.value
@@ -364,7 +377,7 @@ async function saveSettings() {
   settingsBusy.value = true; settingsOk.value = false; err.value = ''
   const { error } = await supabase.rpc('update_tournament_details', {
     p_tournament_id:   tour.value.id,
-    p_name:            settings.value.name || null,
+    p_name:            isAppAdmin.value ? (settings.value.name || null) : null,
     p_description:     settings.value.description || null,
     p_entry_fee:       settings.value.entry_fee ? Number(settings.value.entry_fee) : null,
     p_prize_info:      settings.value.prize_info || null,
@@ -476,6 +489,36 @@ async function makeChampionCard() {
     })
     downloadDataUrl(url, `${tour.value.name}-champions.png`)
   } finally { makingImg.value = '' }
+}
+
+// ── Roles + tournament admins (people) ──
+const isAppAdmin = ref(false)
+const tAdmins = ref([])
+const newAdminEmail = ref('')
+const adminBusy = ref(false)
+const adminErr = ref('')
+async function loadRolesAndAdmins() {
+  const { data: roles } = await supabase.rpc('get_my_roles')
+  isAppAdmin.value = (roles ?? []).some(r => r.role === 'app_admin')
+  const { data: admins } = await supabase.rpc('get_tournament_admins', { p_tournament_id: route.params.id })
+  tAdmins.value = admins ?? []
+}
+async function assignAdmin() {
+  if (!newAdminEmail.value.trim()) return
+  adminBusy.value = true; adminErr.value = ''
+  const { error } = await supabase.rpc('assign_tournament_admin', {
+    p_tournament_id: tour.value.id, p_email: newAdminEmail.value.trim(),
+  })
+  adminBusy.value = false
+  if (error) { adminErr.value = error.message; return }
+  newAdminEmail.value = ''
+  await loadRolesAndAdmins()
+}
+async function removeAdmin(uid) {
+  adminErr.value = ''
+  const { error } = await supabase.rpc('remove_tournament_admin', { p_tournament_id: tour.value.id, p_user_id: uid })
+  if (error) { adminErr.value = error.message; return }
+  await loadRolesAndAdmins()
 }
 
 // ── Delete tournament ──
@@ -847,10 +890,33 @@ async function deleteTournament() {
 
       <!-- ── SETTINGS TAB ── -->
       <div v-if="tab === 'settings'" class="fade-up space-y-4">
+        <!-- Tournament admins (people) -->
+        <div class="card p-4 space-y-3">
+          <p class="text-xs font-bold text-slate-600">👥 Tournament admins</p>
+          <p class="text-[11px] text-slate-400 -mt-1">These people can run this tournament — approvals, draw, scores. Add by email (they must have signed in once).</p>
+          <div v-if="tAdmins.length" class="space-y-1.5">
+            <div v-for="a in tAdmins" :key="a.user_id" class="flex items-center gap-2 text-sm">
+              <span class="w-6 h-6 rounded-full bg-cyan-100 text-cyan-700 text-[11px] font-bold flex items-center justify-center shrink-0">{{ (a.name || a.email || '?').slice(0,1).toUpperCase() }}</span>
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold text-slate-800 truncate">{{ a.name }}<span v-if="a.is_creator" class="text-[10px] text-cyan-600 font-bold"> · creator</span></p>
+                <p class="text-[11px] text-slate-400 truncate">{{ a.email }}</p>
+              </div>
+              <button v-if="!a.is_creator" class="text-slate-300 hover:text-rose-500 text-sm px-1" title="Remove" @click="removeAdmin(a.user_id)">✕</button>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <input v-model="newAdminEmail" type="email" class="input flex-1" placeholder="admin@email.com" inputmode="email" @keyup.enter="assignAdmin" />
+            <button class="btn-primary px-4 text-sm shrink-0" :disabled="adminBusy || !newAdminEmail" @click="assignAdmin">{{ adminBusy ? '…' : 'Add' }}</button>
+          </div>
+          <p v-if="adminErr" class="text-rose-500 text-xs">{{ adminErr }}</p>
+        </div>
+
         <div class="card p-4 space-y-4">
           <div>
             <label class="label">Name</label>
-            <input v-model="settings.name" class="input" />
+            <input v-if="isAppAdmin" v-model="settings.name" class="input" />
+            <div v-else class="input bg-slate-50 text-slate-500 cursor-not-allowed">{{ settings.name }}</div>
+            <p v-if="!isAppAdmin" class="text-[11px] text-slate-400 mt-1">Only a Badminton 360 admin can rename a tournament.</p>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -983,8 +1049,8 @@ async function deleteTournament() {
           </div>
         </div>
 
-        <!-- Danger zone -->
-        <div class="border-t border-red-100 pt-4 mt-2">
+        <!-- Danger zone (super admins only) -->
+        <div v-if="isAppAdmin" class="border-t border-red-100 pt-4 mt-2">
           <p class="text-[10px] uppercase tracking-widest text-rose-400 font-bold mb-2">Danger Zone</p>
           <button class="w-full rounded-xl border border-rose-200 text-rose-500 text-sm py-2.5
                          hover:bg-rose-50 hover:border-rose-300 transition"
@@ -1073,23 +1139,27 @@ async function deleteTournament() {
           <p class="text-[11px] text-slate-400 text-center">Enter 2 games (or 3 if it went to a decider).</p>
         </div>
 
-        <!-- Single score -->
-        <div v-else class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="label">{{ scoreModal.match.team_a_name ?? 'Team A' }}</label>
-            <input v-model="scoreModal.scoreA" type="number" min="0" class="input text-center text-xl font-bold" placeholder="0" />
+        <!-- Simple outcome: Win = 2 / Walkover = 1 / Loss = 0 -->
+        <div v-else class="space-y-2 mb-4">
+          <p class="text-[11px] text-slate-400 text-center mb-1">Who won this match?</p>
+          <button class="w-full rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-3 text-sm hover:bg-emerald-100 transition"
+            :disabled="scoreBusy" @click="submitOutcome(2, 0)">🏆 {{ scoreModal.match.team_a_name ?? 'Team A' }} won</button>
+          <button class="w-full rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold py-3 text-sm hover:bg-emerald-100 transition"
+            :disabled="scoreBusy" @click="submitOutcome(0, 2)">🏆 {{ scoreModal.match.team_b_name ?? 'Team B' }} won</button>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button class="rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold py-2.5 hover:bg-amber-100 transition"
+              :disabled="scoreBusy" @click="submitOutcome(1, 0)">Walkover — {{ scoreModal.match.team_a_name ?? 'A' }}</button>
+            <button class="rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold py-2.5 hover:bg-amber-100 transition"
+              :disabled="scoreBusy" @click="submitOutcome(0, 1)">Walkover — {{ scoreModal.match.team_b_name ?? 'B' }}</button>
           </div>
-          <div>
-            <label class="label">{{ scoreModal.match.team_b_name ?? 'Team B' }}</label>
-            <input v-model="scoreModal.scoreB" type="number" min="0" class="input text-center text-xl font-bold" placeholder="0" />
-          </div>
+          <p class="text-[10px] text-slate-400 text-center pt-1">Win = 2 pts · Walkover = 1 pt · Loss = 0.</p>
         </div>
 
         <p v-if="scoreErr" class="text-rose-500 text-sm mb-3">{{ scoreErr }}</p>
 
         <div class="flex gap-3">
-          <button class="btn-ghost flex-1" @click="scoreModal = null">Cancel</button>
-          <button class="btn-primary flex-1" :disabled="scoreBusy" @click="submitScore">
+          <button class="btn-ghost flex-1" @click="scoreModal = null">{{ scoreModal.bestOf3 ? 'Cancel' : 'Close' }}</button>
+          <button v-if="scoreModal.bestOf3" class="btn-primary flex-1" :disabled="scoreBusy" @click="submitScore">
             {{ scoreBusy ? 'Saving…' : 'Save Result' }}
           </button>
         </div>

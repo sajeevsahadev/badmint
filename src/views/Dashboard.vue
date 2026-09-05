@@ -408,7 +408,7 @@ const fmtDate = d => d
       <div v-if="myClubTournaments.length" class="space-y-2">
         <div v-for="t in myClubTournaments" :key="t.id"
           class="card p-4 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
-          @click="router.push('/tournament/' + t.id)">
+          @click="router.push('/tournaments/' + (t.slug || t.id))">
           <div class="flex items-center justify-between gap-2">
             <div class="flex-1 min-w-0">
               <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>

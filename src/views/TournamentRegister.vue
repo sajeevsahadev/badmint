@@ -31,7 +31,7 @@ const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', {
 
 async function load() {
   loading.value = true; notFound.value = false
-  const { data: res } = await supabase.rpc('get_public_tournament', { p_code: route.params.id })
+  const { data: res } = await supabase.rpc('get_public_tournament', { p_code: route.params.slug || route.params.id })
   if (!res) { notFound.value = true; loading.value = false; return }
   data.value = res
   if (user.value) {
@@ -80,7 +80,7 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
 <template>
   <div class="min-h-screen" style="background:#eef4ff">
     <div class="max-w-lg mx-auto px-4 pb-6 pt-[calc(env(safe-area-inset-top,0px)+3.75rem)] sm:pt-6">
-      <RouterLink :to="t ? `/t/${t.share_code}` : '/'" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4">‹ Tournament</RouterLink>
+      <RouterLink :to="t ? `/tournaments/${t.slug || t.share_code}` : '/'" class="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon transition mb-4">‹ Tournament</RouterLink>
 
       <div v-if="loading" class="space-y-3"><div class="h-24 shimmer rounded-2xl" /><div class="h-64 shimmer rounded-2xl" /></div>
 
@@ -121,7 +121,7 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
           <p v-if="existing" class="text-xs text-slate-500 mt-3 text-center">
             Status: <strong :class="existing.status === 'confirmed' ? 'text-emerald-600' : 'text-amber-600'">{{ statusText(existing.status) }}</strong>
           </p>
-          <RouterLink :to="`/t/${t.share_code}`" class="btn-ghost w-full py-2.5 text-sm mt-4">View tournament page</RouterLink>
+          <RouterLink :to="`/tournaments/${t.slug || t.share_code}`" class="btn-ghost w-full py-2.5 text-sm mt-4">View tournament page</RouterLink>
         </div>
 
         <!-- Not signed in -->

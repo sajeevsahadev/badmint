@@ -77,12 +77,13 @@ const statusClass = computed(() => ({
   completed: 'bg-slate-100 text-slate-500 border-slate-200',
 }[t.value?.status] || 'bg-slate-100 text-slate-500 border-slate-200'))
 
-const shareUrl = computed(() => t.value ? `${SEO_BASE}/t/${t.value.share_code}` : SEO_BASE)
+const shareUrl = computed(() => t.value ? `${SEO_BASE}/tournaments/${t.value.slug || t.value.share_code}` : SEO_BASE)
+const registerUrl = computed(() => t.value ? `/tournaments/${t.value.slug || t.value.share_code}/registration` : '/')
 const teamName = id => teams.value.find(x => x.id === id)?.team_name
 
 // This page serves both /t/:code (share link) and /tournament/:id (in-app);
 // get_public_tournament resolves either a share_code or a raw id.
-const routeKey = () => route.params.code || route.params.id
+const routeKey = () => route.params.slug || route.params.code || route.params.id
 
 async function load(silent = false) {
   if (!silent) { loading.value = true; notFound.value = false }
@@ -94,7 +95,7 @@ async function load(silent = false) {
     title: `${t.value.name} — ${t.value.club_name} | Badminton 360`,
     description: `${t.value.name}, a badminton doubles tournament by ${t.value.club_name}${t.value.venue ? ' at ' + t.value.venue : ''}${dateLabel.value ? ' · ' + dateLabel.value : ''}. Teams, draw, live results and winners.`,
     image: t.value.cover_photo_url || undefined,
-    path: `/t/${t.value.share_code}`,
+    path: `/tournaments/${t.value.slug || t.value.share_code}`,
     type: 'article',
   })
   setJsonLd('ld-tournament', {
@@ -270,7 +271,7 @@ const lightbox = ref(null)
         </RouterLink>
 
         <!-- ★ Primary action — register (big, poster-style) -->
-        <RouterLink v-if="regOpen && !myRegistration" :to="`/tournament/${t.id}/register`"
+        <RouterLink v-if="regOpen && !myRegistration" :to="registerUrl"
           class="block rounded-3xl p-6 text-center text-white no-underline shadow-lg hover:shadow-xl active:scale-[0.99] transition-all relative overflow-hidden"
           style="background:linear-gradient(120deg,#00b4d8 0%,#7c3aed 100%)">
           <div class="absolute inset-0 opacity-25" aria-hidden="true"
@@ -320,10 +321,10 @@ const lightbox = ref(null)
             <p class="text-[11px] uppercase tracking-wide text-slate-400">Prizes</p>
             <p class="text-sm font-semibold text-slate-700">{{ t.prize_info }}</p>
           </div>
-          <div v-if="t.venue_address" class="card p-4 sm:col-span-2">
-            <p class="text-[11px] uppercase tracking-wide text-slate-400">Venue</p>
-            <p class="text-sm font-semibold text-slate-700">{{ t.venue }}</p>
-            <p class="text-xs text-slate-500">{{ t.venue_address }}</p>
+          <div v-if="t.venue || t.venue_address || t.maps_url" class="card p-4 sm:col-span-2">
+            <p class="text-[11px] uppercase tracking-wide text-slate-400">📍 Venue</p>
+            <p class="text-sm font-semibold text-slate-700">{{ t.venue || 'See location' }}</p>
+            <p v-if="t.venue_address" class="text-xs text-slate-500">{{ t.venue_address }}</p>
             <a v-if="t.maps_url" :href="t.maps_url" target="_blank" rel="noopener" class="text-xs text-neon font-semibold mt-1 inline-block">Get directions ↗</a>
           </div>
         </div>
@@ -472,3 +473,19 @@ const lightbox = ref(null)
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Subtle life on each card — a slow animated gradient accent line on top. */
+main .card { position: relative; overflow: hidden; }
+main .card::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, #00b4d8, #a855f7, #fbbf24, #00b4d8);
+  background-size: 300% 100%;
+  animation: tpCardline 9s linear infinite;
+  opacity: .55;
+}
+@keyframes tpCardline { to { background-position: 300% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  main .card::before { animation: none; }
+}
+</style>
