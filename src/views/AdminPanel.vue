@@ -314,6 +314,23 @@ async function saveRename() {
   await loadClubs()
 }
 
+// ── Tournament rename (super admin) ──
+const tourRenameModal = ref(null)
+const tourRenaming = ref(false)
+function openTourRename(t) { tourRenameModal.value = { id: t.id, name: t.name } }
+async function saveTourRename() {
+  if (!tourRenameModal.value.name.trim()) return
+  tourRenaming.value = true
+  const { error } = await supabase.rpc('update_tournament_details', {
+    p_tournament_id: tourRenameModal.value.id, p_name: tourRenameModal.value.name.trim(),
+  })
+  tourRenaming.value = false
+  if (error) { err.value = error.message; return }
+  flash('Tournament renamed')
+  tourRenameModal.value = null
+  await loadTournaments()
+}
+
 // ── Facility actions ──
 function openEditFacility(f) {
   editFacModal.value = {
@@ -679,6 +696,8 @@ const statItems = computed(() => !stats.value ? [] : [
                 <RouterLink :to="'/tournament/' + t.id"
                   class="text-xs border border-slate-200 text-slate-500 hover:text-neon hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="View">👁</RouterLink>
+                <button class="text-xs border border-slate-200 text-slate-500 hover:text-cyan-600 hover:border-cyan-400/40 transition rounded-lg px-3 py-2 min-h-[36px]"
+                  title="Rename" @click="openTourRename(t)">✏️</button>
                 <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Delete"
                   @click="openDelete('tournament', t.id, t.name, 'Deletes all registrations, bracket matches, and results. Cannot be undone.')">
@@ -1081,6 +1100,28 @@ const statItems = computed(() => !stats.value ? [] : [
           <button class="btn-ghost flex-1" @click="renameModal = null">Cancel</button>
           <button class="btn-primary flex-1" :disabled="renaming || !renameModal.name.trim()" @click="saveRename">
             {{ renaming ? 'Saving…' : 'Rename' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rename Tournament Modal -->
+    <div v-if="tourRenameModal"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.5);backdrop-filter:blur(4px)"
+      @click.self="tourRenameModal = null">
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
+        style="background:#f8fafc;border:1px solid rgba(0,229,255,.2)">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-display font-bold text-slate-800">Rename Tournament</h3>
+          <button class="text-slate-400 hover:text-slate-700 text-xl" @click="tourRenameModal = null">✕</button>
+        </div>
+        <input v-model="tourRenameModal.name" class="input mb-4" maxlength="80"
+          placeholder="New tournament name" @keyup.enter="saveTourRename" />
+        <div class="flex gap-3">
+          <button class="btn-ghost flex-1" @click="tourRenameModal = null">Cancel</button>
+          <button class="btn-primary flex-1" :disabled="tourRenaming || !tourRenameModal.name.trim()" @click="saveTourRename">
+            {{ tourRenaming ? 'Saving…' : 'Rename' }}
           </button>
         </div>
       </div>
