@@ -258,29 +258,35 @@ const lightbox = ref(null)
       </header>
 
       <main class="max-w-3xl mx-auto px-4 sm:px-8 py-6 space-y-4">
-        <!-- Share -->
-        <div class="card p-4 flex flex-wrap items-center gap-2">
-          <span class="text-xs font-semibold text-slate-500 mr-auto">Share this tournament</span>
-          <a :href="waShare" target="_blank" rel="noopener" class="btn-ghost text-xs px-3 py-1.5">🟢 WhatsApp</a>
-          <button class="btn-ghost text-xs px-3 py-1.5" @click="copyLink">{{ copied ? '✓ Copied' : '🔗 Copy link' }}</button>
-          <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareAnnouncement">
-            {{ makingImg === 'announce' ? '…' : '📣 Poster' }}
-          </button>
-          <button v-if="t.status === 'completed' && t.winner_registration_id"
-            class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareChampionCard">
-            {{ makingImg === 'champ' ? '…' : '🏆 Champion card' }}
-          </button>
-        </div>
-
         <!-- Director manage bar -->
         <RouterLink v-if="canManage" :to="`/tournament/${t.id}/manage`"
           class="card card-violet p-4 flex items-center gap-3 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
           <div class="text-2xl shrink-0">⚙️</div>
           <div class="flex-1 min-w-0">
             <p class="font-display font-bold text-violet">Manage tournament</p>
-            <p class="text-xs text-slate-500 mt-0.5">Approvals, draw, live scores & results</p>
+            <p class="text-xs text-slate-500 mt-0.5">Approvals, add teams, draw, live scores & results</p>
           </div>
           <span class="text-violet text-sm shrink-0">→</span>
+        </RouterLink>
+
+        <!-- ★ Primary action — register (big, poster-style) -->
+        <RouterLink v-if="regOpen && !myRegistration" :to="`/tournament/${t.id}/register`"
+          class="block rounded-3xl p-6 text-center text-white no-underline shadow-lg hover:shadow-xl active:scale-[0.99] transition-all relative overflow-hidden"
+          style="background:linear-gradient(120deg,#00b4d8 0%,#7c3aed 100%)">
+          <div class="absolute inset-0 opacity-25" aria-hidden="true"
+            style="background-image:radial-gradient(circle at 15% 20%,#ffffff55,transparent 35%),radial-gradient(circle at 85% 80%,#ffffff33,transparent 40%)"></div>
+          <div class="relative">
+            <div class="text-4xl mb-1">🏸</div>
+            <p class="font-display text-2xl font-extrabold leading-tight">{{ isFull ? 'Join the waitlist' : 'Register your team' }}</p>
+            <p class="text-white/85 text-sm mt-1.5">
+              <template v-if="isFull">The field is full — add your team to the waitlist</template>
+              <template v-else>{{ data.confirmed_count }}/{{ t.max_teams }} teams in{{ t.entry_fee ? ` · ${t.currency} ${t.entry_fee} per team` : '' }}</template>
+            </p>
+            <p v-if="t.registration_end" class="text-white/75 text-xs mt-2">⏳ Registration closes {{ fmtDate(t.registration_end) }}</p>
+            <span class="inline-block mt-4 bg-white text-slate-900 font-bold rounded-full px-7 py-2.5 text-sm shadow">
+              {{ isFull ? 'Join waitlist →' : 'Register now →' }}
+            </span>
+          </div>
         </RouterLink>
 
         <!-- My registration status -->
@@ -302,21 +308,6 @@ const lightbox = ref(null)
             </button>
           </div>
         </div>
-
-        <!-- Register CTA -->
-        <RouterLink v-if="regOpen && !myRegistration" :to="`/tournament/${t.id}/register`"
-          class="card-neon p-5 flex items-center gap-4 no-underline hover:shadow-lg transition-all active:scale-[0.99]">
-          <div class="text-3xl shrink-0">📝</div>
-          <div class="flex-1 min-w-0">
-            <p class="font-display font-bold gradient-text">{{ isFull ? 'Join the waitlist' : 'Register your team' }}</p>
-            <p class="text-xs text-slate-500 mt-0.5">
-              <template v-if="isFull">Tournament is full — join the waitlist</template>
-              <template v-else>{{ data.confirmed_count }}/{{ t.max_teams }} teams confirmed{{ t.entry_fee ? ` · Entry ${t.currency} ${t.entry_fee}` : '' }}</template>
-            </p>
-            <p v-if="t.registration_end" class="text-[11px] text-amber-600 mt-0.5">Registration closes {{ fmtDate(t.registration_end) }}</p>
-          </div>
-          <span class="btn-primary text-sm px-4 py-2 shrink-0">{{ isFull ? 'Waitlist →' : 'Register →' }}</span>
-        </RouterLink>
 
         <!-- Key info -->
         <div class="grid sm:grid-cols-2 gap-3">
@@ -447,6 +438,22 @@ const lightbox = ref(null)
             <button v-for="p in photos" :key="p.id" class="aspect-square rounded-xl overflow-hidden bg-slate-100"
               @click="lightbox = p.url">
               <img :src="p.url" :alt="p.caption || 'Tournament photo'" class="w-full h-full object-cover cursor-zoom-in" loading="lazy" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Share -->
+        <div class="card p-4">
+          <p class="text-xs font-semibold text-slate-500 mb-2 text-center">Share this tournament</p>
+          <div class="flex flex-wrap items-center justify-center gap-2">
+            <a :href="waShare" target="_blank" rel="noopener" class="btn-ghost text-xs px-3 py-1.5">🟢 WhatsApp</a>
+            <button class="btn-ghost text-xs px-3 py-1.5" @click="copyLink">{{ copied ? '✓ Copied' : '🔗 Copy link' }}</button>
+            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareAnnouncement">
+              {{ makingImg === 'announce' ? '…' : '📣 Poster image' }}
+            </button>
+            <button v-if="t.status === 'completed' && t.winner_registration_id"
+              class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareChampionCard">
+              {{ makingImg === 'champ' ? '…' : '🏆 Champion card' }}
             </button>
           </div>
         </div>

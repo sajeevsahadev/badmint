@@ -195,27 +195,44 @@ async function setSeed(regId, seed) {
   await load()
 }
 
-// ── Director adds a team directly (walk-ins, phone/WhatsApp sign-ups) ──
-const addTeam = ref(null)   // { team_name, player_a, player_b, phone, confirmed }
+// ── Director adds OR edits a team (walk-ins, phone sign-ups, later fixes) ──
+const addTeam = ref(null)   // { id?, team_name, player_a, player_b, phone, email, confirmed, status }
 const addTeamBusy = ref(false)
 const addTeamErr  = ref('')
 function openAddTeam() {
   addTeamErr.value = ''
-  addTeam.value = { team_name: '', player_a: '', player_b: '', phone: '', confirmed: true }
+  addTeam.value = { id: null, team_name: '', player_a: '', player_b: '', phone: '', email: '', confirmed: true }
+}
+function openEditTeam(r) {
+  addTeamErr.value = ''
+  addTeam.value = {
+    id: r.id, team_name: r.team_name || '', player_a: r.player_a_name || '',
+    player_b: r.player_b_name || '', phone: r.contact_phone || '', email: r.contact_email || '',
+    status: r.status,
+  }
 }
 async function submitAddTeam() {
   addTeamErr.value = ''
   const f = addTeam.value
   if (!f.team_name.trim() || !f.player_a.trim()) { addTeamErr.value = 'Team name and player 1 are required'; return }
   addTeamBusy.value = true
-  const { error } = await supabase.rpc('admin_add_team', {
-    p_tournament_id: tour.value.id,
-    p_team_name: f.team_name.trim(),
-    p_player_a_name: f.player_a.trim(),
-    p_player_b_name: f.player_b.trim() || null,
-    p_contact_phone: f.phone.trim() || null,
-    p_confirmed: f.confirmed,
-  })
+  let error
+  if (f.id) {
+    ;({ error } = await supabase.rpc('admin_update_team', {
+      p_reg_id: f.id, p_team_name: f.team_name.trim(), p_player_a_name: f.player_a.trim(),
+      p_player_b_name: f.player_b.trim(), p_contact_phone: f.phone.trim(), p_contact_email: f.email.trim(),
+    }))
+    // Move to a different stage if the director changed it.
+    if (!error && f.status && f.status !== registrations.value.find(r => r.id === f.id)?.status) {
+      ;({ error } = await supabase.rpc('set_registration_status', { p_reg_id: f.id, p_status: f.status }))
+    }
+  } else {
+    ;({ error } = await supabase.rpc('admin_add_team', {
+      p_tournament_id: tour.value.id, p_team_name: f.team_name.trim(), p_player_a_name: f.player_a.trim(),
+      p_player_b_name: f.player_b.trim() || null, p_contact_phone: f.phone.trim() || null,
+      p_contact_email: f.email.trim() || null, p_confirmed: f.confirmed,
+    }))
+  }
   addTeamBusy.value = false
   if (error) { addTeamErr.value = error.message; return }
   addTeam.value = null
@@ -595,8 +612,9 @@ async function deleteTournament() {
                   <p class="text-xs text-slate-500 mt-0.5">
                     {{ r.player_a_name }}<span v-if="r.player_b_name"> · {{ r.player_b_name }}</span>
                   </p>
-                  <p v-if="r.contact_phone" class="text-xs text-slate-500 mt-1">
-                    📞 <a :href="'tel:' + r.contact_phone" class="text-neon">{{ r.contact_phone }}</a>
+                  <p v-if="r.contact_phone || r.contact_email" class="text-xs text-slate-500 mt-1 space-x-2">
+                    <a v-if="r.contact_phone" :href="'tel:' + r.contact_phone" class="text-neon">📞 {{ r.contact_phone }}</a>
+                    <a v-if="r.contact_email" :href="'mailto:' + r.contact_email" class="text-neon">✉️ {{ r.contact_email }}</a>
                   </p>
                   <p v-if="r.notes" class="text-xs text-slate-400 mt-1 italic">{{ r.notes }}</p>
                   <span class="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5"
@@ -604,13 +622,12 @@ async function deleteTournament() {
                     {{ r.payment_status === 'confirmed' ? 'Paid' : 'Payment pending' }}
                   </span>
                 </div>
-                <div class="flex gap-2 shrink-0">
-                  <button class="btn-success text-xs px-3 py-1.5"
-                    :disabled="busy === 'reg-' + r.id"
-                    @click="approve(r.id)">✓ Approve</button>
-                  <button class="btn-danger text-xs px-3 py-1.5"
-                    :disabled="busy === 'reg-' + r.id"
-                    @click="reject(r.id)">✗</button>
+                <div class="flex flex-col gap-2 shrink-0">
+                  <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="approve(r.id)">✓ Approve</button>
+                  <div class="flex gap-2">
+                    <button class="btn-ghost text-xs px-2 py-1.5 flex-1" @click="openEditTeam(r)">Edit</button>
+                    <button class="btn-danger text-xs px-2.5 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -635,12 +652,13 @@ async function deleteTournament() {
                 </p>
               </div>
               <span class="badge-approved">confirmed</span>
+              <button class="shrink-0 text-slate-300 hover:text-cyan-600 text-sm px-1" title="Edit team" @click="openEditTeam(r)">✎</button>
               <button v-if="!matches.length" class="shrink-0 text-slate-300 hover:text-rose-500 text-sm px-1"
                 :disabled="busy === 'reg-' + r.id" title="Remove team" @click="reject(r.id)">✕</button>
             </div>
           </div>
           <p class="text-xs text-slate-400 mt-2 text-center">
-            Seeds drive bracket seeding · edit inline. ✕ removes a team before the draw is generated.
+            Seeds drive bracket seeding · edit inline. ✎ edits a team (players, contact, stage); ✕ removes it before the draw.
           </p>
         </div>
 
@@ -656,14 +674,18 @@ async function deleteTournament() {
                   <p class="text-xs text-slate-500 mt-0.5">
                     {{ r.player_a_name }}<span v-if="r.player_b_name"> · {{ r.player_b_name }}</span>
                   </p>
-                  <p v-if="r.contact_phone" class="text-xs text-slate-500 mt-1">
-                    📞 <a :href="'tel:' + r.contact_phone" class="text-neon">{{ r.contact_phone }}</a>
+                  <p v-if="r.contact_phone || r.contact_email" class="text-xs text-slate-500 mt-1 space-x-2">
+                    <a v-if="r.contact_phone" :href="'tel:' + r.contact_phone" class="text-neon">📞 {{ r.contact_phone }}</a>
+                    <a v-if="r.contact_email" :href="'mailto:' + r.contact_email" class="text-neon">✉️ {{ r.contact_email }}</a>
                   </p>
                   <span class="inline-block mt-1.5 badge bg-amber-50 text-amber-700 border border-amber-200">Waitlisted</span>
                 </div>
-                <div class="flex gap-2 shrink-0">
+                <div class="flex flex-col gap-2 shrink-0">
                   <button class="btn-success text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="approve(r.id)">✓ Promote</button>
-                  <button class="btn-danger text-xs px-3 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
+                  <div class="flex gap-2">
+                    <button class="btn-ghost text-xs px-2 py-1.5 flex-1" @click="openEditTeam(r)">Edit</button>
+                    <button class="btn-danger text-xs px-2.5 py-1.5" :disabled="busy === 'reg-' + r.id" @click="reject(r.id)">✗</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1084,7 +1106,7 @@ async function deleteTournament() {
       <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
         style="background:#f8fafc; border:1px solid rgba(0,168,204,.25)">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-display text-lg font-bold gradient-text">Add a team</h3>
+          <h3 class="font-display text-lg font-bold gradient-text">{{ addTeam.id ? 'Edit team' : 'Add a team' }}</h3>
           <button class="text-slate-400 hover:text-slate-700 text-xl" @click="addTeam = null">✕</button>
         </div>
         <div class="space-y-3">
@@ -1102,23 +1124,42 @@ async function deleteTournament() {
               <input v-model="addTeam.player_b" class="input" placeholder="Partner" />
             </div>
           </div>
-          <div>
-            <label class="label">Contact phone</label>
-            <input v-model="addTeam.phone" class="input" placeholder="Optional" inputmode="tel" />
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Phone</label>
+              <input v-model="addTeam.phone" class="input" placeholder="Optional" inputmode="tel" />
+            </div>
+            <div>
+              <label class="label">Email</label>
+              <input v-model="addTeam.email" type="email" class="input" placeholder="Optional" inputmode="email" />
+            </div>
           </div>
-          <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer">
+
+          <!-- Add mode: confirm toggle -->
+          <label v-if="!addTeam.id" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer">
             <span>
               <span class="text-sm font-semibold text-slate-700">Confirm this team</span>
-              <span class="block text-[11px] text-slate-400">On = counts as a confirmed entry (waitlisted if full). Off = pending approval.</span>
+              <span class="block text-[11px] text-slate-400">On = confirmed entry (waitlisted if full). Off = pending approval.</span>
             </span>
             <input type="checkbox" v-model="addTeam.confirmed" class="w-5 h-5 accent-cyan-600 shrink-0" />
           </label>
+
+          <!-- Edit mode: change stage -->
+          <div v-else>
+            <label class="label">Stage</label>
+            <select v-model="addTeam.status" class="input">
+              <option value="pending">Pending approval</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="waitlisted">Waitlist</option>
+            </select>
+            <p class="text-[11px] text-slate-400 mt-1">Move the team back to pending or on/off the waitlist.</p>
+          </div>
         </div>
         <p v-if="addTeamErr" class="text-rose-500 text-sm mt-3">⚠️ {{ addTeamErr }}</p>
         <div class="flex gap-3 mt-5">
           <button class="btn-ghost flex-1" @click="addTeam = null">Cancel</button>
           <button class="btn-primary flex-1" :disabled="addTeamBusy" @click="submitAddTeam">
-            {{ addTeamBusy ? 'Adding…' : 'Add team' }}
+            {{ addTeamBusy ? 'Saving…' : (addTeam.id ? 'Save changes' : 'Add team') }}
           </button>
         </div>
       </div>

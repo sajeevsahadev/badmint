@@ -25,7 +25,7 @@ const regOpen = computed(() => {
   return true
 })
 
-const form = ref({ team_name: '', player_a: '', player_b: '', phone: '', notes: '' })
+const form = ref({ team_name: '', player_a: '', player_b: '', phone: '', email: '', notes: '' })
 
 const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'TBC'
 
@@ -36,6 +36,7 @@ async function load() {
   data.value = res
   if (user.value) {
     form.value.player_a = user.value.user_metadata?.full_name || ''
+    form.value.email = form.value.email || user.value.email || ''
     // The public payload already carries this user's registration (server-side,
     // RLS-safe). A rejected team may register again, so ignore that status.
     const mine = res.my_registration
@@ -56,6 +57,8 @@ async function submit() {
   errorMsg.value = null
   if (!form.value.team_name.trim()) { errorMsg.value = 'Enter a team name.'; return }
   if (!form.value.player_a.trim())  { errorMsg.value = 'Enter player 1 name.'; return }
+  if (!/^\S+@\S+\.\S+$/.test(form.value.email.trim())) { errorMsg.value = 'Enter a valid email address.'; return }
+  if (!form.value.phone.trim())     { errorMsg.value = 'Enter a contact phone number.'; return }
   submitting.value = true
   const { error } = await supabase.rpc('register_for_tournament', {
     p_tournament_id: t.value.id,
@@ -63,7 +66,8 @@ async function submit() {
     p_player_a_name: form.value.player_a.trim(),
     p_player_b_name: form.value.player_b.trim() || null,
     p_notes: form.value.notes.trim() || null,
-    p_contact_phone: form.value.phone.trim() || null,
+    p_contact_phone: form.value.phone.trim(),
+    p_contact_email: form.value.email.trim(),
   })
   submitting.value = false
   if (error) { errorMsg.value = error.message; return }
@@ -148,8 +152,12 @@ const statusText = s => ({ pending: 'Pending admin approval', confirmed: 'Confir
             <label class="block"><span class="label">Player 2</span>
               <input v-model="form.player_b" class="input" placeholder="Partner's name" /></label>
           </div>
-          <label class="block"><span class="label">Contact phone</span>
-            <input v-model="form.phone" class="input" placeholder="For payment confirmation" inputmode="tel" /></label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block"><span class="label">Email *</span>
+              <input v-model="form.email" type="email" class="input" placeholder="you@email.com" inputmode="email" /></label>
+            <label class="block"><span class="label">Phone *</span>
+              <input v-model="form.phone" class="input" placeholder="For confirmation" inputmode="tel" /></label>
+          </div>
           <label class="block"><span class="label">Notes (optional)</span>
             <input v-model="form.notes" class="input" placeholder="Anything the organiser should know" /></label>
 
