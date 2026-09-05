@@ -184,12 +184,18 @@ const myRank = computed(() => {
   return i >= 0 ? i + 1 : null
 })
 
-// Tournaments for THIS club (all statuses, so draft ones are visible to manager)
-const myClubTournaments = computed(() =>
-  allTournaments.value
-    .filter(t => t.club_id === currentClub.value?.club_id)
+// Tournaments across ALL the user's clubs, ordered so ONGOING REGISTRATIONS and
+// live events surface first (then upcoming, then finished) — so open sign-ups
+// are always visible on the dashboard, not just the current club's.
+const myClubTournaments = computed(() => {
+  const ids = new Set((clubs.value || []).map(c => c.club_id))
+  const rank = s => s === 'registration_open' ? 0 : s === 'live' ? 1
+    : s === 'registration_closed' ? 2 : s === 'draft' ? 3 : s === 'completed' ? 5 : 4
+  return allTournaments.value
+    .filter(t => ids.has(t.club_id))
+    .sort((a, b) => rank(a.status) - rank(b.status))
     .slice(0, 5)
-)
+})
 
 const clubName = computed(() => currentClub.value?.clubs?.name ?? '')
 
@@ -408,13 +414,15 @@ const fmtDate = d => d
       <div v-if="myClubTournaments.length" class="space-y-2">
         <div v-for="t in myClubTournaments" :key="t.id"
           class="card p-4 cursor-pointer hover:border-cyan-400/40 transition-all active:scale-[0.99]"
+          :class="t.status === 'registration_open' ? 'border-l-4 border-l-emerald-400' : ''"
           @click="router.push('/tournaments/' + (t.slug || t.id))">
           <div class="flex items-center justify-between gap-2">
             <div class="flex-1 min-w-0">
               <p class="font-bold text-slate-800 text-sm truncate">{{ t.name }}</p>
-              <p class="text-xs text-slate-500 mt-0.5 truncate">
-                {{ t.confirmed_teams ?? 0 }}/{{ t.max_teams }} teams
-                <span v-if="t.start_date"> · {{ new Date(t.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) }}</span>
+              <p class="text-xs mt-0.5 truncate"
+                :class="t.status === 'registration_open' ? 'text-emerald-600 font-medium' : 'text-slate-500'">
+                <template v-if="t.status === 'registration_open'">📣 Registration open — {{ t.confirmed_teams ?? 0 }}/{{ t.max_teams }} teams</template>
+                <template v-else>{{ t.confirmed_teams ?? 0 }}/{{ t.max_teams }} teams<span v-if="t.start_date"> · {{ new Date(t.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) }}</span></template>
               </p>
             </div>
             <span class="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border"
@@ -422,7 +430,7 @@ const fmtDate = d => d
                 : t.status === 'registration_open' ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                 : t.status === 'completed' ? 'bg-slate-100 text-slate-500 border-slate-200'
                 : 'bg-amber-50 text-amber-600 border-amber-200'">
-              {{ (t.status || '').replace('_', ' ') }}
+              {{ t.status === 'registration_open' ? 'Registering' : t.status === 'registration_closed' ? 'Reg closed' : (t.status || '').replace('_', ' ') }}
             </span>
           </div>
         </div>
