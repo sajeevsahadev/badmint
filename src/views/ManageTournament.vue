@@ -195,6 +195,33 @@ async function setSeed(regId, seed) {
   await load()
 }
 
+// ── Director adds a team directly (walk-ins, phone/WhatsApp sign-ups) ──
+const addTeam = ref(null)   // { team_name, player_a, player_b, phone, confirmed }
+const addTeamBusy = ref(false)
+const addTeamErr  = ref('')
+function openAddTeam() {
+  addTeamErr.value = ''
+  addTeam.value = { team_name: '', player_a: '', player_b: '', phone: '', confirmed: true }
+}
+async function submitAddTeam() {
+  addTeamErr.value = ''
+  const f = addTeam.value
+  if (!f.team_name.trim() || !f.player_a.trim()) { addTeamErr.value = 'Team name and player 1 are required'; return }
+  addTeamBusy.value = true
+  const { error } = await supabase.rpc('admin_add_team', {
+    p_tournament_id: tour.value.id,
+    p_team_name: f.team_name.trim(),
+    p_player_a_name: f.player_a.trim(),
+    p_player_b_name: f.player_b.trim() || null,
+    p_contact_phone: f.phone.trim() || null,
+    p_confirmed: f.confirmed,
+  })
+  addTeamBusy.value = false
+  if (error) { addTeamErr.value = error.message; return }
+  addTeam.value = null
+  await load()
+}
+
 async function generateBracket() {
   err.value = ''; busy.value = 'bracket'
   const teams = confirmed.value.map(r => ({ id: r.id, seed: r.seed ?? 1 }))
@@ -549,6 +576,14 @@ async function deleteTournament() {
       <!-- ── REGISTRATIONS TAB ── -->
       <div v-if="tab === 'registrations'" class="space-y-4 fade-up">
 
+        <!-- Add a team directly (organiser) -->
+        <button class="w-full rounded-2xl py-3 text-sm font-bold text-white flex items-center justify-center gap-2
+                       bg-gradient-to-r from-cyan-500 to-violet-500 shadow hover:shadow-lg active:scale-[0.99] transition-all"
+          @click="openAddTeam">
+          <span class="text-lg leading-none">＋</span> Add a team
+        </button>
+        <p class="text-[11px] text-slate-400 -mt-2 text-center">For walk-ins or phone / WhatsApp sign-ups. Players can also register themselves from the public page.</p>
+
         <!-- Pending -->
         <div v-if="pending.length">
           <h3 class="label mb-2">Pending Approval ({{ pending.length }})</h3>
@@ -600,10 +635,12 @@ async function deleteTournament() {
                 </p>
               </div>
               <span class="badge-approved">confirmed</span>
+              <button v-if="!matches.length" class="shrink-0 text-slate-300 hover:text-rose-500 text-sm px-1"
+                :disabled="busy === 'reg-' + r.id" title="Remove team" @click="reject(r.id)">✕</button>
             </div>
           </div>
           <p class="text-xs text-slate-400 mt-2 text-center">
-            Seed numbers are used for bracket seeding. Edit inline.
+            Seeds drive bracket seeding · edit inline. ✕ removes a team before the draw is generated.
           </p>
         </div>
 
@@ -1032,6 +1069,56 @@ async function deleteTournament() {
           <button class="btn-ghost flex-1" @click="scoreModal = null">Cancel</button>
           <button class="btn-primary flex-1" :disabled="scoreBusy" @click="submitScore">
             {{ scoreBusy ? 'Saving…' : 'Save Result' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- ── Add Team Modal (organiser) ── -->
+  <Teleport to="body">
+    <div v-if="addTeam"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
+      @click.self="addTeam = null">
+      <div class="w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6"
+        style="background:#f8fafc; border:1px solid rgba(0,168,204,.25)">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-display text-lg font-bold gradient-text">Add a team</h3>
+          <button class="text-slate-400 hover:text-slate-700 text-xl" @click="addTeam = null">✕</button>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="label">Team name *</label>
+            <input v-model="addTeam.team_name" class="input" placeholder="e.g. Smash Bros" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Player 1 *</label>
+              <input v-model="addTeam.player_a" class="input" placeholder="Name" />
+            </div>
+            <div>
+              <label class="label">Player 2</label>
+              <input v-model="addTeam.player_b" class="input" placeholder="Partner" />
+            </div>
+          </div>
+          <div>
+            <label class="label">Contact phone</label>
+            <input v-model="addTeam.phone" class="input" placeholder="Optional" inputmode="tel" />
+          </div>
+          <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer">
+            <span>
+              <span class="text-sm font-semibold text-slate-700">Confirm this team</span>
+              <span class="block text-[11px] text-slate-400">On = counts as a confirmed entry (waitlisted if full). Off = pending approval.</span>
+            </span>
+            <input type="checkbox" v-model="addTeam.confirmed" class="w-5 h-5 accent-cyan-600 shrink-0" />
+          </label>
+        </div>
+        <p v-if="addTeamErr" class="text-rose-500 text-sm mt-3">⚠️ {{ addTeamErr }}</p>
+        <div class="flex gap-3 mt-5">
+          <button class="btn-ghost flex-1" @click="addTeam = null">Cancel</button>
+          <button class="btn-primary flex-1" :disabled="addTeamBusy" @click="submitAddTeam">
+            {{ addTeamBusy ? 'Adding…' : 'Add team' }}
           </button>
         </div>
       </div>
