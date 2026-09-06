@@ -4,7 +4,7 @@ import { useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { applySeo, setJsonLd, SEO_BASE } from '../lib/seo'
 import { computeGroupStandings } from '../utils/tournament-draw'
-import { championCard, announcementCard, downloadDataUrl } from '../utils/tournament-share'
+import { championCard, announcementCard, tournamentPoster, downloadDataUrl } from '../utils/tournament-share'
 
 const route = useRoute()
 const data   = ref(null)
@@ -156,6 +156,21 @@ async function shareChampionCard() {
     downloadDataUrl(url, `${t.value.name}-champions.png`)
   } finally { makingImg.value = '' }
 }
+async function sharePoster() {
+  makingImg.value = 'poster'; await ensureFonts()
+  try {
+    const url = await tournamentPoster({
+      name: t.value.name, clubName: t.value.club_name,
+      category: catLabel(t.value.category), skillLabel: skillLabel(t.value.skill_level),
+      dateLabel: dateLabel.value, venue: t.value.venue, venueAddress: t.value.venue_address,
+      entryFee: t.value.entry_fee ? `${t.value.currency} ${t.value.entry_fee}` : null,
+      prizeInfo: t.value.prize_info,
+      registerUrl: `${SEO_BASE}/tournaments/${t.value.slug || t.value.share_code}/registration`,
+    })
+    downloadDataUrl(url, `${t.value.name}-poster.png`)
+  } catch (e) { /* ignore */ } finally { makingImg.value = '' }
+}
+
 const announceStatus = computed(() => ({
   registration_open: 'REGISTRATION OPEN', live: 'LIVE NOW', completed: 'CHAMPIONS CROWNED',
 }[t.value?.status] || 'TOURNAMENT'))
@@ -333,6 +348,15 @@ const lightbox = ref(null)
           <p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{{ t.description }}</p>
         </div>
 
+        <!-- Rules & regulations (read-only for players) -->
+        <details v-if="t.rules" class="card overflow-hidden group" open>
+          <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-4 py-3 font-bold text-slate-700 text-sm">
+            📋 Rules & regulations
+            <span class="text-slate-400 group-open:rotate-180 transition-transform">▾</span>
+          </summary>
+          <div class="px-4 pb-4 -mt-1 text-[13px] text-slate-600 whitespace-pre-line leading-relaxed">{{ t.rules }}</div>
+        </details>
+
         <!-- Podium (once results are in) -->
         <div v-if="t.winner_registration_id" class="card overflow-hidden">
           <div class="px-4 py-3 border-b border-slate-100 text-xs font-bold text-slate-600">🏆 Results</div>
@@ -449,8 +473,11 @@ const lightbox = ref(null)
           <div class="flex flex-wrap items-center justify-center gap-2">
             <a :href="waShare" target="_blank" rel="noopener" class="btn-ghost text-xs px-3 py-1.5">🟢 WhatsApp</a>
             <button class="btn-ghost text-xs px-3 py-1.5" @click="copyLink">{{ copied ? '✓ Copied' : '🔗 Copy link' }}</button>
+            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="sharePoster">
+              {{ makingImg === 'poster' ? '…' : '🖼️ Poster + QR' }}
+            </button>
             <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareAnnouncement">
-              {{ makingImg === 'announce' ? '…' : '📣 Poster image' }}
+              {{ makingImg === 'announce' ? '…' : '📣 Announcement' }}
             </button>
             <button v-if="t.status === 'completed' && t.winner_registration_id"
               class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareChampionCard">

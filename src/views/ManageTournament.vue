@@ -6,7 +6,7 @@ import { useAuth } from '../composables/useAuth'
 import { useClub } from '../composables/useClub'
 import DateField from '../components/DateField.vue'
 import { generateDraw, buildKnockoutFromGroups, assignCourts, computeGroupStandings } from '../utils/tournament-draw'
-import { championCard, announcementCard, downloadDataUrl } from '../utils/tournament-share'
+import { championCard, announcementCard, tournamentPoster, downloadDataUrl } from '../utils/tournament-share'
 import { uploadClubImage } from '../lib/r2Upload'
 
 const route  = useRoute()
@@ -55,6 +55,7 @@ async function load() {
       start_date:       d.tournament.start_date ?? '',
       end_date:         d.tournament.end_date ?? '',
       max_teams:        d.tournament.max_teams ?? 8,
+      rules:            d.tournament.rules ?? '',
     }
     media.value = {
       cover: d.tournament.cover_photo_url ?? '',
@@ -413,6 +414,7 @@ async function saveSettings() {
     p_category:        settings.value.category || null,
     p_skill_level:     settings.value.skill_level || null,
     p_currency:        settings.value.currency || null,
+    p_rules:           settings.value.rules || null,
   })
   settingsBusy.value = false
   if (error) { err.value = error.message; return }
@@ -498,6 +500,24 @@ async function makeAnnouncement() {
     downloadDataUrl(url, `${tour.value.name}-announcement.png`)
   } finally { makingImg.value = '' }
 }
+const catLabelFor = v => ({ mens_doubles: "Men's Doubles", womens_doubles: "Women's Doubles", mixed_doubles: 'Mixed Doubles' }[v] || null)
+async function makePoster() {
+  makingImg.value = 'poster'; try { await document.fonts.ready } catch { /* ignore */ }
+  try {
+    const t = tour.value
+    const url = await tournamentPoster({
+      name: t.name, clubName: t.club_name,
+      category: catLabelFor(t.category), skillLabel: t.skill_level ? t.skill_level.charAt(0).toUpperCase() + t.skill_level.slice(1) : null,
+      dateLabel: t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Date TBC',
+      venue: t.venue, venueAddress: t.venue_address,
+      entryFee: t.entry_fee ? `${t.currency || 'AED'} ${t.entry_fee}` : null,
+      prizeInfo: t.prize_info,
+      registerUrl: `https://badminton360.app/tournaments/${t.slug || t.share_code}/registration`,
+    })
+    downloadDataUrl(url, `${t.name}-poster.png`)
+  } catch (e) { err.value = 'Could not build the poster.' } finally { makingImg.value = '' }
+}
+
 async function makeChampionCard() {
   makingImg.value = 'champ'; try { await document.fonts.ready } catch { /* ignore */ }
   const nm = id => registrations.value.find(r => r.id === id)?.team_name
@@ -633,10 +653,13 @@ async function deleteTournament() {
         </button>
       </div>
       <div class="flex flex-wrap gap-2 mb-4">
-        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="makeAnnouncement">
-          {{ makingImg === 'announce' ? '…' : '📣 Announcement image' }}
+        <button class="btn-primary text-xs px-3 py-1.5" :disabled="makingImg" @click="makePoster">
+          {{ makingImg === 'poster' ? '…' : '🖼️ Registration poster + QR' }}
         </button>
-        <a class="btn-ghost text-xs px-3 py-1.5" :href="'/t/' + tour.share_code" target="_blank" rel="noopener">🔗 Public page ↗</a>
+        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="makeAnnouncement">
+          {{ makingImg === 'announce' ? '…' : '📣 Announcement' }}
+        </button>
+        <a class="btn-ghost text-xs px-3 py-1.5" :href="'/tournaments/' + (tour.slug || tour.share_code)" target="_blank" rel="noopener">🔗 Public page ↗</a>
       </div>
 
       <!-- Tabs -->
@@ -1013,6 +1036,12 @@ async function deleteTournament() {
           <div>
             <label class="label">Description</label>
             <textarea v-model="settings.description" class="input resize-none" rows="3" />
+          </div>
+          <div>
+            <label class="label">📋 Rules & regulations</label>
+            <textarea v-model="settings.rules" class="input resize-none font-mono text-xs leading-relaxed" rows="12"
+              placeholder="One rule per line…" />
+            <p class="text-[11px] text-slate-400 mt-1">Shown to players on the public page (read-only). Edit freely — it starts from a standard doubles rule set.</p>
           </div>
         </div>
 

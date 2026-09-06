@@ -1,8 +1,23 @@
 // ─────────────────────────────────────────────────────────────────────────
-// Shareable tournament images, drawn on an offscreen canvas (no dependencies).
-// Square 1080×1080 so they look right on WhatsApp / Instagram / status.
+// Shareable tournament images, drawn on an offscreen canvas.
+// Square 1080×1080 cards for social; a portrait 1080×1440 poster with a QR code.
 // Each returns a PNG data URL.
 // ─────────────────────────────────────────────────────────────────────────
+import QRCode from 'qrcode'
+
+function loadImg(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src })
+}
+function wrapLines(x, text, maxW) {
+  const words = String(text || '').split(/\s+/)
+  const lines = []; let line = ''
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w
+    if (x.measureText(test).width > maxW && line) { lines.push(line); line = w } else line = test
+  }
+  if (line) lines.push(line)
+  return lines
+}
 
 const W = 1080
 
@@ -157,6 +172,99 @@ function footer(x) {
   x.fillStyle = 'rgba(255,255,255,0.45)'
   x.font = `600 26px ${FONT}`
   x.fillText('Powered by Badminton 360  ·  badminton360.app', W / 2, W - 54)
+}
+
+// 📣 Auto-generated registration poster (portrait A4-ish) with a QR code that
+// deep-links to the registration page.
+export async function tournamentPoster(o) {
+  const W = 1080, H = 1440
+  const c = document.createElement('canvas'); c.width = W; c.height = H
+  const x = c.getContext('2d')
+
+  // Background + soft accent circle (top-right).
+  x.fillStyle = '#f6f9fb'; x.fillRect(0, 0, W, H)
+  x.fillStyle = 'rgba(16,185,129,0.13)'
+  x.beginPath(); x.arc(W - 210, 300, 320, 0, Math.PI * 2); x.fill()
+  x.fillStyle = 'rgba(168,85,247,0.08)'
+  x.beginPath(); x.arc(W - 120, 120, 180, 0, Math.PI * 2); x.fill()
+
+  // Club presents
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic'
+  x.fillStyle = '#0891a8'; x.font = `800 26px ${FONT}`
+  x.fillText(`${(o.clubName || 'BADMINTON 360').toUpperCase()}  PRESENTS`, 80, 150)
+
+  // Accent bar
+  const bar = x.createLinearGradient(80, 0, 300, 0); bar.addColorStop(0, '#00b4d8'); bar.addColorStop(1, '#a855f7')
+  x.fillStyle = bar; x.fillRect(80, 178, 96, 8)
+
+  // Title (wrapped, big)
+  x.fillStyle = '#0f172a'
+  let ty = 300
+  x.font = `800 96px ${DISPLAY}`
+  const lines = wrapLines(x, o.name || 'Tournament', W - 160)
+  for (const ln of lines.slice(0, 3)) { x.fillText(ln, 80, ty); ty += 96 }
+
+  // Doubles + category/skill
+  x.fillStyle = '#0f8a5f'; x.font = `800 40px ${DISPLAY}`
+  x.fillText('DOUBLES TOURNAMENT', 80, ty + 6); ty += 62
+  const tags = [o.category, o.skillLabel].filter(Boolean).join(' · ')
+  if (tags) { x.fillStyle = '#334155'; x.font = `700 34px ${FONT}`; x.fillText(tags.toUpperCase(), 80, ty + 4); ty += 54 }
+
+  // Prizes line
+  if (o.prizeInfo) {
+    x.fillStyle = '#0f172a'; x.font = `700 30px ${FONT}`
+    x.fillText('🏆 ' + o.prizeInfo, 80, ty + 24); ty += 54
+  }
+
+  // Detail rows (icon chips) — anchored just above the footer band so they
+  // never slip under it, whatever the title length.
+  const bandY = H - 360
+  const rows = [
+    ['📅', o.dateLabel],
+    o.venue ? ['📍', o.venue + (o.venueAddress ? ' · ' + o.venueAddress : '')] : null,
+    o.entryFee ? ['🎟️', 'Entry ' + o.entryFee] : null,
+  ].filter(Boolean)
+  let ry = bandY - 44 - (rows.length - 1) * 74
+  for (const [icon, text] of rows) {
+    x.save()
+    x.beginPath()
+    const cx = 108, cy = ry - 12
+    x.fillStyle = 'rgba(16,185,129,0.12)'; x.arc(cx, cy, 30, 0, Math.PI * 2); x.fill()
+    x.font = '30px ' + FONT; x.textAlign = 'center'; x.fillStyle = '#0f172a'; x.fillText(icon, cx, cy + 11)
+    x.textAlign = 'left'; x.fillStyle = '#1f2937'; x.font = `700 32px ${FONT}`
+    const t = String(text)
+    x.fillText(x.measureText(t).width > W - 240 ? t.slice(0, 42) + '…' : t, 160, ry)
+    x.restore()
+    ry += 74
+  }
+
+  // Footer band (dark) with the QR code.
+  const bg = x.createLinearGradient(0, bandY, W, H); bg.addColorStop(0, '#0b1220'); bg.addColorStop(1, '#0a5b74')
+  x.fillStyle = bg; x.fillRect(0, bandY, W, 360)
+
+  // QR (white rounded plate)
+  const qrDataUrl = await QRCode.toDataURL(o.registerUrl || 'https://badminton360.app', { width: 260, margin: 1, color: { dark: '#0b1220', light: '#ffffff' } })
+  const qrImg = await loadImg(qrDataUrl)
+  const qs = 232, qx = 80, qy = bandY + 64
+  x.fillStyle = '#fff'; roundRect(x, qx - 16, qy - 16, qs + 32, qs + 32, 20); x.fill()
+  x.drawImage(qrImg, qx, qy, qs, qs)
+
+  // Right side text
+  const rx = qx + qs + 60
+  x.textAlign = 'left'
+  x.fillStyle = '#22d3ee'; x.font = `800 30px ${FONT}`; x.fillText('SCAN TO REGISTER', rx, bandY + 96)
+  x.fillStyle = '#fff'; x.font = `700 26px ${FONT}`
+  x.fillText('or visit', rx, bandY + 140)
+  x.fillStyle = '#e2e8f0'; x.font = `700 24px ${FONT}`
+  x.fillText((o.registerUrl || '').replace(/^https?:\/\//, ''), rx, bandY + 176)
+  if (o.contact) {
+    x.fillStyle = '#94a3b8'; x.font = `600 24px ${FONT}`
+    x.fillText('📞 ' + o.contact, rx, bandY + 224)
+  }
+  x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = `600 22px ${FONT}`
+  x.fillText('Powered by Badminton 360 · badminton360.app', rx, H - 46)
+
+  return c.toDataURL('image/png')
 }
 
 // Trigger a browser download of a data URL. Large data: URLs are blocked by
