@@ -648,15 +648,15 @@ async function deleteTournament() {
         <div class="space-y-1 text-sm">
           <p class="font-bold text-slate-800">🥇 {{ tour.winner_team_name || registrations.find(r => r.id === tour.winner_registration_id)?.team_name }}</p>
         </div>
-        <button class="btn-primary w-full mt-3 py-2 text-sm" :disabled="makingImg" @click="makeChampionCard">
+        <button class="btn-primary w-full mt-3 py-2 text-sm" :disabled="!!makingImg" @click="makeChampionCard">
           {{ makingImg === 'champ' ? '…' : '🏆 Download champion card' }}
         </button>
       </div>
       <div class="flex flex-wrap gap-2 mb-4">
-        <button class="btn-primary text-xs px-3 py-1.5" :disabled="makingImg" @click="makePoster">
+        <button class="btn-primary text-xs px-3 py-1.5" :disabled="!!makingImg" @click="makePoster">
           {{ makingImg === 'poster' ? '…' : '🖼️ Registration poster + QR' }}
         </button>
-        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="makeAnnouncement">
+        <button class="btn-ghost text-xs px-3 py-1.5" :disabled="!!makingImg" @click="makeAnnouncement">
           {{ makingImg === 'announce' ? '…' : '📣 Announcement' }}
         </button>
         <a class="btn-ghost text-xs px-3 py-1.5" :href="'/tournaments/' + (tour.slug || tour.share_code)" target="_blank" rel="noopener">🔗 Public page ↗</a>

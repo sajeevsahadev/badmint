@@ -473,14 +473,14 @@ const lightbox = ref(null)
           <div class="flex flex-wrap items-center justify-center gap-2">
             <a :href="waShare" target="_blank" rel="noopener" class="btn-ghost text-xs px-3 py-1.5">🟢 WhatsApp</a>
             <button class="btn-ghost text-xs px-3 py-1.5" @click="copyLink">{{ copied ? '✓ Copied' : '🔗 Copy link' }}</button>
-            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="sharePoster">
+            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="!!makingImg" @click="sharePoster">
               {{ makingImg === 'poster' ? '…' : '🖼️ Poster + QR' }}
             </button>
-            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareAnnouncement">
+            <button class="btn-ghost text-xs px-3 py-1.5" :disabled="!!makingImg" @click="shareAnnouncement">
               {{ makingImg === 'announce' ? '…' : '📣 Announcement' }}
             </button>
             <button v-if="t.status === 'completed' && t.winner_registration_id"
-              class="btn-ghost text-xs px-3 py-1.5" :disabled="makingImg" @click="shareChampionCard">
+              class="btn-ghost text-xs px-3 py-1.5" :disabled="!!makingImg" @click="shareChampionCard">
               {{ makingImg === 'champ' ? '…' : '🏆 Champion card' }}
             </button>
           </div>
