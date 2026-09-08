@@ -7,6 +7,9 @@ import { useAuth } from '../composables/useAuth'
 import Avatar from '../components/Avatar.vue'
 import PerfChart from '../components/PerfChart.vue'
 import { sharePlayerCard, whatsappShareUrl } from '../utils/share-card'
+import { tierFor, nextTier } from '../utils/tiers'
+import { computeStreaks, computePointsDiff, computePartnerships, computeHeadToHead } from '../utils/insights'
+import { evaluateAchievements, earnedCount } from '../utils/achievements'
 
 const route  = useRoute()
 const router = useRouter()
@@ -113,6 +116,10 @@ async function load() {
         oppScore: oppSide?.score ?? 0,
         myTeam:  (mySide?.participants  ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
         oppTeam: (oppSide?.participants ?? []).map(mp => ({ name: mp.display_name, avatar: null })).filter(t => t.name),
+        partners:  (mySide?.participants  ?? []).filter(mp => mp.player_id !== playerId)
+          .map(mp => ({ id: mp.player_id, name: mp.display_name })).filter(t => t.id),
+        opponents: (oppSide?.participants ?? [])
+          .map(mp => ({ id: mp.player_id, name: mp.display_name })).filter(t => t.id),
         eloDelta: myMp?.elo_after != null ? Math.round(myMp.elo_after - myMp.elo_before) : null,
         eloAfter: myMp?.elo_after != null ? Math.round(myMp.elo_after) : null,
       }
@@ -210,6 +217,13 @@ async function load() {
         name: profileMap[mp.players?.id]?.name || mp.players?.display_name,
         avatar: profileMap[mp.players?.id]?.avatar ?? null
       })).filter(t => t.name),
+      partners: (mySide?.match_participants ?? [])
+        .filter(mp => mp.players?.id !== playerId)
+        .map(mp => ({ id: mp.players?.id, name: profileMap[mp.players?.id]?.name || mp.players?.display_name }))
+        .filter(t => t.id),
+      opponents: (oppSide?.match_participants ?? [])
+        .map(mp => ({ id: mp.players?.id, name: profileMap[mp.players?.id]?.name || mp.players?.display_name }))
+        .filter(t => t.id),
       eloDelta: (() => {
         const mp = mySide?.match_participants?.find(p => p.players?.id === playerId)
         return mp?.elo_after != null ? Math.round(mp.elo_after - mp.elo_before) : null
@@ -252,6 +266,34 @@ const eloSeries = computed(() =>
   [...matches.value].filter(m => m.eloAfter != null).reverse().map((m, i) => ({ i, elo: m.eloAfter, date: m.date }))
 )
 const formGuide = computed(() => [...matches.value].slice(0, 12).reverse().map(m => m.won))
+
+// ── Insights (all derived from match history already in memory) ──────────────
+const eloNow = computed(() => Math.round(stats.value?.elo ?? player.value?.elo ?? 1000))
+const tier   = computed(() => tierFor(eloNow.value))
+const toNext = computed(() => nextTier(eloNow.value))
+
+const wonChrono   = computed(() => [...matches.value].reverse().map(m => m.won))
+const streaks     = computed(() => computeStreaks(wonChrono.value))
+const pointsDiff  = computed(() => computePointsDiff(matches.value))
+const allPartners = computed(() => computePartnerships(matches.value))
+const partnerships = computed(() => allPartners.value.slice(0, 3))
+const headToHead  = computed(() => computeHeadToHead(matches.value).slice(0, 5))
+
+const gamesCount = computed(() => stats.value?.games ?? matches.value.length)
+const winsCount  = computed(() => stats.value?.wins ?? matches.value.filter(m => m.won).length)
+const winPctVal  = computed(() => Math.round(stats.value?.win_pct ?? (gamesCount.value ? (winsCount.value / gamesCount.value) * 100 : 0)))
+
+const achievements = computed(() => evaluateAchievements({
+  games: gamesCount.value,
+  wins:  winsCount.value,
+  winPct: winPctVal.value,
+  elo:   eloNow.value,
+  streaks: streaks.value,
+  pointsDiff: pointsDiff.value,
+  partnerships: allPartners.value,
+}))
+const achievementsEarned = computed(() => earnedCount(achievements.value))
+const diffText = d => d > 0 ? `+${d}` : `${d}`
 
 // ── Share card ──
 const sharing   = ref(false)
@@ -388,6 +430,10 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
           <div class="flex items-center gap-2 mt-1 flex-wrap">
             <span class="text-xs text-slate-300">{{ clubName }}</span>
             <span v-if="emirates" class="badge-member text-[9px]">{{ emirates }}</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              :style="{ color: tier.color, background: tier.color + '1a', border: '1px solid ' + tier.color + '55' }">
+              {{ tier.emoji }} {{ tier.label }}
+            </span>
           </div>
           <!-- Bio -->
           <p v-if="profile?.bio" class="text-xs text-slate-400 mt-1.5 italic">{{ profile.bio }}</p>
@@ -467,6 +513,98 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
         <span :class="eloSeries[eloSeries.length-1].elo >= eloSeries[0].elo ? 'text-emerald-500' : 'text-rose-400'">
           {{ eloSeries[eloSeries.length-1].elo }}
         </span>
+      </div>
+    </div>
+
+    <!-- Form & streaks + points differential -->
+    <div v-if="gamesCount > 0" class="card p-4 mb-4 fade-up">
+      <div class="text-xs font-bold text-slate-700 mb-3">🔥 Form & Streaks</div>
+      <div class="grid grid-cols-4 gap-2 text-center">
+        <div>
+          <div class="text-lg font-extrabold"
+            :class="streaks.type === 'win' ? 'text-emerald-500' : streaks.type === 'loss' ? 'text-rose-400' : 'text-slate-400'">
+            {{ streaks.current }}
+          </div>
+          <div class="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">{{ streaks.type === 'loss' ? 'Loss' : 'Win' }} Streak</div>
+        </div>
+        <div>
+          <div class="text-lg font-extrabold text-emerald-500">{{ streaks.longestWin }}</div>
+          <div class="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">Longest Win</div>
+        </div>
+        <div>
+          <div class="text-lg font-extrabold text-rose-400">{{ streaks.longestLoss }}</div>
+          <div class="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">Longest Loss</div>
+        </div>
+        <div>
+          <div class="text-lg font-extrabold" :class="pointsDiff >= 0 ? 'text-neon' : 'text-rose-400'">{{ diffText(pointsDiff) }}</div>
+          <div class="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">Points Diff</div>
+        </div>
+      </div>
+      <div v-if="toNext" class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+        <span class="text-slate-500">{{ toNext.needed }} Elo to
+          <span class="font-semibold" :style="{ color: toNext.color }">{{ toNext.emoji }} {{ toNext.label }}</span>
+        </span>
+        <span class="text-slate-400">now {{ tier.emoji }} {{ tier.label }}</span>
+      </div>
+    </div>
+
+    <!-- Best partnerships -->
+    <div v-if="partnerships.length" class="card p-4 mb-4 fade-up">
+      <div class="text-xs font-bold text-slate-700 mb-2">🤝 Best Partnerships</div>
+      <div class="space-y-1.5">
+        <RouterLink v-for="p in partnerships" :key="p.id" :to="'/player/' + p.id"
+          class="flex items-center gap-2.5 no-underline rounded-lg px-2 py-1.5 hover:bg-slate-50 transition">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-slate-800 truncate">{{ p.name }}</p>
+            <p class="text-[11px] text-slate-400">{{ p.games }} {{ p.games === 1 ? 'game' : 'games' }} together</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-extrabold text-emerald-500">{{ p.winPct }}%</p>
+            <p v-if="p.avgElo != null" class="text-[10px] font-semibold"
+              :class="p.avgElo >= 0 ? 'text-slate-400' : 'text-rose-400'">{{ diffText(p.avgElo) }} avg Elo</p>
+          </div>
+        </RouterLink>
+      </div>
+    </div>
+
+    <!-- Head-to-head -->
+    <div v-if="headToHead.length" class="card p-4 mb-4 fade-up">
+      <div class="text-xs font-bold text-slate-700 mb-2">⚔️ Head-to-Head</div>
+      <div class="space-y-1.5">
+        <RouterLink v-for="o in headToHead" :key="o.id" :to="'/player/' + o.id"
+          class="flex items-center gap-2.5 no-underline rounded-lg px-2 py-1.5 hover:bg-slate-50 transition">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-slate-800 truncate">{{ o.name }}</p>
+            <p class="text-[11px] text-slate-400">{{ o.games }} played</p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-sm font-extrabold" :class="o.winPct >= 50 ? 'text-emerald-500' : 'text-rose-400'">{{ o.winPct }}%</p>
+            <p class="text-[10px] text-slate-400">win rate</p>
+          </div>
+        </RouterLink>
+      </div>
+    </div>
+
+    <!-- Achievements -->
+    <div v-if="gamesCount > 0" class="card p-4 mb-4 fade-up">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs font-bold text-slate-700">🏆 Achievements</div>
+        <span class="badge-member text-[10px]">{{ achievementsEarned }} / {{ achievements.length }}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div v-for="a in achievements" :key="a.id"
+          class="rounded-xl px-3 py-2.5 flex items-center gap-2.5 transition"
+          :class="a.earned ? 'bg-gradient-to-br from-amber-50 to-cyan-50 border border-amber-200' : 'bg-slate-50 border border-slate-100'">
+          <span class="text-xl shrink-0" :class="a.earned ? '' : 'grayscale opacity-40'">{{ a.icon }}</span>
+          <div class="min-w-0 flex-1">
+            <p class="text-[12px] font-bold truncate" :class="a.earned ? 'text-slate-800' : 'text-slate-400'">{{ a.label }}</p>
+            <p class="text-[10px] leading-tight truncate" :class="a.earned ? 'text-slate-500' : 'text-slate-400'">{{ a.desc }}</p>
+            <div v-if="a.progress" class="mt-1 h-1 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full bg-cyan-400 rounded-full"
+                :style="{ width: Math.min(100, Math.round(a.progress.cur / a.progress.goal * 100)) + '%' }"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

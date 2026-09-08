@@ -8,6 +8,7 @@ import InfoTip from '../components/InfoTip.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { useFeatures } from '../composables/useFeatures'
+import { tierFor } from '../utils/tiers'
 
 const router = useRouter()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -374,6 +375,9 @@ const fmtDate = d => d
               <p class="text-sm font-semibold truncate" :class="isMe(p) ? 'text-cyan-700' : 'text-slate-800'">
                 {{ p.display_name }}
                 <span v-if="isMe(p)" class="text-xs font-normal text-cyan-500 ml-1">you</span>
+              </p>
+              <p v-if="!p._gap" class="text-[10px] font-semibold" :style="{ color: tierFor(p.elo).color }">
+                {{ tierFor(p.elo).emoji }} {{ tierFor(p.elo).label }}
               </p>
             </div>
             <div class="text-right shrink-0">

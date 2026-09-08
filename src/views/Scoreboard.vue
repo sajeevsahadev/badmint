@@ -8,6 +8,7 @@ import InfoTip from '../components/InfoTip.vue'
 import PageHeader from '../components/PageHeader.vue'
 import Avatar from '../components/Avatar.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
+import { tierFor } from '../utils/tiers'
 
 const { user } = useAuth()
 const { currentClub } = useClub()
@@ -174,6 +175,9 @@ const heroStyle = label => HERO_STYLE[label] || HERO_STYLE['Top Climber']
             {{ p.elo }} <span class="text-[10px] font-semibold text-slate-400">Elo</span>
           </div>
           <div class="text-[10px] text-slate-400 mt-0.5">{{ p.win_pct }}% win</div>
+          <div class="text-[10px] font-bold mt-1" :style="{ color: tierFor(p.elo).color }">
+            {{ tierFor(p.elo).emoji }} {{ tierFor(p.elo).label }}
+          </div>
         </div>
       </div>
 
