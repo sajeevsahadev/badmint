@@ -19,7 +19,33 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'badge.png', 'sw-push.js'],
       workbox: {
         clientsClaim: true,
-        importScripts: ['sw-push.js']
+        cleanupOutdatedCaches: true,
+        importScripts: ['sw-push.js'],
+        // Offline viewing: cache images and the last-seen data GETs so rankings,
+        // best pairs, players and photos still show with no signal. (Writes and
+        // RPC/POST reads still need a connection — see the offline banner.)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.hostname === 'images.badminton360.app',
+            handler: 'CacheFirst',
+            options: { cacheName: 'b360-images', expiration: { maxEntries: 400, maxAgeSeconds: 2592000 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+          {
+            urlPattern: ({ url }) => /\.supabase\.co$/.test(url.hostname) && url.pathname.startsWith('/storage/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'b360-avatars', expiration: { maxEntries: 300, maxAgeSeconds: 2592000 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+          {
+            urlPattern: ({ url, request }) => /\.supabase\.co$/.test(url.hostname) && url.pathname.startsWith('/rest/v1/') && request.method === 'GET',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'b360-data', networkTimeoutSeconds: 4, expiration: { maxEntries: 250, maxAgeSeconds: 86400 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+          {
+            urlPattern: ({ url }) => url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com',
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'b360-fonts', expiration: { maxEntries: 30, maxAgeSeconds: 31536000 } },
+          },
+        ],
       },
       manifest: {
         name: 'Badminton 360 – Rankings & Payment Splits',

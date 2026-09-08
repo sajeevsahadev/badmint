@@ -80,6 +80,15 @@ function closeWizard() {
 const dismissedUpdate = ref(false)
 const UPDATE_POLL_MS = 15 * 60 * 1000   // re-check every 15 minutes
 
+// Offline awareness: show a slim banner so users know a dropped connection means
+// they're viewing last-synced data (rankings/photos cached by the service worker),
+// and that recording/updating needs a connection.
+const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
+if (typeof window !== 'undefined') {
+  window.addEventListener('online',  () => { isOnline.value = true })
+  window.addEventListener('offline', () => { isOnline.value = false })
+}
+
 const { needRefresh, updateServiceWorker } = useRegisterSW({
   immediate: true,
   onRegisteredSW(_swUrl, registration) {
@@ -263,6 +272,18 @@ const needsClub = computed(() =>
   </div>
 
   <template v-else>
+
+    <!-- ── Offline banner ───────────────────────────────────────────────────────
+         Slim strip shown when the connection drops. Cached rankings/photos still
+         render; recording and updates resume once back online. -->
+    <Teleport to="body">
+      <div v-if="!isOnline"
+        class="fixed left-0 right-0 z-[250] flex items-center justify-center gap-2 px-4 py-1.5 text-[12px] font-semibold text-amber-900"
+        style="bottom:calc(env(safe-area-inset-bottom,0px) + 4.25rem); background:#fde68a; box-shadow:0 -2px 12px rgba(0,0,0,.08);">
+        <span>📴</span>
+        <span>You're offline — showing saved data. Recording needs a connection.</span>
+      </div>
+    </Teleport>
 
     <!-- ── Biometric app-lock overlay ──────────────────────────────────────────
          Re-gates an ALREADY-active session on this device after the configured
