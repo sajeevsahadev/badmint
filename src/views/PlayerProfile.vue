@@ -295,6 +295,11 @@ const achievements = computed(() => evaluateAchievements({
 const achievementsEarned = computed(() => earnedCount(achievements.value))
 const diffText = d => d > 0 ? `+${d}` : `${d}`
 
+// Tap an achievement to see what it is + how to earn it (progress if applicable).
+const selectedAch = ref(null)
+const achPct = a => a?.progress ? Math.min(100, Math.round((a.progress.cur / a.progress.goal) * 100))
+  : (a?.earned ? 100 : 0)
+
 // ── Share card ──
 const sharing   = ref(false)
 const shareNote = ref('')
@@ -592,19 +597,20 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
         <span class="badge-member text-[10px]">{{ achievementsEarned }} / {{ achievements.length }}</span>
       </div>
       <div class="grid grid-cols-2 gap-2">
-        <div v-for="a in achievements" :key="a.id"
-          class="rounded-xl px-3 py-2.5 flex items-center gap-2.5 transition"
+        <button v-for="a in achievements" :key="a.id" type="button" @click="selectedAch = a"
+          class="text-left rounded-xl px-3 py-2.5 flex items-center gap-2.5 transition hover:brightness-95 active:scale-[0.98]"
           :class="a.earned ? 'bg-gradient-to-br from-amber-50 to-cyan-50 border border-amber-200' : 'bg-slate-50 border border-slate-100'">
           <span class="text-xl shrink-0" :class="a.earned ? '' : 'grayscale opacity-40'">{{ a.icon }}</span>
           <div class="min-w-0 flex-1">
             <p class="text-[12px] font-bold truncate" :class="a.earned ? 'text-slate-800' : 'text-slate-400'">{{ a.label }}</p>
-            <p class="text-[10px] leading-tight truncate" :class="a.earned ? 'text-slate-500' : 'text-slate-400'">{{ a.desc }}</p>
+            <p v-if="a.earned" class="text-[10px] text-emerald-500 font-semibold">✓ Unlocked</p>
+            <p v-else-if="a.progress" class="text-[10px] text-slate-400 font-medium">{{ a.progress.cur }} / {{ a.progress.goal }}</p>
+            <p v-else class="text-[10px] text-slate-400">Tap to see how</p>
             <div v-if="a.progress" class="mt-1 h-1 rounded-full bg-slate-200 overflow-hidden">
-              <div class="h-full bg-cyan-400 rounded-full"
-                :style="{ width: Math.min(100, Math.round(a.progress.cur / a.progress.goal * 100)) + '%' }"></div>
+              <div class="h-full bg-cyan-400 rounded-full" :style="{ width: achPct(a) + '%' }"></div>
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -686,6 +692,38 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
         </button>
       </div>
     </div>
+
+    <!-- Achievement detail sheet -->
+    <Teleport to="body">
+      <div v-if="selectedAch" class="fixed inset-0 z-[200] flex items-end sm:items-center justify-center px-4"
+        style="background:rgba(15,23,42,0.45)" @click.self="selectedAch = null">
+        <div class="w-full max-w-sm bg-white rounded-3xl p-6 text-center shadow-2xl mb-4 sm:mb-0 fade-up">
+          <div class="text-5xl mb-3" :class="selectedAch.earned ? '' : 'grayscale opacity-40'">{{ selectedAch.icon }}</div>
+          <span class="badge-member text-[10px] mb-2 inline-block">{{ selectedAch.category }}</span>
+          <h3 class="font-display text-lg font-extrabold text-slate-800">{{ selectedAch.label }}</h3>
+
+          <p v-if="selectedAch.earned" class="mt-1 text-sm font-semibold text-emerald-500">✓ Unlocked</p>
+          <p v-else class="mt-1 text-xs text-slate-400 uppercase tracking-wider">Locked</p>
+
+          <div class="mt-4 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3 text-left">
+            <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">How to earn it</p>
+            <p class="text-sm text-slate-700">{{ selectedAch.desc }}</p>
+          </div>
+
+          <div v-if="!selectedAch.earned && selectedAch.progress" class="mt-4">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="text-slate-500">Your progress</span>
+              <span class="font-semibold text-slate-700">{{ selectedAch.progress.cur }} / {{ selectedAch.progress.goal }}</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full bg-cyan-400 rounded-full transition-all" :style="{ width: achPct(selectedAch) + '%' }"></div>
+            </div>
+          </div>
+
+          <button class="btn-primary w-full mt-5 py-2.5 text-sm" @click="selectedAch = null">Got it</button>
+        </div>
+      </div>
+    </Teleport>
 
   </template>
 </template>
