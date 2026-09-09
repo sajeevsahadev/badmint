@@ -68,6 +68,37 @@ async function parseWithAI() {
   }
 }
 
+// Voice input — free, on-device Web Speech API. Speaks → transcript → parseWithAI.
+let recog = null
+const listening       = ref(false)
+const speechSupported = ref(false)
+
+function initSpeech() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) return
+  speechSupported.value = true
+  recog = new SR()
+  recog.lang = navigator.language || 'en-US'
+  recog.interimResults = false
+  recog.maxAlternatives = 1
+  recog.onresult = (e) => {
+    const t = e.results?.[0]?.[0]?.transcript || ''
+    aiText.value = t
+    listening.value = false
+    if (t.trim()) parseWithAI()
+  }
+  recog.onerror = () => { listening.value = false }
+  recog.onend   = () => { listening.value = false }
+}
+
+function toggleMic() {
+  if (!recog) return
+  if (listening.value) { try { recog.stop() } catch {} listening.value = false; return }
+  aiText.value = ''
+  aiMsg.value = { ok: true, t: '🎤 Listening… say who played and the score' }
+  try { recog.start(); listening.value = true } catch { listening.value = false }
+}
+
 // Schedule-aware player filter
 const scheduleId          = ref(null)
 const scheduleAttendeeIds = ref(new Set())
@@ -136,6 +167,7 @@ onMounted(async () => {
     if (/^\d{4}-\d{2}-\d{2}$/.test(route.query.date)) playedOn.value = route.query.date
     pickingFor.value = sideA.value.length < 2 ? 'A' : sideB.value.length < 2 ? 'B' : 'A'
   }
+  initSpeech()
 })
 watch(currentClub, () => { reset(); loadPlayers(); loadNextMatchNum() })
 watch(playedOn, (date) => checkScheduleAttendees(date))
@@ -351,6 +383,12 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
         <input v-model="aiText" class="input flex-1"
           placeholder='"Sajeev & Ravi beat Arun & John 21-15"'
           :disabled="aiLoading" @keyup.enter="parseWithAI" />
+        <button v-if="speechSupported" type="button" @click="toggleMic"
+          class="px-3 shrink-0 rounded-xl border font-semibold transition"
+          :class="listening ? 'bg-rose-500 border-rose-500 text-white animate-pulse' : 'border-slate-200 text-slate-600 hover:border-violet-400'"
+          :title="listening ? 'Listening… tap to stop' : 'Speak the result'">
+          {{ listening ? '● Rec' : '🎤' }}
+        </button>
         <button class="btn-violet px-4 shrink-0 font-semibold" :disabled="aiLoading || !aiText.trim()" @click="parseWithAI">
           {{ aiLoading ? '…' : 'Fill' }}
         </button>

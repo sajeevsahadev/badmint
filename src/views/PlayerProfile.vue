@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { buildProfileMap } from '../lib/playerNames'
@@ -299,6 +299,43 @@ const diffText = d => d > 0 ? `+${d}` : `${d}`
 const selectedAch = ref(null)
 const achPct = a => a?.progress ? Math.min(100, Math.round((a.progress.cur / a.progress.goal) * 100))
   : (a?.earned ? 100 : 0)
+
+// Newly-unlocked celebration — per-device, localStorage. On your OWN profile we
+// diff the earned set against what this device last saw; a fresh unlock pops a
+// toast. First visit seeds silently (no toast storm for already-earned badges).
+const unlockToast = ref(null)      // { icon, label, more }
+const earnedDates = ref({})        // { [achId]: isoDate } — first-seen on this device
+let unlockTimer = null
+const achKey = () => `b360_ach_${playerId}`
+function loadAchStore() { try { return JSON.parse(localStorage.getItem(achKey()) || 'null') } catch { return null } }
+function saveAchStore(s) { try { localStorage.setItem(achKey(), JSON.stringify(s)) } catch {} }
+const fmtAchDate = d => { try { return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return '' } }
+
+function syncAchievements() {
+  if (!isOwnProfile.value) return
+  const earnedIds = achievements.value.filter(a => a.earned).map(a => a.id)
+  if (!earnedIds.length) return
+  const now = new Date().toISOString()
+  let store = loadAchStore()
+  if (!store || !store.earned) {
+    store = { seededAt: now, earned: Object.fromEntries(earnedIds.map(id => [id, now])) }
+    saveAchStore(store)
+    earnedDates.value = store.earned
+    return
+  }
+  const newIds = earnedIds.filter(id => !store.earned[id])
+  for (const id of newIds) store.earned[id] = now
+  if (newIds.length) {
+    saveAchStore(store)
+    const first = achievements.value.find(a => a.id === newIds[0])
+    unlockToast.value = { icon: first.icon, label: first.label, more: newIds.length - 1 }
+    if (unlockTimer) clearTimeout(unlockTimer)
+    unlockTimer = setTimeout(() => { unlockToast.value = null }, 4500)
+  }
+  earnedDates.value = store.earned
+}
+watch([isOwnProfile, achievements], syncAchievements)
+onUnmounted(() => { if (unlockTimer) clearTimeout(unlockTimer) })
 
 // ── Share card ──
 const sharing   = ref(false)
@@ -703,7 +740,8 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
           <h3 class="font-display text-lg font-extrabold text-slate-800">{{ selectedAch.label }}</h3>
 
           <p v-if="selectedAch.earned" class="mt-1 text-sm font-semibold text-emerald-500">✓ Unlocked</p>
-          <p v-else class="mt-1 text-xs text-slate-400 uppercase tracking-wider">Locked</p>
+          <p v-if="selectedAch.earned && earnedDates[selectedAch.id]" class="text-[11px] text-slate-400">Earned {{ fmtAchDate(earnedDates[selectedAch.id]) }}</p>
+          <p v-if="!selectedAch.earned" class="mt-1 text-xs text-slate-400 uppercase tracking-wider">Locked</p>
 
           <div class="mt-4 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3 text-left">
             <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">How to earn it</p>
@@ -725,5 +763,26 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
       </div>
     </Teleport>
 
+    <!-- Achievement unlocked toast (own profile, newly earned) -->
+    <Teleport to="body">
+      <Transition name="ach-pop">
+        <div v-if="unlockToast"
+          class="fixed left-1/2 -translate-x-1/2 z-[300] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3"
+          style="bottom:calc(env(safe-area-inset-bottom,0px) + 5.5rem); background:linear-gradient(135deg,#fbbf24,#a855f7); color:#fff; box-shadow:0 12px 40px rgba(168,85,247,.4)">
+          <span class="text-3xl">{{ unlockToast.icon }}</span>
+          <div>
+            <div class="text-[11px] font-bold uppercase tracking-wider opacity-90">🏆 Achievement unlocked</div>
+            <div class="text-sm font-extrabold leading-tight">{{ unlockToast.label }}</div>
+            <div v-if="unlockToast.more" class="text-[11px] opacity-90">+{{ unlockToast.more }} more unlocked</div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </template>
 </template>
+
+<style scoped>
+.ach-pop-enter-active, .ach-pop-leave-active { transition: all .4s cubic-bezier(.34,1.56,.64,1); }
+.ach-pop-enter-from, .ach-pop-leave-to { opacity: 0; transform: translate(-50%, 28px) scale(.9); }
+</style>
