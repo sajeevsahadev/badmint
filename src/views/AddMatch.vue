@@ -29,6 +29,45 @@ const savedToastTimer   = ref(null)
 // Guided picking: 'A' = filling Side A, 'B' = filling Side B
 const pickingFor = ref('A')
 
+// ── AI quick entry ──────────────────────────────────────────────────────────
+// Type/dictate the result; Gemini (parse-match fn) fills the teams + score for
+// the user to confirm. Never records on its own — Design Rule 1 stands.
+const aiText    = ref('')
+const aiLoading = ref(false)
+const aiMsg     = ref(null)
+
+async function parseWithAI() {
+  if (!aiText.value.trim() || aiLoading.value) return
+  aiLoading.value = true; aiMsg.value = null
+  try {
+    const roster = players.value.map(p => ({ id: p.id, name: p.display_name }))
+    const { data, error } = await supabase.functions.invoke('parse-match', {
+      body: { text: aiText.value.trim(), roster }
+    })
+    if (error || !data?.ok) {
+      aiMsg.value = { ok: false, t: data?.error || error?.message || 'Could not parse. Enter manually.' }
+      return
+    }
+    const aIds = (data.sideA || []).filter(p => p.id).map(p => p.id).slice(0, 2)
+    const bIds = (data.sideB || []).filter(p => p.id).map(p => p.id).slice(0, 2)
+    sideA.value = aIds
+    sideB.value = bIds
+    if (Number.isFinite(data.scoreA)) scoreA.value = data.scoreA
+    if (Number.isFinite(data.scoreB)) scoreB.value = data.scoreB
+    pickingFor.value = aIds.length < 2 ? 'A' : bIds.length < 2 ? 'B' : 'A'
+    const warns = data.warnings || []
+    if (aIds.length === 2 && bIds.length === 2) {
+      aiMsg.value = { ok: true, t: warns.length ? `Filled — but check: ${warns.join('; ')}` : '✓ Teams & score filled. Review, then Record.' }
+    } else {
+      aiMsg.value = { ok: false, t: `Matched ${aIds.length + bIds.length}/4 players${warns.length ? ' — ' + warns.join('; ') : ''}. Tap the rest below.` }
+    }
+  } catch {
+    aiMsg.value = { ok: false, t: 'Could not parse. Enter manually.' }
+  } finally {
+    aiLoading.value = false
+  }
+}
+
 // Schedule-aware player filter
 const scheduleId          = ref(null)
 const scheduleAttendeeIds = ref(new Set())
@@ -301,6 +340,23 @@ onUnmounted(() => { if (savedToastTimer.value) clearTimeout(savedToastTimer.valu
     <div class="mb-4 fade-up">
       <h2 class="font-display text-xl font-bold gradient-text">Record Match</h2>
       <p class="text-xs text-slate-400 mt-0.5">Elo ratings update instantly for all 4 players</p>
+    </div>
+
+    <!-- AI quick entry -->
+    <div class="card p-3 mb-4 fade-up" style="border:1px solid rgba(168,85,247,.25); background:rgba(168,85,247,.04)">
+      <label class="label flex items-center gap-1.5">
+        ✨ AI quick entry <span class="text-slate-500 font-normal normal-case">· type or dictate</span>
+      </label>
+      <div class="flex gap-2">
+        <input v-model="aiText" class="input flex-1"
+          placeholder='"Sajeev & Ravi beat Arun & John 21-15"'
+          :disabled="aiLoading" @keyup.enter="parseWithAI" />
+        <button class="btn-violet px-4 shrink-0 font-semibold" :disabled="aiLoading || !aiText.trim()" @click="parseWithAI">
+          {{ aiLoading ? '…' : 'Fill' }}
+        </button>
+      </div>
+      <p v-if="aiMsg" class="mt-2 text-xs font-medium" :class="aiMsg.ok ? 'text-emerald-600' : 'text-amber-600'">{{ aiMsg.t }}</p>
+      <p v-else class="mt-1.5 text-[11px] text-slate-400">Say who played and the score — AI fills the teams & score for you to confirm below.</p>
     </div>
 
     <!-- Date + Name row -->
