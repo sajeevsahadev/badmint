@@ -115,7 +115,30 @@ export default defineConfig({
             url: 'https://badminton360.app/manifest.webmanifest'
           }
         ],
-        prefer_related_applications: false
+        prefer_related_applications: false,
+        // Long-press the app icon → jump straight to a key action. Baked into the
+        // Android bundle (needs a new AAB build to take effect).
+        shortcuts: [
+          { name: 'Record Match', short_name: 'Record',   url: '/match',      icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Rankings',     short_name: 'Rankings',  url: '/scoreboard', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Schedule',     short_name: 'Schedule',  url: '/schedule',   icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Split Pay',    short_name: 'Split Pay', url: '/splits',     icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] }
+        ],
+        // Receive a photo shared from WhatsApp / gallery / camera → post it into a
+        // club chat. Becomes a share intent-filter in the AAB (needs a rebuild).
+        // The service worker (sw-push.js) intercepts the POST and hands the file
+        // to the /share receiver page.
+        share_target: {
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text:  'text',
+            url:   'url',
+            files: [{ name: 'image', accept: ['image/*'] }]
+          }
+        }
       }
     })
   ]

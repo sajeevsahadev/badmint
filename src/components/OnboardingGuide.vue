@@ -56,6 +56,34 @@ const slides = [
     color: 'amber',
   },
   {
+    emoji: '✨',
+    title: 'Record by voice or text',
+    story: "In a hurry courtside? Just type or dictate \"Dev & Anil beat Ravi & Kiran 21-15\" — the AI fills the teams and score for you to confirm. Recording a game is now one sentence.",
+    tip: '→ Add Match → ✨ AI quick entry (tap 🎤 to speak).',
+    color: 'violet',
+  },
+  {
+    emoji: '🏅',
+    title: 'Insights, tiers & achievements',
+    story: "Every player profile now shows an Elo progress chart, win/loss streaks, best partnerships, head-to-head records, a rank tier (Bronze → Diamond) and unlockable achievement badges. Real bragging rights.",
+    tip: '→ Tap any player name to open their profile.',
+    color: 'amber',
+  },
+  {
+    emoji: '📸',
+    title: 'Share photos straight to chat',
+    story: "Got a great match photo? Share it from your gallery or WhatsApp and pick Badminton 360 — it posts straight into your club chat. Long-press the app icon for quick actions too.",
+    tip: '→ Share a photo → Badminton 360 → choose your club.',
+    color: 'cyan',
+  },
+  {
+    emoji: '📴',
+    title: 'Works offline',
+    story: "No signal at the court? Rankings, profiles and photos you've already seen still load from the last sync, so the app keeps working. Recording resumes the moment you're back online.",
+    tip: 'Just open the app — saved data shows automatically.',
+    color: 'violet',
+  },
+  {
     emoji: '🎉',
     title: "Dev's crew is ready!",
     story: "Matches tracked. Rankings live. Costs split fairly. Wallet pre-funded. Dev's Saturday Crew runs like a proper league now — and it took less than 5 minutes to set up.",
@@ -268,8 +296,8 @@ const colorMap = {
                   <text x="180" y="123" text-anchor="middle" font-size="8" fill="#fbbf24">Court fee auto-deducted each week ✓</text>
                 </template>
 
-                <!-- Slide 7: Ready! -->
-                <template v-else-if="step === 7">
+                <!-- Finale: Ready! (index kept relative so inserting slides above is safe) -->
+                <template v-else-if="step === total - 1">
                   <rect width="360" height="140" fill="#0f172a"/>
                   <defs>
                     <linearGradient id="readyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -287,6 +315,14 @@ const colorMap = {
                   <text x="136" y="47"  text-anchor="middle" font-size="14">🎯</text>
                   <text x="180" y="63"  text-anchor="middle" font-size="22">🏸</text>
                   <text x="180" y="81"  text-anchor="middle" font-size="8.5" fill="#00e5ff" font-weight="bold">B360</text>
+                </template>
+
+                <!-- Fallback illustration for feature slides without bespoke art -->
+                <template v-else>
+                  <rect width="360" height="140" fill="#0f172a"/>
+                  <circle cx="180" cy="70" r="40" fill="none" stroke="#00e5ff30" stroke-width="1.5"/>
+                  <circle cx="180" cy="70" r="28" fill="none" stroke="#a855f720" stroke-width="1"/>
+                  <text x="180" y="86" text-anchor="middle" font-size="40">{{ slides[step].emoji }}</text>
                 </template>
 
               </svg>

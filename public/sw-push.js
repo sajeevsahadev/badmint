@@ -33,3 +33,25 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
+// ── Web Share Target ──────────────────────────────────────────────────────
+// The manifest's share_target POSTs the shared photo here. We stash the file in
+// a cache and redirect to the /share receiver page, which reads it back and
+// lets the user post it into a club chat. (Enabled by a new AAB build.)
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (event.request.method === 'POST' && url.pathname === '/share-target') {
+    event.respondWith((async () => {
+      try {
+        const form = await event.request.formData()
+        const file = form.get('image')
+        if (file && file.size) {
+          const cache = await caches.open('b360-share')
+          await cache.put('/__shared-image',
+            new Response(file, { headers: { 'Content-Type': file.type || 'image/jpeg' } }))
+        }
+      } catch { /* fall through to the page, which shows an empty-state */ }
+      return Response.redirect('/share', 303)
+    })())
+  }
+})

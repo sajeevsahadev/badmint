@@ -18,6 +18,7 @@ const routes = [
   { path: '/manage',    component: () => import('../views/Manage.vue') },
   { path: '/splits',    component: () => import('../views/PaySplits.vue') },
   { path: '/chat',      component: () => import('../views/Chat.vue'), meta: { fullscreen: true } },
+  { path: '/share',     component: () => import('../views/ShareTarget.vue') },
   { path: '/join',      component: () => import('../views/JoinClub.vue') },
   { path: '/join/:clubId', component: () => import('../views/JoinClub.vue') },
   { path: '/profile',   component: () => import('../views/Profile.vue') },
