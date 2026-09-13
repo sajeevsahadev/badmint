@@ -51,7 +51,8 @@ self.addEventListener('fetch', (event) => {
             new Response(file, { headers: { 'Content-Type': file.type || 'image/jpeg' } }))
         }
       } catch { /* fall through to the page, which shows an empty-state */ }
-      return Response.redirect('/share', 303)
+      // Response.redirect requires an ABSOLUTE URL — relative throws in some browsers.
+      return Response.redirect(new URL('/share', self.location.origin).href, 303)
     })())
   }
 })
