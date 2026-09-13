@@ -16,7 +16,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'badge.png', 'sw-push.js'],
+      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'badge.png', 'sw-push.js'],
       workbox: {
         clientsClaim: true,
         cleanupOutdatedCaches: true,
@@ -63,7 +63,9 @@ export default defineConfig({
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          // Padded safe-zone icon for Android adaptive/maskable icons (full-bleed
+          // designs get cropped by the launcher mask — see icon-maskable-512.png).
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ],
         screenshots: [
           {

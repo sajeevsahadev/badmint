@@ -112,8 +112,25 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
+    const reqUrl = new URL(req.url)
+
+    // ?preview=<owner-email> sends one of each template to the owner for review.
+    // Restricted to the owner address so it can never mail an arbitrary recipient;
+    // does not touch lifecycle_email_log.
+    const previewTo = reqUrl.searchParams.get('preview')
+    if (previewTo) {
+      const OWNER = 'sajeevsahadev@gmail.com'
+      if (previewTo !== OWNER) return json({ error: 'preview restricted to owner' }, 403)
+      const results = {
+        welcome: await sendEmail(OWNER, '[Preview] Welcome to Badminton 360 🏸',            welcomeHtml('Sajeev')),
+        day2:    await sendEmail(OWNER, '[Preview] Ready to start your badminton club? 🏸',  day2Html('Sajeev')),
+        monthly: await sendEmail(OWNER, '[Preview] Your badminton club is 2 minutes away 🏸', monthlyHtml('Sajeev')),
+      }
+      return json({ ok: true, preview: true, sentTo: OWNER, results })
+    }
+
     // ?dry=1 renders + counts without sending or logging (safe pipeline check).
-    const dry = new URL(req.url).searchParams.get('dry') === '1'
+    const dry = reqUrl.searchParams.get('dry') === '1'
     const admin = createClient(URL_, SVC)
     const { data: targets, error } = await admin.rpc('get_pending_nudges')
     if (error) return json({ error: error.message }, 500)
