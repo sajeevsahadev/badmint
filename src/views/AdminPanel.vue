@@ -161,6 +161,14 @@ const chatClubId  = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const search      = ref('')
+// Clubs-tab search — client-side filter over the already-loaded admin club list.
+const clubSearch  = ref('')
+const filteredClubs = computed(() => {
+  const q = clubSearch.value.trim().toLowerCase()
+  if (!q) return clubs.value
+  return clubs.value.filter(c =>
+    [c.name, c.owner_name, c.owner_email].some(v => String(v || '').toLowerCase().includes(q)))
+})
 const loading     = ref(true)
 const err         = ref('')
 const ok          = ref('')
@@ -595,9 +603,20 @@ const statItems = computed(() => !stats.value ? [] : [
 
       <!-- ── CLUBS ─────────────────────────────────────────────────────── -->
       <div v-if="tab === 'clubs'" class="space-y-3 fade-up">
-        <p class="text-xs text-slate-400">{{ clubs.length }} clubs on platform</p>
+        <p class="text-xs text-slate-400">
+          <template v-if="clubSearch.trim()">{{ filteredClubs.length }} of {{ clubs.length }}</template>
+          <template v-else>{{ clubs.length }}</template>
+          clubs on platform
+        </p>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+          <input v-model="clubSearch" placeholder="Search by club name, owner, or email…"
+            class="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+          <button v-if="clubSearch" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            @click="clubSearch = ''">✕</button>
+        </div>
         <div class="space-y-2">
-          <div v-for="c in clubs" :key="c.club_id" class="card p-4">
+          <div v-for="c in filteredClubs" :key="c.club_id" class="card p-4">
             <div class="flex items-start gap-2">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
@@ -629,6 +648,7 @@ const statItems = computed(() => !stats.value ? [] : [
             </div>
           </div>
           <p v-if="!clubs.length" class="text-center text-sm text-slate-400 py-6">No clubs yet.</p>
+          <p v-else-if="!filteredClubs.length" class="text-center text-sm text-slate-400 py-6">No clubs match “{{ clubSearch }}”.</p>
         </div>
       </div>
 
