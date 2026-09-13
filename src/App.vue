@@ -182,6 +182,9 @@ async function init() {
   }
   // Non-blocking: session + admin check don't need to hold up club/page loading
   startSession(currentClub.value?.club_id).catch(() => {})
+
+  // Deep link from onboarding emails (…/dashboard?guide=1) opens the app guide.
+  if (route.query.guide === '1') showOnboarding.value = true
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
   }).catch(() => {})
@@ -221,6 +224,9 @@ onMounted(init)
 // comparison this would cause loadClubs() to run 2-3× on every startup.
 watch(user, (newUser, oldUser) => {
   if (newUser?.id !== oldUser?.id) init()
+})
+watch(() => route.query.guide, (g) => {
+  if (g === '1' && user.value) showOnboarding.value = true
 })
 watch(() => route.path, (path) => {
   if (!user.value) return
