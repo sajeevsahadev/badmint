@@ -4,11 +4,15 @@ import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useFeatures } from '../composables/useFeatures'
+import { useClub } from '../composables/useClub'
 import { deviceIcon, deviceName } from '../utils/formatters'
 
 const router = useRouter()
 const { user } = useAuth()
 const { flags, reloadFeatures } = useFeatures()
+// Refresh the admin's OWN club list after a club delete/restore so a stale
+// currentClub never lingers (prevents post-delete mis-routing).
+const { loadClubs: reloadMyClubs } = useClub()
 
 // ── Feature flags ──
 const flagBusy = ref('')
@@ -101,10 +105,12 @@ const TABS = [
 ]
 
 // ── Data ──
-const users       = ref([])
-const clubs       = ref([])
-const facilities  = ref([])
-const tournaments = ref([])
+const users         = ref([])
+const clubs         = ref([])
+const deletedClubs  = ref([])   // soft-deleted clubs (30-day retention)
+const restoreBusy   = ref('')   // club_id being restored/purged
+const facilities    = ref([])
+const tournaments   = ref([])
 const stats       = ref(null)
 const sessions    = ref([])
 const sessionsLoading = ref(false)
@@ -248,8 +254,32 @@ async function loadStats() {
 }
 
 async function loadClubs() {
-  const { data, error } = await supabase.rpc('admin_get_clubs')
+  const [{ data, error }, { data: del }] = await Promise.all([
+    supabase.rpc('admin_get_clubs'),
+    supabase.rpc('admin_get_deleted_clubs'),
+  ])
   if (!error) clubs.value = data ?? []
+  deletedClubs.value = del ?? []
+}
+
+async function restoreClub(id) {
+  restoreBusy.value = id
+  const { error } = await supabase.rpc('admin_restore_club', { p_club_id: id })
+  restoreBusy.value = ''
+  if (error) { err.value = error.message; return }
+  flash('Club restored')
+  await Promise.all([loadClubs(), loadStats()])
+  reloadMyClubs().catch(() => {})
+}
+
+async function purgeClub(id, name) {
+  if (!confirm(`Permanently delete "${name}" and ALL its data now? This cannot be undone.`)) return
+  restoreBusy.value = id
+  const { error } = await supabase.rpc('admin_purge_club', { p_club_id: id })
+  restoreBusy.value = ''
+  if (error) { err.value = error.message; return }
+  flash(`${name} permanently deleted`)
+  await Promise.all([loadClubs(), loadStats()])
 }
 
 async function loadFacilities() {
@@ -407,7 +437,10 @@ async function confirmDelete() {
   flash(`${deleteModal.value.name} deleted`)
   const name = deleteModal.value.name
   deleteModal.value = null
-  if (type === 'club')       await Promise.all([loadClubs(), loadStats()])
+  if (type === 'club') {
+    await Promise.all([loadClubs(), loadStats()])
+    reloadMyClubs().catch(() => {})   // self-heal currentClub if we deleted our own club
+  }
   if (type === 'facility')   await Promise.all([loadFacilities(), loadStats()])
   if (type === 'tournament') await Promise.all([loadTournaments(), loadStats()])
 }
@@ -641,7 +674,7 @@ const statItems = computed(() => !stats.value ? [] : [
                   title="Rename" @click="openRename(c)">✏️</button>
                 <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
                   title="Delete"
-                  @click="openDelete('club', c.club_id, c.name, 'Permanently deletes ALL matches, Elo history, and player data for this club. Cannot be undone.')">
+                  @click="openDelete('club', c.club_id, c.name, 'Moves the club to Recently Deleted — it and all its data are hidden immediately and can be restored for 30 days, after which they are permanently removed.')">
                   🗑
                 </button>
               </div>
@@ -649,6 +682,35 @@ const statItems = computed(() => !stats.value ? [] : [
           </div>
           <p v-if="!clubs.length" class="text-center text-sm text-slate-400 py-6">No clubs yet.</p>
           <p v-else-if="!filteredClubs.length" class="text-center text-sm text-slate-400 py-6">No clubs match “{{ clubSearch }}”.</p>
+        </div>
+
+        <!-- Recently deleted (30-day retention) -->
+        <div v-if="deletedClubs.length" class="mt-6">
+          <p class="text-xs font-bold text-rose-500 mb-2">🗑 Recently deleted · {{ deletedClubs.length }}</p>
+          <p class="text-[11px] text-slate-400 mb-2">Hidden from everyone. Restore within the window, or they are purged automatically.</p>
+          <div class="space-y-2">
+            <div v-for="c in deletedClubs" :key="c.club_id" class="card p-4 border border-rose-200/60">
+              <div class="flex items-start gap-2">
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-slate-700 text-sm truncate">{{ c.name }}</p>
+                  <p class="text-xs text-slate-400 truncate mt-0.5">{{ c.owner_email || 'Unknown owner' }} · 👥 {{ c.member_count }}</p>
+                  <p class="text-[11px] mt-1" :class="c.days_left <= 5 ? 'text-rose-500 font-semibold' : 'text-slate-400'">
+                    Deleted {{ fmtShort(c.deleted_at) }} · {{ c.days_left }} day{{ c.days_left === 1 ? '' : 's' }} left to restore
+                  </p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                  <button class="text-xs border border-emerald-300 text-emerald-600 hover:bg-emerald-50 transition rounded-lg px-3 py-2 min-h-[36px] font-semibold"
+                    :disabled="restoreBusy === c.club_id" @click="restoreClub(c.club_id)">
+                    {{ restoreBusy === c.club_id ? '…' : '↩ Restore' }}
+                  </button>
+                  <button class="text-xs border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-300 transition rounded-lg px-3 py-2 min-h-[36px]"
+                    :disabled="restoreBusy === c.club_id" title="Delete forever now" @click="purgeClub(c.club_id, c.name)">
+                    🗑 Forever
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -13,7 +13,7 @@ export function useClub() {
 
     const { data, error } = await supabase
       .from('club_members')
-      .select('club_id, role, clubs(name, logo_url, currency)')
+      .select('club_id, role, clubs!inner(name, logo_url, currency)')
       .eq('user_id', user.id)          // â† only THIS user's memberships
 
     if (error) throw error
@@ -28,9 +28,17 @@ export function useClub() {
       seen.add(c.club_id)
       return true
     })
-    if (!currentClub.value && clubs.value.length) {
-      const saved = localStorage.getItem('clubId')
-      currentClub.value = clubs.value.find(c => c.club_id === saved) || clubs.value[0]
+    // Pick / re-validate the current club. Self-heals when the selected club
+    // vanished from the list (e.g. an admin soft-deleted it, or the user left):
+    // reselect the saved/first remaining club, or clear it if none are left.
+    if (clubs.value.length) {
+      const stillValid = currentClub.value && clubs.value.some(c => c.club_id === currentClub.value.club_id)
+      if (!stillValid) {
+        const saved = localStorage.getItem('clubId')
+        currentClub.value = clubs.value.find(c => c.club_id === saved) || clubs.value[0]
+      }
+    } else {
+      currentClub.value = null
     }
   }
 

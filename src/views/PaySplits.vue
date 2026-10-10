@@ -114,6 +114,46 @@ const expandedPlayer  = ref(null)
 const simplifyOn = ref(localStorage.getItem('b360_simplify_debts') !== '0')
 watch(simplifyOn, v => localStorage.setItem('b360_simplify_debts', v ? '1' : '0'))
 
+// ── Settle up (record an out-of-system payment that clears a payable) ──────
+const settlements = ref([])
+const settleModal = ref(null)   // { fromId, toId, amount, note }
+const settleBusy  = ref(false)
+const settleErr   = ref('')
+const fmtSettleDate = d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+function openSettle(fromId, toId, amount) {
+  settleErr.value = ''
+  settleModal.value = {
+    fromId: fromId || '',
+    toId:   toId || '',
+    amount: amount != null ? Math.round(amount * 100) / 100 : '',
+    note:   '',
+  }
+}
+async function confirmSettle() {
+  const m = settleModal.value
+  if (!m) return
+  const amt = Number(m.amount)
+  if (!m.fromId || !m.toId || m.fromId === m.toId) { settleErr.value = 'Pick two different people.'; return }
+  if (!(amt > 0)) { settleErr.value = 'Enter an amount greater than zero.'; return }
+  settleBusy.value = true; settleErr.value = ''
+  const { error } = await supabase.rpc('add_settlement', {
+    p_club_id:        currentClub.value.club_id,
+    p_from_player_id: m.fromId,
+    p_to_player_id:   m.toId,
+    p_amount:         amt,
+    p_note:           m.note?.trim() || null,
+  })
+  settleBusy.value = false
+  if (error) { settleErr.value = error.message; return }
+  settleModal.value = null
+  await load()
+}
+async function deleteSettle(id) {
+  const { error } = await supabase.rpc('delete_settlement', { p_settlement_id: id })
+  if (!error) await load()
+}
+
 // "Plus N more balances" collapse in the top summary card
 const showAllMyBalance = ref(false)
 
@@ -129,7 +169,7 @@ async function load() {
   loading.value = true
   const cid = currentClub.value.club_id
   try {
-  const [plRes, expRes, balRes, noteRes, myPlRes, wRes, obRes, fifoRes] = await Promise.all([
+  const [plRes, expRes, balRes, noteRes, myPlRes, wRes, obRes, fifoRes, setRes] = await Promise.all([
     supabase.rpc('get_club_players', { p_club_id: cid }),
     supabase.rpc('get_expenses', { p_club_id: cid }),
     supabase.rpc('get_balance_summary', { p_club_id: cid }),
@@ -141,7 +181,8 @@ async function load() {
       .eq('club_id', cid).eq('user_id', user.value.id).maybeSingle(),
     supabase.rpc('get_wallet_data', { p_club_id: cid }),
     supabase.rpc('get_opening_balances', { p_club_id: cid }),
-    supabase.rpc('get_fifo_result', { p_club_id: cid })
+    supabase.rpc('get_fifo_result', { p_club_id: cid }),
+    supabase.rpc('get_settlements', { p_club_id: cid })
   ])
 
   players.value  = plRes.data  ?? []
@@ -170,6 +211,9 @@ async function load() {
 
   // FIFO from server (O(C+W) SQL) — falls back to empty if v36b not yet applied
   fifoResult.value = fifoRes.data ?? { active: [], consumed: [] }
+
+  // Settlements (v126) — tolerate migration not applied yet
+  settlements.value = setRes.error ? [] : (setRes.data ?? [])
   loadCats()
   } finally {
     loading.value = false
@@ -1298,6 +1342,10 @@ const categoryBreakdown = computed(() => {
     <!-- ══════════════════════════════ BALANCE ═════════════════════════════ -->
     <div v-if="activeTab === 'balance'" class="fade-up">
 
+      <button class="btn-primary w-full py-2.5 mb-3 text-sm" @click="openSettle('', '', null)">
+        💵 Record a payment
+      </button>
+
       <!-- Opening balances don't net to zero — group can't fully settle -->
       <div v-if="Math.abs(openingSum) >= 0.01"
         class="mb-3 px-3.5 py-2.5 rounded-xl text-[11px] leading-relaxed"
@@ -1440,6 +1488,9 @@ const categoryBreakdown = computed(() => {
                 </div>
                 <div v-if="o.kind === 'wallet'" class="text-xs text-slate-400 mt-0.5">💰 wallet payment</div>
                 <div v-if="o.kind === 'opening'" class="text-xs text-slate-400 mt-0.5">⚖️ opening balance</div>
+                <button v-if="o.toId && o.toId !== POOL_ID && o.kind !== 'wallet' && o.kind !== 'opening'"
+                  class="mt-1 text-[11px] font-semibold text-neon hover:underline"
+                  @click.stop="openSettle(p.id, o.toId, o.amount)">💵 Settle up</button>
               </div>
               <span class="text-rose-400 font-bold text-sm shrink-0">{{ aed(o.amount) }}</span>
             </div>
@@ -1480,6 +1531,61 @@ const categoryBreakdown = computed(() => {
         </button>
       </div>
 
+      <!-- Payments recorded (settle-up history) -->
+      <div v-if="settlements.length" class="card mt-4 overflow-hidden">
+        <div class="px-4 py-3 border-b border-[rgba(15,23,42,0.06)]">
+          <span class="text-sm font-bold text-slate-700">💵 Payments recorded</span>
+          <span class="text-[11px] text-slate-400 ml-2">out-of-app payments that cleared balances</span>
+        </div>
+        <div v-for="s in settlements" :key="s.id"
+          class="flex items-center justify-between gap-3 px-4 py-3 border-b border-[rgba(15,23,42,0.04)] last:border-0">
+          <div class="min-w-0">
+            <div class="text-sm text-slate-300">
+              <span class="font-semibold">{{ isMe(s.from_player_id) ? 'You' : s.from_name }}</span>
+              <span class="text-slate-500"> paid </span>
+              <span class="font-semibold">{{ isMe(s.to_player_id) ? 'you' : s.to_name }}</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-0.5">{{ fmtSettleDate(s.created_at) }}<span v-if="s.note"> · {{ s.note }}</span></div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-sm font-bold text-emerald-400">{{ aed(s.amount) }}</span>
+            <button v-if="canModify({ created_by: s.created_by })"
+              class="text-slate-400 hover:text-rose-400 text-sm leading-none" title="Delete payment"
+              @click="deleteSettle(s.id)">✕</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Settle-up modal -->
+    <div v-if="settleModal" class="fixed inset-0 z-[200] flex items-end sm:items-center justify-center px-4"
+      style="background:rgba(15,23,42,.5)" @click.self="settleModal = null">
+      <div class="w-full max-w-sm bg-white rounded-3xl p-6 mb-4 sm:mb-0 fade-up">
+        <h3 class="font-display text-lg font-extrabold text-slate-800 mb-1">💵 Record a payment</h3>
+        <p class="text-xs text-slate-400 mb-4">Log a payment made outside the app — it clears that amount between the two people.</p>
+        <label class="label">Who paid</label>
+        <select v-model="settleModal.fromId" class="input mb-3">
+          <option value="">Select payer…</option>
+          <option v-for="p in players" :key="'sf' + p.id" :value="p.id">{{ p.display_name }}</option>
+        </select>
+        <label class="label">Paid to</label>
+        <select v-model="settleModal.toId" class="input mb-3">
+          <option value="">Select payee…</option>
+          <option v-for="p in players" :key="'st' + p.id" :value="p.id">{{ p.display_name }}</option>
+        </select>
+        <label class="label">Amount ({{ clubCurrency }})</label>
+        <input v-model="settleModal.amount" type="number" min="0" step="0.01" class="input mb-3" placeholder="0.00" />
+        <label class="label">Note (optional)</label>
+        <input v-model="settleModal.note" class="input mb-4" maxlength="80" placeholder="e.g. cash, bank transfer" />
+        <p v-if="settleErr" class="text-xs text-rose-500 mb-3">{{ settleErr }}</p>
+        <div class="flex gap-2">
+          <button class="btn-ghost flex-1 py-2.5 text-sm" :disabled="settleBusy" @click="settleModal = null">Cancel</button>
+          <button class="btn-primary flex-1 py-2.5 text-sm" :disabled="settleBusy" @click="confirmSettle">
+            {{ settleBusy ? 'Saving…' : 'Record payment' }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- ══════════════════════════════ WALLET ═════════════════════════════ -->
