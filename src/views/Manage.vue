@@ -32,6 +32,42 @@ const busy         = ref(false)
 
 // Guest players (no account linked)
 const guestPlayers     = ref([])
+
+// ── Add a player (same as the Players roster: create a guest player + optional invite) ──
+const showAddPlayer   = ref(false)
+const newPlayerName   = ref('')
+const newPlayerEmail  = ref('')
+const addPlayerBusy   = ref(false)
+const addPlayerNote   = ref(null)   // { ok, t }
+const addPlayerInvite = ref(null)   // { link, email } when an email was supplied
+
+async function addPlayerSubmit() {
+  const name = newPlayerName.value.trim()
+  if (!name || !currentClub.value) return
+  addPlayerBusy.value = true; addPlayerNote.value = null; addPlayerInvite.value = null
+  const cid = currentClub.value.club_id
+  const { error } = await supabase.from('players').insert({ club_id: cid, display_name: name })
+  if (error) { addPlayerNote.value = { ok: false, t: error.message }; addPlayerBusy.value = false; return }
+
+  // Optional: email → generate a 7-day invite link so they can claim the account
+  const email = newPlayerEmail.value.trim()
+  if (email) {
+    const { data: token, error: invErr } = await supabase.rpc('invite_member', { p_club_id: cid, p_email: email })
+    if (!invErr && token) {
+      addPlayerInvite.value = { link: `${window.location.origin}/join?token=${token}`, email }
+      supabase.functions.invoke('notify-invite', { body: { club_id: cid, email } }).catch(() => {})
+    }
+  }
+  addPlayerNote.value = { ok: true, t: `${name} added${email ? ' — invite link ready below' : ''}` }
+  newPlayerName.value = ''; newPlayerEmail.value = ''
+  await load()
+  addPlayerBusy.value = false
+}
+function copyAddInvite() {
+  if (!addPlayerInvite.value?.link) return
+  navigator.clipboard.writeText(addPlayerInvite.value.link)
+  addPlayerNote.value = { ok: true, t: '✅ Invite link copied!' }
+}
 const guestInviteId    = ref(null)
 const guestInviteEmail = ref('')
 const guestInviteLink  = ref('')
@@ -750,7 +786,33 @@ async function leaveClub(clubId) {
 
   <!-- ── Members ── -->
   <div v-if="currentClub && (members.length || guestPlayers.length)" class="card p-4 mb-4 fade-up">
-    <div class="label">Members — {{ currentClub.clubs?.name }}</div>
+    <div class="flex items-center justify-between gap-2 mb-1">
+      <div class="label mb-0">Members — {{ currentClub.clubs?.name }}</div>
+      <button v-if="isManager()" class="text-xs font-semibold text-neon hover:opacity-80 transition shrink-0"
+        @click="showAddPlayer = !showAddPlayer">
+        {{ showAddPlayer ? '✕ Close' : '+ Add Player' }}
+      </button>
+    </div>
+
+    <!-- Add player — same flow as the Players roster -->
+    <div v-if="showAddPlayer && isManager()" class="mb-3 p-3 rounded-xl fade-up"
+      style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12)">
+      <p class="text-[11px] text-slate-400 mb-2">
+        Add a player by name. Optionally add their Gmail to send an invite link so they can claim the account later.
+      </p>
+      <input v-model="newPlayerName" class="input text-sm mb-2" placeholder="Player name" maxlength="40" @keyup.enter="addPlayerSubmit" />
+      <div class="flex gap-2 mb-2">
+        <input v-model="newPlayerEmail" type="email" class="input flex-1 text-sm" placeholder="their@gmail.com (optional)" @keyup.enter="addPlayerSubmit" />
+        <button class="btn-primary px-4 text-sm shrink-0" :disabled="addPlayerBusy || !newPlayerName.trim()" @click="addPlayerSubmit">
+          {{ addPlayerBusy ? '…' : 'Add' }}
+        </button>
+      </div>
+      <div v-if="addPlayerNote" class="text-xs px-2 py-1 rounded-lg mb-1" :class="addPlayerNote.ok ? 'text-emerald-500' : 'text-rose-500'">{{ addPlayerNote.t }}</div>
+      <div v-if="addPlayerInvite" class="fade-up">
+        <div class="text-xs text-slate-400 break-all font-mono mb-2 bg-[rgba(15,23,42,0.04)] rounded-lg p-2 select-all">{{ addPlayerInvite.link }}</div>
+        <button class="btn-ghost text-xs py-2 px-3" @click="copyAddInvite">📋 Copy invite link</button>
+      </div>
+    </div>
 
     <div v-if="memberError"
       class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl text-xs font-medium text-rose-300"
