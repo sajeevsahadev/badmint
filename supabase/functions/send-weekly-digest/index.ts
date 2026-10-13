@@ -12,6 +12,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+async function hmacHex(msg: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg))
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("")
+}
+
 // Current day-of-week (0=Sun..6=Sat) and hour (0..23) in a given IANA timezone.
 function nowInTz(tz: string): { dow: number; hour: number } {
   let parts: Intl.DateTimeFormatPart[]
@@ -133,8 +140,9 @@ function buildDigestHtml(opts: {
   weekly: WeeklyRow[]
   heroes: DayAward[]
   heroDate: string
+  unsub: string
 }): string {
-  const { club_name, nickname, top5, weekly, heroes, heroDate } = opts
+  const { club_name, nickname, top5, weekly, heroes, heroDate, unsub } = opts
   const mvp = weekly[0]
   const greeting = nickname ? `Hi ${esc(nickname)},` : "Hi,"
 
@@ -252,8 +260,10 @@ function buildDigestHtml(opts: {
   <tr><td style="padding:20px 0;text-align:center;">
     <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.8;">
       <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;font-weight:600;">Badminton 360</a>
-      &nbsp;·&nbsp; Manage emails in
-      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">Settings → Email</a>
+      &nbsp;·&nbsp;
+      <a href="${unsub}" style="color:#0099bb;text-decoration:none;">Unsubscribe</a>
+      &nbsp;·&nbsp;
+      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">Email preferences</a>
     </p>
   </td></tr>
 
@@ -285,11 +295,14 @@ async function getClubData(admin: ReturnType<typeof createClient>, clubId: strin
   return { top5, weekly, heroes, heroDate }
 }
 
-async function sendEmail(RESEND_API_KEY: string, to: string, subject: string, html: string): Promise<string | null> {
+async function sendEmail(RESEND_API_KEY: string, to: string, subject: string, html: string, unsub: string): Promise<string | null> {
   const resp = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "Badminton 360 <noreply@badminton360.app>", to: [to], subject, html }),
+    body: JSON.stringify({
+      from: "Badminton 360 <noreply@badminton360.app>", to: [to], subject, html,
+      headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    }),
   })
   if (resp.ok) return null
   return await resp.text()
@@ -346,9 +359,10 @@ serve(async (req: Request) => {
       for (const club of candidates) {
         const cd = await getClubData(admin, club.id)
         if (!cd) continue
-        const html = buildDigestHtml({ club_name: club.name, nickname: "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate })
+        const unsub = `${SUPABASE_URL}/functions/v1/unsubscribe?e=${encodeURIComponent(testEmail)}&t=${await hmacHex(testEmail.toLowerCase(), SUPABASE_SERVICE_KEY)}`
+        const html = buildDigestHtml({ club_name: club.name, nickname: "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate, unsub })
         const mvpName = cd.weekly[0]?.display_name ?? cd.top5[0]?.display_name ?? club.name
-        const err = await sendEmail(RESEND_API_KEY, testEmail, `🏆 Weekly Rankings — ${club.name} (preview)`, html)
+        const err = await sendEmail(RESEND_API_KEY, testEmail, `🏆 Weekly Rankings — ${club.name} (preview)`, html, unsub)
         return new Response(JSON.stringify({ ok: !err, test: testEmail, club: club.name, mvp: mvpName, error: err }), {
           status: err ? 502 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         })
@@ -377,6 +391,10 @@ serve(async (req: Request) => {
     const emailMap = new Map<string, string>()
     for (const u of authData?.users ?? []) if (u.email) emailMap.set(u.id, u.email)
 
+    // Suppression list (keyed by email) — honoured even for managers_only test sends
+    const { data: suppRows } = await admin.from("email_suppression").select("email")
+    const suppressed = new Set<string>((suppRows ?? []).map((s: { email: string }) => s.email.toLowerCase()))
+
     let totalSent = 0
     const allErrors: string[] = []
     let batchCount = 0
@@ -393,25 +411,28 @@ serve(async (req: Request) => {
         : members
       const userIds = relevant.map((m: { user_id: string }) => m.user_id)
       const { data: profiles } = await admin
-        .from("user_profiles").select("user_id, nickname, email_prefs").in("user_id", userIds)
-      const profileMap = new Map<string, { nickname: string | null; email_prefs: Record<string, unknown> | null }>()
-      for (const p of profiles ?? []) profileMap.set(p.user_id, { nickname: p.nickname, email_prefs: p.email_prefs })
+        .from("user_profiles").select("user_id, nickname, email_prefs, deactivated_at").in("user_id", userIds)
+      const profileMap = new Map<string, { nickname: string | null; email_prefs: Record<string, unknown> | null; deactivated_at: string | null }>()
+      for (const p of profiles ?? []) profileMap.set(p.user_id, { nickname: p.nickname, email_prefs: p.email_prefs, deactivated_at: p.deactivated_at })
 
       const mvpName = cd.weekly[0]?.display_name ?? cd.top5[0]?.display_name ?? club.name
 
       for (const uid of userIds) {
         const email = emailMap.get(uid)
         if (!email) continue
+        if (suppressed.has(email.toLowerCase())) continue          // unsubscribed — never email
         const profile = profileMap.get(uid)
+        if (profile?.deactivated_at) continue                       // deactivated — no automated email
         const prefs   = profile?.email_prefs ?? null
         const wantsDigest = managersOnly || !prefs || (prefs.weekly_digest !== false && prefs.weekly_digest !== "false")
         if (!wantsDigest) continue
 
-        const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate })
+        const unsub = `${SUPABASE_URL}/functions/v1/unsubscribe?e=${encodeURIComponent(email)}&t=${await hmacHex(email.toLowerCase(), SUPABASE_SERVICE_KEY)}`
+        const html = buildDigestHtml({ club_name: club.name, nickname: profile?.nickname ?? "", top5: cd.top5, weekly: cd.weekly, heroes: cd.heroes, heroDate: cd.heroDate, unsub })
         const subject = managersOnly
           ? `🧪 [Test] Weekly Rankings — ${club.name}`
           : `🏆 ${mvpName} tops ${club.name} — Weekly Rankings`
-        const err = await sendEmail(RESEND_API_KEY, email, subject, html)
+        const err = await sendEmail(RESEND_API_KEY, email, subject, html, unsub)
         if (err) allErrors.push(`${email}(${club.name}): ${err}`)
         else totalSent++
 
