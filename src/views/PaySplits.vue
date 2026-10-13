@@ -196,12 +196,11 @@ async function load() {
     author: players.value.find(p => p.user_id === n.created_by)?.display_name ?? 'Member'
   }))
 
-  if (wRes.data) {
-    walletData.value = {
-      contributions:   wRes.data.contributions   ?? [],
-      wallet_expenses: wRes.data.wallet_expenses ?? [],
-      player_balances: wRes.data.player_balances ?? []
-    }
+  // Always assign (even when null) so switching clubs never shows a stale balance.
+  walletData.value = {
+    contributions:   wRes.data?.contributions   ?? [],
+    wallet_expenses: wRes.data?.wallet_expenses ?? [],
+    player_balances: wRes.data?.player_balances ?? []
   }
 
   // Tolerate the v19 migration not being applied yet; show newest entry first
