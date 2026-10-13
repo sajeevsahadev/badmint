@@ -1,9 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // Onboarding email lifecycle dispatcher — invoked daily by pg_cron. Sends the
-// day-2 and monthly "you haven't created a club yet" nudges to eligible users
-// (see get_pending_nudges), then logs each send so it never repeats. Access is
-// gated by Supabase verify_jwt=true; the actual work uses the service role.
+// welcome, day-2 and monthly nudges to eligible users (see get_pending_nudges,
+// which already excludes deactivated + suppressed emails), then logs each send so
+// it never repeats. Every email carries a one-click, no-login Unsubscribe link
+// (HMAC-signed) + a List-Unsubscribe header. Gated by verify_jwt=true; work runs
+// under the service role.
 
 const RESEND = Deno.env.get('RESEND_API_KEY')
 const URL_  = Deno.env.get('SUPABASE_URL')!
@@ -19,8 +21,20 @@ const json = (o: unknown, s = 200) =>
 const APP = 'https://badminton360.app'
 const first = (name: string) => (name && name.trim() ? name.trim().split(/\s+/)[0] : 'there')
 
-// Shared shell so both nudges look like the welcome email.
-function shell(inner: string) {
+// ── One-click unsubscribe link (verified by the public `unsubscribe` function) ──
+async function hmacHex(msg: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg))
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+async function unsubUrl(email: string): Promise<string> {
+  const t = await hmacHex(email.toLowerCase(), SVC)
+  return `${URL_}/functions/v1/unsubscribe?e=${encodeURIComponent(email)}&t=${t}`
+}
+
+// Shared shell so every email looks the same. `unsub` is the one-click link.
+function shell(inner: string, unsub: string) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Badminton 360</title></head>
 <body style="margin:0;background:#eef4ff;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a">
@@ -32,9 +46,11 @@ function shell(inner: string) {
   <div style="background:#fff;border-radius:18px;padding:26px 22px;box-shadow:0 8px 30px rgba(15,23,42,.08)">
     ${inner}
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px;line-height:1.6">
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px;line-height:1.7">
     You're getting this because you signed up for Badminton 360.<br>
-    Manage email preferences in the app · <a href="mailto:hello@badminton360.app" style="color:#0891b2">hello@badminton360.app</a>
+    <a href="${unsub}" style="color:#0891b2">Unsubscribe</a> ·
+    <a href="${APP}/settings/email" style="color:#0891b2">Email preferences</a> ·
+    <a href="mailto:hello@badminton360.app" style="color:#0891b2">hello@badminton360.app</a>
   </p>
 </div></body></html>`
 }
@@ -47,7 +63,7 @@ function step(emoji: string, title: string, body: string) {
     <span style="font-size:13px;color:#475569">${body}</span></td></tr>`
 }
 
-function day2Html(name: string) {
+function day2Html(name: string, unsub: string) {
   return shell(`
     <h1 style="font-size:20px;margin:0 0 6px">Ready to start your club, ${first(name)}? 🏸</h1>
     <p style="font-size:14px;color:#475569;margin:0 0 16px;line-height:1.6">
@@ -61,9 +77,9 @@ function day2Html(name: string) {
     <div style="text-align:center;margin:6px 0 4px">${button(APP + '/manage', 'Create my club →')}</div>
     <p style="text-align:center;font-size:12px;color:#94a3b8;margin:14px 0 0">
       Thousands of badminton players already track their games here.
-      Need a hand? <a href="${APP}/dashboard?guide=1" style="color:#0891b2">See the app guide →</a></p>`)
+      Need a hand? <a href="${APP}/dashboard?guide=1" style="color:#0891b2">See the app guide →</a></p>`, unsub)
 }
-function monthlyHtml(name: string) {
+function monthlyHtml(name: string, unsub: string) {
   return shell(`
     <h1 style="font-size:20px;margin:0 0 6px">Still here whenever you're ready, ${first(name)} 🏸</h1>
     <p style="font-size:14px;color:#475569;margin:0 0 16px;line-height:1.6">
@@ -77,10 +93,9 @@ function monthlyHtml(name: string) {
     <div style="text-align:center;margin:6px 0 4px">${button(APP + '/manage', 'Create my club →')}</div>
     <p style="text-align:center;font-size:12px;color:#94a3b8;margin:14px 0 0">
       Not sure where to start? <a href="${APP}/dashboard?guide=1" style="color:#0891b2">Open the app guide →</a>
-      — it walks you through the whole thing.</p>`)
+      — it walks you through the whole thing.</p>`, unsub)
 }
-
-function welcomeHtml(name: string) {
+function welcomeHtml(name: string, unsub: string) {
   return shell(`
     <h1 style="font-size:20px;margin:0 0 6px">Welcome to Badminton 360, ${first(name)}! 🏸</h1>
     <p style="font-size:14px;color:#475569;margin:0 0 16px;line-height:1.6">
@@ -93,43 +108,46 @@ function welcomeHtml(name: string) {
     </table>
     <div style="text-align:center;margin:6px 0 4px">${button(APP, 'Open Badminton 360 →')}</div>
     <p style="text-align:center;font-size:12px;color:#94a3b8;margin:14px 0 0">
-      New here? <a href="${APP}/dashboard?guide=1" style="color:#0891b2">Take the 2-minute app guide →</a></p>`)
+      New here? <a href="${APP}/dashboard?guide=1" style="color:#0891b2">Take the 2-minute app guide →</a></p>`, unsub)
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+async function sendEmail(to: string, subject: string, html: string, unsub: string): Promise<boolean> {
   if (!RESEND) return false
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Badminton 360 <hello@badminton360.app>', to: [to], subject, html }),
+    body: JSON.stringify({
+      from: 'Badminton 360 <hello@badminton360.app>',
+      to: [to], subject, html,
+      headers: {
+        'List-Unsubscribe': `<${unsub}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    }),
   })
   return r.ok
 }
 
-// Access is gated by Supabase verify_jwt=true (a valid project key is required);
-// repeated calls are harmless because every send is logged and never repeats
-// within its window (get_pending_nudges filters on the log).
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const reqUrl = new URL(req.url)
 
     // ?preview=<owner-email> sends one of each template to the owner for review.
-    // Restricted to the owner address so it can never mail an arbitrary recipient;
-    // does not touch lifecycle_email_log.
     const previewTo = reqUrl.searchParams.get('preview')
     if (previewTo) {
       const OWNER = 'sajeevsahadev@gmail.com'
       if (previewTo !== OWNER) return json({ error: 'preview restricted to owner' }, 403)
+      const un = await unsubUrl(OWNER)
       const results = {
-        welcome: await sendEmail(OWNER, '[Preview] Welcome to Badminton 360 🏸',            welcomeHtml('Sajeev')),
-        day2:    await sendEmail(OWNER, '[Preview] Ready to start your badminton club? 🏸',  day2Html('Sajeev')),
-        monthly: await sendEmail(OWNER, '[Preview] Your badminton club is 2 minutes away 🏸', monthlyHtml('Sajeev')),
+        welcome: await sendEmail(OWNER, '[Preview] Welcome to Badminton 360 🏸',            welcomeHtml('Sajeev', un), un),
+        day2:    await sendEmail(OWNER, '[Preview] Ready to start your badminton club? 🏸',  day2Html('Sajeev', un), un),
+        monthly: await sendEmail(OWNER, '[Preview] Your badminton club is 2 minutes away 🏸', monthlyHtml('Sajeev', un), un),
       }
       return json({ ok: true, preview: true, sentTo: OWNER, results })
     }
 
-    // ?dry=1 renders + counts without sending or logging (safe pipeline check).
+    // ?dry=1 renders + counts without sending or logging.
     const dry = reqUrl.searchParams.get('dry') === '1'
     const admin = createClient(URL_, SVC)
     const { data: targets, error } = await admin.rpc('get_pending_nudges')
@@ -138,13 +156,14 @@ Deno.serve(async (req) => {
     let sent = 0, failed = 0
     const byKind: Record<string, number> = {}
     for (const t of (targets ?? [])) {
+      const un = await unsubUrl(t.email)
       let subject: string, html: string
-      if (t.kind === 'welcome')      { subject = 'Welcome to Badminton 360 🏸';               html = welcomeHtml(t.name) }
-      else if (t.kind === 'day2')    { subject = 'Ready to start your badminton club? 🏸';     html = day2Html(t.name) }
-      else                           { subject = 'Your badminton club is 2 minutes away 🏸';   html = monthlyHtml(t.name) }
+      if (t.kind === 'welcome')      { subject = 'Welcome to Badminton 360 🏸';               html = welcomeHtml(t.name, un) }
+      else if (t.kind === 'day2')    { subject = 'Ready to start your badminton club? 🏸';     html = day2Html(t.name, un) }
+      else                           { subject = 'Your badminton club is 2 minutes away 🏸';   html = monthlyHtml(t.name, un) }
       byKind[t.kind] = (byKind[t.kind] ?? 0) + 1
-      if (dry) { void subject; void html; continue }   // render only, no send
-      const ok = await sendEmail(t.email, subject, html)
+      if (dry) continue
+      const ok = await sendEmail(t.email, subject, html, un)
       if (ok) { await admin.rpc('log_lifecycle_email', { p_user_id: t.user_id, p_kind: t.kind }); sent++ }
       else failed++
     }

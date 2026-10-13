@@ -68,6 +68,7 @@ async function load() {
   ])
 
   profile.value = prof
+  isDeactivated.value = !!prof?.deactivated_at
 
   // Load leaderboard stats for each club this user is in
   if (playerRows?.length) {
@@ -211,6 +212,37 @@ async function confirmDelete() {
     deleteError.value = e.message
     deleting.value = false
   }
+}
+
+// ── Deactivate / Reactivate (pause automated emails, keep data) ──
+const deactivating  = ref(false)
+const isDeactivated  = ref(false)
+const lifecycleNote = ref('')
+async function toggleDeactivate() {
+  deactivating.value = true; lifecycleNote.value = ''
+  const { error } = await supabase.rpc(isDeactivated.value ? 'reactivate_my_account' : 'deactivate_my_account')
+  deactivating.value = false
+  if (error) { lifecycleNote.value = error.message; return }
+  isDeactivated.value = !isDeactivated.value
+  lifecycleNote.value = isDeactivated.value
+    ? '⏸ Account paused — you will no longer receive any automated emails. Your data is kept; reactivate anytime.'
+    : '▶ Account reactivated.'
+}
+
+// ── GDPR data export (right to access / portability) ──
+const exporting = ref(false)
+async function exportMyData() {
+  exporting.value = true; lifecycleNote.value = ''
+  const { data, error } = await supabase.rpc('export_my_data')
+  exporting.value = false
+  if (error) { lifecycleNote.value = error.message; return }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `badminton360-my-data-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -357,8 +389,47 @@ async function confirmDelete() {
     <p v-if="leaveNote" class="text-xs text-emerald-400 mb-3 px-1">✅ {{ leaveNote }}</p>
     <p v-if="leaveError" class="text-xs text-rose-400 mb-3 px-1">{{ leaveError }}</p>
 
-    <!-- ── Danger Zone ──────────────────────────────────────────────────── -->
+    <!-- ── Account & Privacy ────────────────────────────────────────────── -->
     <div class="mt-6 mb-2 fade-up">
+      <div class="card overflow-hidden p-0">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <span class="text-base">🔒</span>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Account &amp; Privacy</span>
+        </div>
+
+        <!-- Pause / deactivate -->
+        <div class="px-4 py-4 border-b border-slate-100">
+          <div class="text-sm font-semibold text-slate-800 mb-1">
+            {{ isDeactivated ? 'Reactivate My Account' : 'Pause My Account' }}
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">
+            <template v-if="isDeactivated">Your account is paused — no automated emails are being sent. Reactivate to resume.</template>
+            <template v-else>Stop all automated emails (nudges, digests, reminders) while keeping your account and data. You can reactivate anytime.</template>
+          </p>
+          <button @click="toggleDeactivate" :disabled="deactivating"
+            class="text-xs font-bold rounded-xl px-4 py-2 border transition disabled:opacity-50"
+            :class="isDeactivated ? 'text-emerald-600 border-emerald-300 hover:bg-emerald-50' : 'text-amber-600 border-amber-300 hover:bg-amber-50'">
+            {{ deactivating ? 'Saving…' : (isDeactivated ? '▶ Reactivate account' : '⏸ Pause account') }}
+          </button>
+        </div>
+
+        <!-- Data export -->
+        <div class="px-4 py-4">
+          <div class="text-sm font-semibold text-slate-800 mb-1">Download My Data</div>
+          <p class="text-xs text-slate-500 leading-relaxed mb-3">
+            Export everything we hold about you (profile, clubs, sessions, preferences) as a JSON file — your GDPR right to access.
+          </p>
+          <button @click="exportMyData" :disabled="exporting"
+            class="text-xs font-bold text-cyan-700 border border-cyan-300 rounded-xl px-4 py-2 hover:bg-cyan-50 transition disabled:opacity-50">
+            {{ exporting ? 'Preparing…' : '⬇ Download my data (JSON)' }}
+          </button>
+        </div>
+      </div>
+      <p v-if="lifecycleNote" class="text-xs text-slate-600 mt-2 px-1">{{ lifecycleNote }}</p>
+    </div>
+
+    <!-- ── Danger Zone ──────────────────────────────────────────────────── -->
+    <div class="mt-4 mb-2 fade-up">
       <div class="rounded-2xl border border-rose-200/60 overflow-hidden" style="background:#fff9f9;">
         <div class="px-4 py-3 border-b border-rose-100 flex items-center gap-2">
           <span class="text-base">⚠️</span>
@@ -369,6 +440,7 @@ async function confirmDelete() {
           <p class="text-xs text-slate-500 leading-relaxed mb-3">
             Permanently remove your account and all personal data from Badminton 360.
             Club match history is preserved (anonymised) so Elo rankings stay accurate.
+            <br><span class="text-slate-400">Just want to stop emails? Use <b>Pause My Account</b> above instead.</span>
           </p>
           <button
             @click="openDeleteModal"
@@ -420,6 +492,9 @@ async function confirmDelete() {
               style="background:#fff7f7; border-color:#fecaca; color:#991b1b;">
               <div class="font-bold mb-1">❌ Can't delete right now</div>
               <p>{{ deleteCheckResult.details }}</p>
+              <p class="mt-2 pt-2 border-t border-rose-200 text-rose-700">
+                Prefer to just stop emails? Close this and use <b>Pause My Account</b> — it keeps your data but ends every automated email.
+              </p>
             </div>
 
             <!-- Pre-check: clear to delete -->

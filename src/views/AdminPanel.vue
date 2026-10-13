@@ -167,6 +167,10 @@ const chatClubId  = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const search      = ref('')
+// User lifecycle (deactivate / delete)
+const userBusy        = ref('')    // user_id being deactivated/reactivated/pre-checked
+const deleteUserModal = ref(null)  // { user_id, email, name, matchCount, canDelete, blockReason }
+const deletingUser    = ref(false)
 // Clubs-tab search — client-side filter over the already-loaded admin club list.
 const clubSearch  = ref('')
 const filteredClubs = computed(() => {
@@ -330,6 +334,50 @@ async function revoke(userId, role, name) {
   const { error } = await supabase.rpc('revoke_role', { p_user_id: userId, p_role: role })
   if (error) { err.value = error.message; return }
   flash(`${role} revoked from ${name}`)
+  await loadUsers()
+}
+
+// ── User lifecycle (deactivate / delete) ──
+async function toggleUserActive(u) {
+  const activating = !!u.deactivated_at   // currently deactivated → reactivate
+  userBusy.value = u.user_id
+  const { error } = await supabase.rpc('admin_set_user_active', { p_user_id: u.user_id, p_active: activating })
+  userBusy.value = ''
+  if (error) { err.value = error.message; return }
+  flash(activating ? 'Account reactivated' : 'Account deactivated — automated emails stopped')
+  await loadUsers()
+}
+
+async function openDeleteUser(u) {
+  userBusy.value = u.user_id
+  const { data, error } = await supabase.rpc('admin_can_delete_user', { p_user_id: u.user_id })
+  userBusy.value = ''
+  if (error) { err.value = error.message; return }
+  deleteUserModal.value = {
+    user_id:     u.user_id,
+    email:       u.email,
+    name:        u.full_name || u.nickname || u.email,
+    matchCount:  data?.match_count ?? 0,
+    canDelete:   !!data?.can_delete,
+    blockReason: data?.details || '',
+  }
+}
+
+async function confirmDeleteUser() {
+  const m = deleteUserModal.value
+  if (!m || !m.canDelete) return
+  deletingUser.value = true; err.value = ''
+  const { data, error } = await supabase.functions.invoke('admin-delete-user', { body: { user_id: m.user_id } })
+  if (error || data?.error) {
+    let msg = data?.error || error?.message || 'Delete failed'
+    try { if (error?.context) { const b = await error.context.json(); if (b?.error) msg = b.error } } catch { /* ignore */ }
+    deletingUser.value = false
+    err.value = msg
+    return
+  }
+  deletingUser.value = false
+  flash(`${m.email} permanently deleted`)
+  deleteUserModal.value = null
   await loadUsers()
 }
 
@@ -603,7 +651,11 @@ const statItems = computed(() => !stats.value ? [] : [
           <div v-for="u in users" :key="u.user_id" class="card p-4">
             <div class="flex items-start justify-between gap-2 mb-2">
               <div class="flex-1 min-w-0">
-                <p class="font-semibold text-slate-800 text-sm truncate">{{ u.full_name || u.nickname || '—' }}</p>
+                <p class="font-semibold text-slate-800 text-sm truncate">
+                  {{ u.full_name || u.nickname || '—' }}
+                  <span v-if="u.deactivated_at" class="inline-block align-middle text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Deactivated</span>
+                  <span v-if="u.email_suppressed" class="inline-block align-middle text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600">Unsubscribed</span>
+                </p>
                 <p class="text-xs text-slate-400 truncate">{{ u.email }}</p>
                 <p class="text-[10px] text-slate-300 mt-0.5">
                   Joined {{ fmtDate(u.created_at) }}
@@ -615,7 +667,19 @@ const statItems = computed(() => !stats.value ? [] : [
                   <span v-if="u.last_ip" class="font-mono"> · {{ deviceIcon(u.last_user_agent) }} {{ u.last_ip }}</span>
                 </p>
               </div>
-              <button class="shrink-0 btn-ghost text-xs px-3 py-1.5" @click="openGrant(u)">+ Role</button>
+              <div class="shrink-0 flex flex-col items-end gap-1.5">
+                <div class="flex gap-1.5">
+                  <button class="text-xs px-2.5 py-1.5 rounded-lg border transition disabled:opacity-50"
+                    :class="u.deactivated_at ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50' : 'border-amber-200 text-amber-600 hover:bg-amber-50'"
+                    :disabled="userBusy === u.user_id" @click="toggleUserActive(u)"
+                    :title="u.deactivated_at ? 'Reactivate account' : 'Deactivate — stops all automated emails, keeps data'">
+                    {{ userBusy === u.user_id ? '…' : (u.deactivated_at ? '▶ Reactivate' : '⏸ Deactivate') }}
+                  </button>
+                  <button class="text-xs px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition disabled:opacity-50"
+                    :disabled="userBusy === u.user_id" @click="openDeleteUser(u)" title="Permanently delete (GDPR erasure)">🗑 Delete</button>
+                </div>
+                <button class="btn-ghost text-xs px-3 py-1.5" @click="openGrant(u)">+ Role</button>
+              </div>
             </div>
             <div v-if="u.roles?.length" class="flex flex-wrap gap-1.5">
               <div v-for="r in u.roles" :key="r.role"
@@ -1291,6 +1355,45 @@ const statItems = computed(() => !stats.value ? [] : [
           <button class="btn-primary flex-1" :disabled="saving || !editFacModal.name.trim()" @click="saveEditFacility">
             {{ saving ? 'Saving…' : 'Save Changes' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Delete user (GDPR erasure) ── -->
+    <div v-if="deleteUserModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50"
+      @click.self="deleteUserModal = null">
+      <div class="card p-5 max-w-sm w-full">
+        <h3 class="text-base font-bold text-slate-800 mb-1">Delete this account?</h3>
+        <p class="text-xs text-slate-500 mb-3 truncate">{{ deleteUserModal.name }} · {{ deleteUserModal.email }}</p>
+
+        <div v-if="deleteUserModal.canDelete">
+          <div class="rounded-xl bg-rose-50 border border-rose-100 p-3 text-xs text-rose-700 mb-3 space-y-1.5">
+            <p class="font-semibold">This permanently erases the user (GDPR right to erasure):</p>
+            <ul class="list-disc pl-4 space-y-0.5 text-rose-600">
+              <li>Profile, sessions, chat, votes and push devices are deleted.</li>
+              <li>Login is removed — they can no longer sign in.</li>
+              <li>All automated emails stop immediately.</li>
+              <li v-if="deleteUserModal.matchCount > 0">
+                {{ deleteUserModal.matchCount }} match(es) are kept but <b>anonymized</b> (shown as a guest) so other players' Elo stays intact.
+              </li>
+            </ul>
+            <p class="pt-1">This <b>cannot be undone.</b> To just stop emails instead, use <b>Deactivate</b>.</p>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn-ghost flex-1" @click="deleteUserModal = null">Cancel</button>
+            <button class="btn-danger flex-1" :disabled="deletingUser" @click="confirmDeleteUser">
+              {{ deletingUser ? 'Deleting…' : 'Delete permanently' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else>
+          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 text-xs text-amber-800 mb-3">
+            <p class="font-semibold mb-1">Can't delete yet</p>
+            <p>{{ deleteUserModal.blockReason }}</p>
+            <p class="mt-2 text-amber-700">You can <b>Deactivate</b> this account instead — it keeps the data but stops every automated email.</p>
+          </div>
+          <button class="btn-ghost w-full" @click="deleteUserModal = null">Close</button>
         </div>
       </div>
     </div>
