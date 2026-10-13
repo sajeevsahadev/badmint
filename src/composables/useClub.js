@@ -3,13 +3,17 @@ import { supabase } from '../lib/supabase'
 
 const clubs       = ref([])
 const currentClub = ref(null)
+// Admin "Super User mode": when an app_admin turns this on, the switcher lists
+// EVERY club so they can monitor full activity. Persisted per device.
+const superUser   = ref((() => { try { return localStorage.getItem('b360_superuser') === '1' } catch { return false } })())
+const isAppAdmin  = ref(false)
 
 export function useClub() {
   async function loadClubs() {
     // MUST filter by user_id â€” otherwise RLS returns ALL members of joined clubs,
     // causing the same club to appear once per other member (N times in switcher).
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { clubs.value = []; return }
+    if (!user) { clubs.value = []; isAppAdmin.value = false; return }
 
     const { data, error } = await supabase
       .from('club_members')
@@ -23,11 +27,35 @@ export function useClub() {
     // for any club you belong to. The user_id filter above should handle this,
     // but we guard defensively here in case of any query/caching edge cases.
     const seen = new Set()
-    clubs.value = (data ?? []).filter(c => {
+    const list = (data ?? []).filter(c => {
       if (seen.has(c.club_id)) return false
       seen.add(c.club_id)
       return true
     })
+
+    // Am I an app admin? (cheap SECURITY DEFINER check) — gates Super User mode.
+    try {
+      const { data: adm } = await supabase.rpc('is_app_admin')
+      isAppAdmin.value = !!adm
+    } catch { isAppAdmin.value = false }
+
+    // Super User mode: fold EVERY club into the switcher (role 'owner' so all
+    // screens render). _adminView flags clubs the admin is only monitoring.
+    if (superUser.value && isAppAdmin.value) {
+      try {
+        const { data: all } = await supabase.rpc('admin_list_all_clubs')
+        for (const c of all ?? []) {
+          if (seen.has(c.club_id)) continue
+          seen.add(c.club_id)
+          list.push({
+            club_id: c.club_id, role: 'owner', _adminView: true,
+            clubs: { name: c.name, logo_url: c.logo_url, currency: c.currency },
+          })
+        }
+      } catch { /* non-admin or RPC unavailable — ignore */ }
+    }
+
+    clubs.value = list
     // Pick / re-validate the current club. Self-heals when the selected club
     // vanished from the list (e.g. an admin soft-deleted it, or the user left):
     // reselect the saved/first remaining club, or clear it if none are left.
@@ -47,6 +75,13 @@ export function useClub() {
     localStorage.setItem('clubId', c.club_id)
   }
 
+  // Turn Super User mode on/off (admin only) and refresh the club list.
+  async function setSuperUser(on) {
+    superUser.value = !!on
+    try { localStorage.setItem('b360_superuser', on ? '1' : '0') } catch { /* ignore */ }
+    await loadClubs()
+  }
+
   async function createClub(name, currency = 'AED', countryCode = 'AE') {
     const { data, error } = await supabase.rpc('create_club', {
       p_name: name, p_currency: currency, p_country_code: countryCode,
@@ -60,5 +95,5 @@ export function useClub() {
 
   const isManager = () => ['owner','manager'].includes(currentClub.value?.role)
 
-  return { clubs, currentClub, loadClubs, selectClub, createClub, isManager }
+  return { clubs, currentClub, loadClubs, selectClub, createClub, isManager, superUser, isAppAdmin, setSuperUser }
 }

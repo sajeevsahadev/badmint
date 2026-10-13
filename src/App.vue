@@ -18,7 +18,7 @@ import ProfileCompletionGate from './components/ProfileCompletionGate.vue'
 
 const { user, ready, signOut } = useAuth()
 const { syncFromProfile } = useTheme()
-const { clubs, currentClub, loadClubs, selectClub } = useClub()
+const { clubs, currentClub, loadClubs, selectClub, superUser } = useClub()
 const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
 const { startSession, trackPage, endSession } = useSession()
 const { isLocked, armOnBoot, unlock } = useBiometricLock()
@@ -455,6 +455,13 @@ const needsClub = computed(() =>
         </div>
 
       </header>
+
+      <!-- Super User monitoring banner — shown when viewing a club the admin isn't a member of -->
+      <div v-if="superUser && currentClub?._adminView"
+        class="mb-3 rounded-xl px-3 py-2 text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-300 flex items-center gap-2">
+        <span>🕵️</span>
+        <span class="flex-1 min-w-0">Super User — viewing <b>{{ currentClub.clubs?.name }}</b> as admin (read-only monitoring).</span>
+      </div>
 
       <!-- No club state -->
       <div v-if="needsClub" class="card-neon p-8 text-center fade-up">

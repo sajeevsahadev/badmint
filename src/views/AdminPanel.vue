@@ -12,7 +12,7 @@ const { user } = useAuth()
 const { flags, reloadFeatures } = useFeatures()
 // Refresh the admin's OWN club list after a club delete/restore so a stale
 // currentClub never lingers (prevents post-delete mis-routing).
-const { loadClubs: reloadMyClubs } = useClub()
+const { loadClubs: reloadMyClubs, superUser, setSuperUser } = useClub()
 
 // ── Feature flags ──
 const flagBusy = ref('')
@@ -381,6 +381,14 @@ async function confirmDeleteUser() {
   await loadUsers()
 }
 
+// ── Super User mode (see every club in the switcher) ──
+async function toggleSuper() {
+  await setSuperUser(!superUser.value)
+  flash(superUser.value
+    ? 'Super User mode ON — every club is now in your switcher (top bar)'
+    : 'Super User mode OFF — back to your own clubs')
+}
+
 // ── Club actions ──
 function openRename(c) {
   renameModal.value = { id: c.club_id, name: c.name }
@@ -560,6 +568,28 @@ const statItems = computed(() => !stats.value ? [] : [
       </div>
       <h1 class="font-display text-2xl font-extrabold gradient-text">Admin Panel</h1>
       <p class="text-xs text-slate-400 mt-1">Platform management · Badminton 360</p>
+    </div>
+
+    <!-- Super User mode -->
+    <div class="card p-4 mb-3" :class="superUser ? 'border-2 border-amber-300 bg-amber-50/40' : ''">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-bold text-slate-800">🕵️ Super User mode</p>
+          <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            When ON, <b>every club</b> appears in your club switcher (top bar), so you can open any club's
+            full activity — leaderboard, matches, players, schedule, Split Pay and chat — to monitor misuse.
+          </p>
+          <p v-if="superUser" class="text-[11px] text-amber-600 font-semibold mt-1">
+            ● Active — pick any club from the top-bar switcher. You are viewing other clubs as an admin (read-only).
+          </p>
+        </div>
+        <button @click="toggleSuper" role="switch" :aria-checked="superUser"
+          class="shrink-0 relative w-12 h-7 rounded-full transition-colors focus:outline-none"
+          :class="superUser ? 'bg-amber-500' : 'bg-slate-300'">
+          <span class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform"
+            :class="superUser ? 'translate-x-5' : ''"></span>
+        </button>
+      </div>
     </div>
 
     <!-- Alerts -->
