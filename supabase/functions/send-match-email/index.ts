@@ -6,6 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
+async function hmacHex(msg: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg))
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("")
+}
+
 function buildMatchHtml(opts: {
   match_name: string
   played_on: string
@@ -14,8 +21,9 @@ function buildMatchHtml(opts: {
   score_a: number
   score_b: number
   club_name: string
+  unsub: string
 }): string {
-  const { match_name, played_on, side_a_names, side_b_names, score_a, score_b, club_name } = opts
+  const { match_name, played_on, side_a_names, side_b_names, score_a, score_b, club_name, unsub } = opts
   const winner_side = score_a > score_b ? "A" : "B"
   const winner_names = winner_side === "A" ? side_a_names : side_b_names
   const loser_names  = winner_side === "A" ? side_b_names : side_a_names
@@ -93,19 +101,18 @@ function buildMatchHtml(opts: {
     </table>
 
     <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
-      Elo ratings have been updated for all 4 players.<br>
-      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">
-        Manage email preferences
-      </a>
+      Elo ratings have been updated for all 4 players.
     </p>
   </td></tr>
 
   <!-- Footer -->
   <tr><td style="padding:20px 0;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#94a3b8;">
+    <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.8;">
       <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;">Badminton 360</a>
       &nbsp;·&nbsp;
-      <a href="mailto:hello@badminton360.app" style="color:#0099bb;text-decoration:none;">hello@badminton360.app</a>
+      <a href="${unsub}" style="color:#0099bb;text-decoration:none;">Unsubscribe</a>
+      &nbsp;·&nbsp;
+      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">Email preferences</a>
     </p>
   </td></tr>
 
@@ -180,17 +187,25 @@ serve(async (req: Request) => {
 
     const userIds = members.map((m: { user_id: string }) => m.user_id)
 
-    // Get profiles — check email_prefs->match_recorded
+    // Get profiles — check email_prefs->match_recorded + deactivation
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, email_prefs")
+      .select("user_id, email_prefs, deactivated_at")
       .in("user_id", userIds)
+
+    // Deactivated users never get automated email, regardless of prefs
+    const deactivated = new Set<string>(
+      (profiles ?? [])
+        .filter((p: { deactivated_at: string | null }) => !!p.deactivated_at)
+        .map((p: { user_id: string }) => p.user_id)
+    )
 
     // Build set of opted-in user_ids
     // Default: notify if key is missing (true) or explicitly "true"
     const optedIn = new Set<string>(
       (profiles ?? [])
-        .filter((p: { user_id: string; email_prefs: Record<string, unknown> | null }) => {
+        .filter((p: { user_id: string; email_prefs: Record<string, unknown> | null; deactivated_at: string | null }) => {
+          if (p.deactivated_at) return false
           const prefs = p.email_prefs
           if (!prefs) return true // no prefs set = default true
           return prefs.match_recorded !== false && prefs.match_recorded !== "false"
@@ -200,8 +215,12 @@ serve(async (req: Request) => {
     // Users without a profile row at all also get the email (default opt-in)
     for (const uid of userIds) {
       const hasProfile = (profiles ?? []).some((p: { user_id: string }) => p.user_id === uid)
-      if (!hasProfile) optedIn.add(uid)
+      if (!hasProfile && !deactivated.has(uid)) optedIn.add(uid)
     }
+
+    // Suppression list (unsubscribed emails) — keyed by email
+    const { data: suppRows } = await admin.from("email_suppression").select("email")
+    const suppressed = new Set<string>((suppRows ?? []).map((s: { email: string }) => s.email.toLowerCase()))
 
     if (!optedIn.size) {
       return new Response(JSON.stringify({ ok: true, sent: 0 }), {
@@ -217,22 +236,25 @@ serve(async (req: Request) => {
       if (u.email) emailMap.set(u.id, u.email)
     }
 
-    const html = buildMatchHtml({
-      match_name,
-      played_on,
-      side_a_names,
-      side_b_names,
-      score_a: Number(score_a),
-      score_b: Number(score_b),
-      club_name: club?.name ?? "Your Club",
-    })
-
     let sent = 0
     const errors: string[] = []
 
     for (const uid of optedIn) {
       const email = emailMap.get(uid)
       if (!email) continue
+      if (suppressed.has(email.toLowerCase())) continue   // unsubscribed — never email
+
+      const unsub = `${SUPABASE_URL}/functions/v1/unsubscribe?e=${encodeURIComponent(email)}&t=${await hmacHex(email.toLowerCase(), SUPABASE_SERVICE_KEY)}`
+      const html = buildMatchHtml({
+        match_name,
+        played_on,
+        side_a_names,
+        side_b_names,
+        score_a: Number(score_a),
+        score_b: Number(score_b),
+        club_name: club?.name ?? "Your Club",
+        unsub,
+      })
 
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -245,6 +267,7 @@ serve(async (req: Request) => {
           to: [email],
           subject: `🏸 Match recorded — ${match_name}`,
           html,
+          headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
         }),
       })
 

@@ -6,6 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
+async function hmacHex(msg: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg))
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("")
+}
+
 function buildExpenseHtml(opts: {
   title: string
   amount: number
@@ -13,8 +20,9 @@ function buildExpenseHtml(opts: {
   split_count: number
   club_name: string
   currency: string
+  unsub: string
 }): string {
-  const { title, amount, paid_by_name, split_count, club_name, currency } = opts
+  const { title, amount, paid_by_name, split_count, club_name, currency, unsub } = opts
   const per_person = split_count > 0 ? amount / split_count : amount
   const fmt = (n: number) => n.toFixed(2)
 
@@ -91,19 +99,18 @@ function buildExpenseHtml(opts: {
     </table>
 
     <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
-      Check the Balance tab in Split Pay to see who owes what.<br>
-      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">
-        Manage email preferences
-      </a>
+      Check the Balance tab in Split Pay to see who owes what.
     </p>
   </td></tr>
 
   <!-- Footer -->
   <tr><td style="padding:20px 0;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#94a3b8;">
+    <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.8;">
       <a href="https://badminton360.app" style="color:#0099bb;text-decoration:none;">Badminton 360</a>
       &nbsp;·&nbsp;
-      <a href="mailto:hello@badminton360.app" style="color:#0099bb;text-decoration:none;">hello@badminton360.app</a>
+      <a href="${unsub}" style="color:#0099bb;text-decoration:none;">Unsubscribe</a>
+      &nbsp;·&nbsp;
+      <a href="https://badminton360.app/settings/email" style="color:#0099bb;text-decoration:none;">Email preferences</a>
     </p>
   </td></tr>
 
@@ -178,16 +185,23 @@ serve(async (req: Request) => {
 
     const userIds = members.map((m: { user_id: string }) => m.user_id)
 
-    // Get profiles — check email_prefs->payment_reminders
+    // Get profiles — check email_prefs->payment_reminders + deactivation
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, email_prefs")
+      .select("user_id, email_prefs, deactivated_at")
       .in("user_id", userIds)
 
-    // Default: notify if key is missing or explicitly true
+    const deactivated = new Set<string>(
+      (profiles ?? [])
+        .filter((p: { deactivated_at: string | null }) => !!p.deactivated_at)
+        .map((p: { user_id: string }) => p.user_id)
+    )
+
+    // Default: notify if key is missing or explicitly true (and not deactivated)
     const optedIn = new Set<string>(
       (profiles ?? [])
-        .filter((p: { user_id: string; email_prefs: Record<string, unknown> | null }) => {
+        .filter((p: { user_id: string; email_prefs: Record<string, unknown> | null; deactivated_at: string | null }) => {
+          if (p.deactivated_at) return false
           const prefs = p.email_prefs
           if (!prefs) return true
           return prefs.payment_reminders !== false && prefs.payment_reminders !== "false"
@@ -196,8 +210,12 @@ serve(async (req: Request) => {
     )
     for (const uid of userIds) {
       const hasProfile = (profiles ?? []).some((p: { user_id: string }) => p.user_id === uid)
-      if (!hasProfile) optedIn.add(uid)
+      if (!hasProfile && !deactivated.has(uid)) optedIn.add(uid)
     }
+
+    // Suppression list (unsubscribed emails)
+    const { data: suppRows } = await admin.from("email_suppression").select("email")
+    const suppressed = new Set<string>((suppRows ?? []).map((s: { email: string }) => s.email.toLowerCase()))
 
     if (!optedIn.size) {
       return new Response(JSON.stringify({ ok: true, sent: 0 }), {
@@ -213,21 +231,24 @@ serve(async (req: Request) => {
       if (u.email) emailMap.set(u.id, u.email)
     }
 
-    const html = buildExpenseHtml({
-      title,
-      amount: Number(amount),
-      paid_by_name: paid_by_name ?? "Unknown",
-      split_count: Number(split_count) || 1,
-      club_name: club?.name ?? "Your Club",
-      currency:  club?.currency ?? "AED",
-    })
-
     let sent = 0
     const errors: string[] = []
 
     for (const uid of optedIn) {
       const email = emailMap.get(uid)
       if (!email) continue
+      if (suppressed.has(email.toLowerCase())) continue   // unsubscribed — never email
+
+      const unsub = `${SUPABASE_URL}/functions/v1/unsubscribe?e=${encodeURIComponent(email)}&t=${await hmacHex(email.toLowerCase(), SUPABASE_SERVICE_KEY)}`
+      const html = buildExpenseHtml({
+        title,
+        amount: Number(amount),
+        paid_by_name: paid_by_name ?? "Unknown",
+        split_count: Number(split_count) || 1,
+        club_name: club?.name ?? "Your Club",
+        currency:  club?.currency ?? "AED",
+        unsub,
+      })
 
       const resp = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -240,6 +261,7 @@ serve(async (req: Request) => {
           to: [email],
           subject: `💰 New expense added — ${title}`,
           html,
+          headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
         }),
       })
 
