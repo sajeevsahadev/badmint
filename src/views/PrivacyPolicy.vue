@@ -48,15 +48,26 @@ const { user } = useAuth()
       </section>
 
       <section>
-        <h2 class="font-display text-base font-bold text-slate-800 mb-2">Your rights</h2>
-        <p>
+        <h2 class="font-display text-base font-bold text-slate-800 mb-2">Your rights &amp; controls</h2>
+        <p class="mb-2">
           You can edit or remove most of your info any time from
           <RouterLink to="/profile" class="text-cyan-700 hover:underline">your Profile</RouterLink>.
-          You can permanently delete your account and personal data from
-          <RouterLink to="/profile" class="text-cyan-700 hover:underline">Profile → Danger Zone</RouterLink> —
-          match history is anonymised rather than deleted outright so your club's rankings stay accurate,
-          and deletion is blocked while you're a club owner or have an unsettled Split Pay balance, so you can
-          resolve those first.
+          Specifically, you can:
+        </p>
+        <ul class="list-disc pl-5 space-y-1.5 mb-2">
+          <li><strong>Access / export your data</strong> — download everything we hold about you as a JSON file
+            from <RouterLink to="/profile" class="text-cyan-700 hover:underline">Profile → Account &amp; Privacy</RouterLink>.</li>
+          <li><strong>Stop emails without deleting</strong> — <em>Pause My Account</em> keeps your data but turns off
+            every automated email. Any email we send also has a one-click <strong>Unsubscribe</strong> link that
+            works even without signing in.</li>
+          <li><strong>Erase your account</strong> — from Profile → Danger Zone. Your personal data is deleted and
+            your match history is <em>anonymised</em> (not deleted outright) so your club's rankings stay accurate.
+            Erasure is paused while you're a club owner or have an unsettled Split Pay balance, so you can resolve
+            those first — or use Pause instead.</li>
+        </ul>
+        <p>
+          An administrator can also deactivate or erase an account on request (for example, to action an erasure
+          request by email). Email us to exercise any of these rights.
         </p>
       </section>
 
