@@ -454,10 +454,19 @@ async function exportMyData() {
 
     <!-- Footer -->
     <div class="text-center py-8 fade-up">
+      <RouterLink to="/support"
+        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm text-[#0d0c0c] mb-5
+               shadow-sm hover:shadow-md transition active:scale-95"
+        style="background:#FFDD00;">
+        ☕ Buy me a coffee
+      </RouterLink>
+      <p class="text-[11px] text-slate-400 mb-4">Badminton 360 is free — your support keeps it that way.</p>
       <SocialLinks class="mb-4" />
       <p class="text-xs text-slate-400 mb-2">Made with 🏸 and ❤️ for badminton communities everywhere</p>
       <p class="text-[11px]">
         <RouterLink to="/privacy" class="text-slate-400 hover:text-cyan-600 transition">Privacy Policy</RouterLink>
+        <span class="text-slate-300"> · </span>
+        <RouterLink to="/support" class="text-slate-400 hover:text-cyan-600 transition">Support Us</RouterLink>
       </p>
       <p class="text-[10px] text-slate-300 mt-2">Badminton 360 v{{ appVersion }}</p>
     </div>
