@@ -455,12 +455,12 @@ async function exportMyData() {
     <!-- Footer -->
     <div class="text-center py-8 fade-up">
       <RouterLink to="/support"
-        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm text-[#0d0c0c] mb-5
+        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm text-white mb-5
                shadow-sm hover:shadow-md transition active:scale-95"
-        style="background:#FFDD00;">
-        ☕ Buy me a coffee
+        style="background:linear-gradient(135deg,#a855f7,#7c3aed);">
+        🏸 Buy us a shuttle
       </RouterLink>
-      <p class="text-[11px] text-slate-400 mb-4">Badminton 360 is free — your support keeps it that way.</p>
+      <p class="text-[11px] text-slate-400 mb-4">Enjoying the app? Your support keeps Badminton 360 free. 💜</p>
       <SocialLinks class="mb-4" />
       <p class="text-xs text-slate-400 mb-2">Made with 🏸 and ❤️ for badminton communities everywhere</p>
       <p class="text-[11px]">

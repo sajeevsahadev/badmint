@@ -7,26 +7,26 @@ import QRCode from 'qrcode'
 const router = useRouter()
 const { user } = useAuth()
 
-// Crowdfunding link (Buy Me a Coffee). Single source of truth.
-const BMC_URL = 'https://buymeacoffee.com/sajeev'
+// Crowdfunding link (Ziina payment — accepts intl cards, settles to UAE bank). Single source of truth.
+const PAY_URL = 'https://pay.ziina.com/sajeevks'
 
 const qr = ref('')
 const shared = ref('')
 
 onMounted(async () => {
   try {
-    qr.value = await QRCode.toDataURL(BMC_URL, {
-      width: 220, margin: 1, color: { dark: '#0b1220', light: '#ffffff' },
+    qr.value = await QRCode.toDataURL(PAY_URL, {
+      width: 220, margin: 1, color: { dark: '#6d28d9', light: '#ffffff' },
     })
   } catch { /* QR is a nice-to-have; the button still works */ }
 })
 
 async function share() {
   shared.value = ''
-  const data = { title: 'Support Badminton 360', text: 'Keep Badminton 360 free for every club 🏸☕', url: BMC_URL }
+  const data = { title: 'Support Badminton 360', text: 'Enjoying Badminton 360? Buy us a shuttle 🏸💜', url: PAY_URL }
   try {
     if (navigator.share) { await navigator.share(data); return }
-    await navigator.clipboard.writeText(BMC_URL)
+    await navigator.clipboard.writeText(PAY_URL)
     shared.value = 'Link copied!'
   } catch { /* user cancelled share — ignore */ }
 }
@@ -40,32 +40,33 @@ async function share() {
 
     <!-- Hero -->
     <div class="text-center mb-7 fade-up">
-      <div class="text-5xl mb-3">☕</div>
-      <h1 class="font-display text-2xl font-extrabold gradient-text mb-2">Support Badminton 360</h1>
+      <div class="text-5xl mb-3">🏸</div>
+      <h1 class="font-display text-2xl font-extrabold gradient-text mb-2">Enjoying Badminton 360?</h1>
       <p class="text-sm text-slate-500 leading-relaxed">
-        Badminton 360 is <b>free for every club</b>, with no ads. If it's saved your group some hassle,
-        a coffee helps keep the servers running and new features coming. 🏸
+        If B360 has saved your crew from WhatsApp scorekeeping, endless "who's best?" arguments, and
+        chasing everyone for court money — <b>buy us a shuttle</b>. It keeps the app <b>free, ad-free,
+        and getting better</b>. No pressure, just 💜.
       </p>
     </div>
 
-    <!-- Buy Me a Coffee button -->
-    <a :href="BMC_URL" target="_blank" rel="noopener noreferrer"
+    <!-- Pay button -->
+    <a :href="PAY_URL" target="_blank" rel="noopener noreferrer"
        class="flex items-center justify-center gap-2.5 w-full py-4 rounded-2xl font-extrabold text-[17px]
-              text-[#0d0c0c] transition active:scale-[.99] shadow-sm hover:shadow-md fade-up"
-       style="background:#FFDD00;">
-      <span class="text-xl">☕</span> Buy me a coffee
+              text-white transition active:scale-[.99] shadow-sm hover:shadow-md fade-up"
+       style="background:linear-gradient(135deg,#a855f7,#7c3aed);">
+      <span class="text-xl">🏸</span> Buy us a shuttle
     </a>
     <p class="text-center text-[11px] text-slate-400 mt-2">
-      Opens Buy Me a Coffee · one-time or monthly, any amount
+      Secure checkout by Ziina · Apple&nbsp;Pay, Google&nbsp;Pay, Visa, Mastercard &amp; Amex · any amount
     </p>
 
     <!-- QR + share -->
     <div class="card p-5 mt-6 flex flex-col items-center fade-up">
-      <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Scan to support</p>
-      <img v-if="qr" :src="qr" alt="Buy Me a Coffee QR code" width="200" height="200"
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Scan to pay</p>
+      <img v-if="qr" :src="qr" alt="Ziina payment QR code" width="200" height="200"
            class="rounded-xl border border-slate-100" />
       <div v-else class="w-[200px] h-[200px] rounded-xl shimmer" />
-      <p class="text-[11px] text-slate-400 mt-3 break-all text-center">buymeacoffee.com/sajeev</p>
+      <p class="text-[11px] text-slate-400 mt-3 break-all text-center">pay.ziina.com/sajeevks</p>
       <button class="btn-ghost mt-4 text-sm px-5" @click="share">🔗 Share this</button>
       <p v-if="shared" class="text-xs text-emerald-600 mt-2">{{ shared }}</p>
     </div>
@@ -82,7 +83,7 @@ async function share() {
     </div>
 
     <p class="text-center text-xs text-slate-400 mt-6">
-      Thank you for being part of the Badminton 360 community. 💙
+      Thank you for being part of the Badminton 360 community. 💜
     </p>
   </div>
 </template>
