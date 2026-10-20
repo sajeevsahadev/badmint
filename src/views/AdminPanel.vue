@@ -6,9 +6,12 @@ import { useAuth } from '../composables/useAuth'
 import { useFeatures } from '../composables/useFeatures'
 import { useClub } from '../composables/useClub'
 import { deviceIcon, deviceName } from '../utils/formatters'
+import { countryName } from '../utils/countries'
+import { useGeo } from '../composables/useGeo'
 
 const router = useRouter()
 const { user } = useAuth()
+const { flagEmoji } = useGeo()
 const { flags, reloadFeatures } = useFeatures()
 // Refresh the admin's OWN club list after a club delete/restore so a stale
 // currentClub never lingers (prevents post-delete mis-routing).
@@ -542,7 +545,9 @@ const statusChip = s => ({
 
 const fmtDate  = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 const fmtDateTime = d => d ? new Date(d).toLocaleString('en-AE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-const sessionLocation = s => [s.city, s.region, s.country].filter(Boolean).join(', ') || '—'
+// Prefer the accurate Cloudflare country (country_code) over the old client-sent country text.
+const sessionCountry = s => s.country_code ? `${flagEmoji(s.country_code)} ${countryName(s.country_code)}` : (s.country || '')
+const sessionLocation = s => [s.city, s.region, sessionCountry(s)].filter(Boolean).join(', ') || '—'
 const fmtShort = d => d ? new Date(d).toLocaleDateString('en-AE', { day: 'numeric', month: 'short' }) : '—'
 
 const statItems = computed(() => !stats.value ? [] : [
@@ -694,8 +699,15 @@ const statItems = computed(() => !stats.value ? [] : [
                 </p>
                 <p v-if="u.login_count > 0 || u.last_ip" class="text-[10px] text-slate-400 mt-0.5">
                   <span v-if="u.login_count">{{ u.login_count }} session(s)</span>
+                  <span v-if="u.country_code"> · {{ flagEmoji(u.country_code) }} {{ countryName(u.country_code) }}</span>
                   <span v-if="u.last_ip" class="font-mono"> · {{ deviceIcon(u.last_user_agent) }} {{ u.last_ip }}</span>
                 </p>
+                <div v-if="u.clubs?.length" class="flex flex-wrap items-center gap-1 mt-1">
+                  <span v-for="c in u.clubs" :key="c.id"
+                    class="inline-flex items-center gap-0.5 bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 text-[10px]">
+                    🏸 {{ c.name }}<span v-if="c.role !== 'player'" class="opacity-60"> · {{ c.role }}</span>
+                  </span>
+                </div>
               </div>
               <div class="shrink-0 flex flex-col items-end gap-1.5">
                 <div class="flex gap-1.5">

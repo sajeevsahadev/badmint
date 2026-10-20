@@ -13,7 +13,7 @@ const saving  = ref(false)
 const saved   = ref(false)
 const prefs = ref({
   invites: true,
-  match_recorded: false,
+  match_digest: true,
   weekly_digest: true,
   payment_reminders: true,
   news: true,
@@ -24,8 +24,8 @@ const GROUPS = [
   {
     label: 'Club Activity',
     items: [
-      { key: 'invites',        label: "When you're invited to a club" },
-      { key: 'match_recorded', label: 'When a match is recorded' },
+      { key: 'invites',      label: "When you're invited to a club" },
+      { key: 'match_digest', label: 'Daily match summary · one email at noon' },
     ],
   },
   {

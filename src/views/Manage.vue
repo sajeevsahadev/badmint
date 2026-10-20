@@ -9,9 +9,11 @@ import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { DAYS, HOURS, TIMEZONES, describeSchedule } from '../utils/schedule'
 import { useGeo } from '../composables/useGeo'
 import { COUNTRIES, countryName } from '../utils/countries'
+import CountrySelect from '../components/CountrySelect.vue'
 import { subdivisionsFor, regionLabelFor } from '../utils/regions'
 
-const { flagEmoji } = useGeo()
+const { flagEmoji, countryCode: detectedCode, detectCountry } = useGeo()
+detectCountry().catch(() => {})   // so an unset club defaults to the admin's detected country
 
 const { clubs, currentClub, loadClubs, isManager } = useClub()
 const { avatarMap, loadAvatars } = usePlayerAvatars()
@@ -181,7 +183,7 @@ async function load() {
     .select('emirates, facility_name, facility_address, maps_url, description, facility_id, digest_dow, digest_hour, digest_tz, digest_enabled, country_code, is_public, join_policy')
     .eq('id', cid).single()
   if (clubInfo) {
-    clubCountryCode.value           = clubInfo.country_code      ?? 'AE'
+    clubCountryCode.value           = clubInfo.country_code || detectedCode.value || 'AE'
     clubIsPublic.value              = clubInfo.is_public          ?? true
     clubJoinPolicy.value            = clubInfo.join_policy        ?? 'open'
     digest.value = {
@@ -1002,11 +1004,7 @@ async function leaveClub(clubId) {
     <div class="border-t border-[rgba(15,23,42,0.06)] pt-3 mt-3">
       <label class="label">Country</label>
       <div class="flex gap-2">
-        <select v-model="clubCountryCode" class="input flex-1">
-          <option v-for="code in COUNTRIES" :key="code" :value="code">
-            {{ flagEmoji(code) }} {{ countryName(code) }}
-          </option>
-        </select>
+        <CountrySelect v-model="clubCountryCode" class="flex-1" />
         <button class="btn-primary px-4 shrink-0" :disabled="countryBusy" @click="saveCountry">
           {{ countryBusy ? '…' : 'Save' }}
         </button>
