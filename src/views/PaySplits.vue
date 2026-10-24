@@ -727,31 +727,18 @@ async function saveExpense() {
   }
 
   const { p_club_id: _cid, ...updateParams } = params
-  const { error } = editingId.value
+  const res = editingId.value
     ? await supabase.rpc('update_expense', { p_expense_id: editingId.value, ...updateParams })
     : await supabase.rpc('add_expense', params)
+  const { error } = res
 
   formSaving.value = false
   if (error) { formError.value = error.message; return }
 
-  // Fire-and-forget: notify club members about new expense (new expenses only, not edits)
-  if (!editingId.value) {
-    const isWallet = form.value.paymentSource === 'wallet'
-    const isMultiPayer = !isWallet && form.value.multiPayer && form.value.payers.length > 1
-    const paidByName = isWallet
-      ? 'Club Wallet'
-      : isMultiPayer
-        ? form.value.payers.map(p => players.value.find(pl => pl.id === p.player_id)?.display_name ?? '?').join(', ')
-        : players.value.find(p => p.id === form.value.paid_player_id)?.display_name ?? 'Unknown'
-    supabase.functions.invoke('send-expense-email', {
-      body: {
-        club_id:      currentClub.value.club_id,
-        title:        form.value.title.trim(),
-        amount:       parseFloat(form.value.amount),
-        paid_by_name: paidByName,
-        split_count:  form.value.participant_ids.length,
-      }
-    }).catch(() => {})
+  // Fire-and-forget: email ONLY the expense's participants, each with their own
+  // share (resolved server-side from the new expense id). New expenses only.
+  if (!editingId.value && res.data) {
+    supabase.functions.invoke('send-expense-email', { body: { expense_id: res.data } }).catch(() => {})
   }
 
   showForm.value = false
