@@ -316,6 +316,8 @@ async function sendGuestInvite() {
       `✅ Linked! ${email} now owns "${player?.display_name ?? 'this player'}" — Elo history and all. No approval needed.`
     guestInviteBusy.value = false
     guestInviteId.value   = null
+    // Notify the newly-linked user that they've been added to this club
+    supabase.functions.invoke('send-club-added-email', { body: { player_id: playerId } }).catch(() => {})
     await load()   // player moves from Guests to Members
     return
   }
@@ -350,6 +352,29 @@ function guestWhatsApp() {
     `Hi ${player?.display_name ?? 'there'}!\n\nYou've been added to "${club}" on Badminton 360. Click the link below to sign in with Google and claim your account — your Elo ranking and match history will be waiting for you:\n${guestInviteLink.value}\n\nThe link expires in 7 days. See you on the court! 🏸`
   )
   window.open(`https://wa.me/?text=${msg}`, '_blank')
+}
+
+// ── Merge duplicate players (fold one into another) ──
+const mergeFrom   = ref(null)   // the player being folded in (removed)
+const mergeIntoId = ref('')
+const mergeBusy   = ref(false)
+const mergeNote   = ref(null)
+const mergeTargets = computed(() => {
+  const all = [
+    ...members.value.filter(m => m.player_id).map(m => ({ id: m.player_id, name: m.display, linked: true })),
+    ...guestPlayers.value.map(g => ({ id: g.id, name: g.display_name, linked: false })),
+  ]
+  return all.filter(p => p.id !== mergeFrom.value?.id)
+})
+function openMerge(player) { mergeFrom.value = player; mergeIntoId.value = ''; mergeNote.value = null }
+async function doMerge() {
+  if (!mergeIntoId.value || !mergeFrom.value) return
+  mergeBusy.value = true; mergeNote.value = null
+  const { error } = await supabase.rpc('merge_players', { p_keep_id: mergeIntoId.value, p_remove_id: mergeFrom.value.id })
+  mergeBusy.value = false
+  if (error) { mergeNote.value = { ok: false, t: error.message }; return }
+  mergeFrom.value = null
+  await load()
 }
 
 // ── Save facility info ──
@@ -899,6 +924,12 @@ async function leaveClub(clubId) {
               @click="askDeletePlayer(gp.id, gp.display_name, true)">
               Delete
             </button>
+            <button v-if="isManager()"
+              class="text-[11px] px-2 py-1 rounded-lg border border-violet-200 text-violet-600 hover:bg-violet-50 transition"
+              title="Merge this duplicate into another player"
+              @click="openMerge({ id: gp.id, name: gp.display_name })">
+              Merge
+            </button>
             <button
               class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
               style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"
@@ -1258,6 +1289,35 @@ async function leaveClub(clubId) {
       </button>
     </div>
   </div>
+
+  <!-- ── Merge Players Modal ── -->
+  <Teleport to="body">
+    <div v-if="mergeFrom" class="fixed inset-0 z-[300] flex items-center justify-center p-4"
+      style="background:rgba(0,0,0,.5)" @click.self="mergeFrom = null">
+      <div class="card p-5 max-w-sm w-full">
+        <h3 class="text-base font-bold text-slate-800 mb-1">Merge player</h3>
+        <p class="text-xs text-slate-500 leading-relaxed mb-3">
+          Fold <b>{{ mergeFrom.name }}</b> into another player. All their matches, Elo, attendance and Split Pay
+          move to the player you keep, and <b>{{ mergeFrom.name }}</b> is removed. Rankings are recalculated.
+          <span class="text-rose-500 font-semibold">This can't be undone.</span>
+        </p>
+        <label class="label">Keep &amp; merge into</label>
+        <select v-model="mergeIntoId" class="input w-full mb-3">
+          <option value="" disabled>Select the player to keep…</option>
+          <option v-for="t in mergeTargets" :key="t.id" :value="t.id">
+            {{ t.name }}{{ t.linked ? ' · has account' : ' · guest' }}
+          </option>
+        </select>
+        <p v-if="mergeNote && !mergeNote.ok" class="text-xs text-rose-500 mb-3">{{ mergeNote.t }}</p>
+        <div class="flex gap-2">
+          <button class="btn-ghost flex-1" @click="mergeFrom = null">Cancel</button>
+          <button class="btn-danger flex-1" :disabled="mergeBusy || !mergeIntoId" @click="doMerge">
+            {{ mergeBusy ? 'Merging…' : 'Merge' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- ── Delete Club Modal ── -->
   <Teleport to="body">
