@@ -172,6 +172,9 @@ async function init() {
   sessionStorage.removeItem('bm_skip_intro')
   armOnBoot()
   try {
+    // Auto-link any guest-player rows an admin pre-assigned to this user's email
+    // (pending links saved by link_guest_player when the account didn't exist yet).
+    await supabase.rpc('claim_my_pending_links').catch(() => {})
     await loadClubs()
     await refreshPending()
   } catch {}

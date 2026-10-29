@@ -320,18 +320,21 @@ async function sendGuestInvite() {
     return
   }
 
-  // Step 2: not registered yet → generate the classic invite link
+  // Step 2: not registered yet → link_guest_player has SAVED the email as a pending
+  // link, so they'll be auto-linked the moment they sign in with it. We also generate
+  // the classic invite link as an optional shortcut to share.
+  const player = guestPlayers.value.find(p => p.id === playerId)
   const { data, error } = await supabase.rpc('invite_guest_player', {
     p_club_id:   currentClub.value.club_id,
     p_player_id: playerId,
     p_email:     email,
   })
   guestInviteBusy.value = false
-  if (error) {
-    guestInviteNote.value = { ok: false, t: error.message }
-  } else {
-    guestInviteLink.value = `${window.location.origin}/join?token=${data}`
-    guestInviteNote.value = { ok: true, t: `${email} hasn't signed up yet — share this link so they can sign in and claim their Elo history.` }
+  guestInviteLink.value = error ? '' : `${window.location.origin}/join?token=${data}`
+  guestInviteNote.value = {
+    ok: true,
+    t: `✅ Saved! When ${email} signs in with that email, "${player?.display_name ?? 'this player'}" (Elo history and all) links to them automatically — no approval needed.`
+      + (error ? '' : ' You can also share the invite link below to speed it up.'),
   }
 }
 
