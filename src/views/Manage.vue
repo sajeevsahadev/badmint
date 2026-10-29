@@ -323,20 +323,25 @@ async function sendGuestInvite() {
   }
 
   // Step 2: not registered yet → link_guest_player has SAVED the email as a pending
-  // link, so they'll be auto-linked the moment they sign in with it. We also generate
-  // the classic invite link as an optional shortcut to share.
+  // link, so they'll be auto-linked the moment they sign in with it. Generate the
+  // /join token, then AUTO-EMAIL the invite (no manual send). The share link stays
+  // below as an optional extra (e.g. if the email lands in spam).
   const player = guestPlayers.value.find(p => p.id === playerId)
   const { data, error } = await supabase.rpc('invite_guest_player', {
     p_club_id:   currentClub.value.club_id,
     p_player_id: playerId,
     p_email:     email,
   })
+  const token = error ? null : data
   guestInviteBusy.value = false
-  guestInviteLink.value = error ? '' : `${window.location.origin}/join?token=${data}`
+  guestInviteLink.value = token ? `${window.location.origin}/join?token=${token}` : ''
+  // Fire-and-forget: the system emails the invite automatically.
+  supabase.functions.invoke('send-club-invite-email', {
+    body: { club_id: currentClub.value.club_id, player_id: playerId, email, token },
+  }).catch(() => {})
   guestInviteNote.value = {
     ok: true,
-    t: `✅ Saved! When ${email} signs in with that email, "${player?.display_name ?? 'this player'}" (Elo history and all) links to them automatically — no approval needed.`
-      + (error ? '' : ' You can also share the invite link below to speed it up.'),
+    t: `📧 Invite emailed to ${email}. When they sign in with that email, "${player?.display_name ?? 'this player'}" (Elo history and all) links to them automatically — no approval needed.`,
   }
 }
 
@@ -945,7 +950,7 @@ async function leaveClub(clubId) {
           style="background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.12)">
           <p class="text-[11px] text-slate-400 mb-2">
             Enter their Gmail — if they've already signed up, they're linked instantly.
-            Otherwise you'll get an invite link to share.
+            Otherwise we email them an invite automatically.
           </p>
           <div class="flex gap-2 mb-2">
             <input v-model="guestInviteEmail" type="email" placeholder="their@gmail.com"
@@ -962,6 +967,7 @@ async function leaveClub(clubId) {
             {{ guestInviteNote.t }}
           </div>
           <div v-if="guestInviteLink" class="fade-up">
+            <div class="text-[11px] text-slate-400 mb-1">Optional — share the link directly too:</div>
             <div class="text-xs text-slate-400 break-all font-mono mb-2 bg-[rgba(15,23,42,0.04)] rounded-lg p-2 select-all">
               {{ guestInviteLink }}
             </div>
