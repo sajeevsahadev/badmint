@@ -149,7 +149,7 @@ async function load() {
       : { data: [] },
     // player rows for this club (linked accounts only) — id + is_active power the Deactivate toggle
     supabase.from('players').select('id, user_id, display_name, is_active').eq('club_id', cid).not('user_id', 'is', null),
-    supabase.from('players').select('id, display_name').eq('club_id', cid).is('user_id', null).eq('is_active', true),
+    supabase.from('players').select('id, display_name, pending_email').eq('club_id', cid).is('user_id', null).eq('is_active', true),
   ])
   cfg.value      = c
   requests.value = r ?? []
@@ -343,6 +343,7 @@ async function sendGuestInvite() {
     ok: true,
     t: `📧 Invite emailed to ${email}. When they sign in with that email, "${player?.display_name ?? 'this player'}" (Elo history and all) links to them automatically — no approval needed.`,
   }
+  await load()   // refresh so the "Invited ✓" badge + saved email show on this row
 }
 
 function copyGuestLink() {
@@ -921,7 +922,13 @@ async function leaveClub(clubId) {
         <div class="flex items-center justify-between py-2 gap-2">
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <Avatar :name="gp.display_name" :src="''" :size="32" />
-            <div class="text-sm text-slate-300 truncate">{{ gp.display_name }}</div>
+            <div class="min-w-0">
+              <div class="text-sm text-slate-300 truncate">{{ gp.display_name }}</div>
+              <div v-if="gp.pending_email" class="text-[10px] text-amber-600 truncate flex items-center gap-1"
+                :title="`Invited ${gp.pending_email} — links automatically when they sign in`">
+                <span>✉️ Invited: {{ gp.pending_email }}</span>
+              </div>
+            </div>
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <button v-if="isManager()"
@@ -938,8 +945,8 @@ async function leaveClub(clubId) {
             <button
               class="text-xs px-3 py-1.5 rounded-lg font-medium transition"
               style="border:1px solid rgba(0,229,255,0.3); color:#00e5ff"
-              @click="guestInviteId = gp.id; guestInviteEmail = ''; guestInviteLink = ''; guestInviteNote = null">
-              Link Account
+              @click="guestInviteId = gp.id; guestInviteEmail = gp.pending_email || ''; guestInviteLink = ''; guestInviteNote = null">
+              {{ gp.pending_email ? 'Invited ✓' : 'Link Account' }}
             </button>
           </div>
         </div>
