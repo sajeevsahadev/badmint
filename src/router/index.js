@@ -12,6 +12,7 @@ const routes = [
   { path: '/schedule',  component: () => import('../views/Schedule.vue') },
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
+  { path: '/record',    component: () => import('../views/RecordVideo.vue') },
   { path: '/players',   component: () => import('../views/Players.vue') },
   { path: '/compare',   component: () => import('../views/Compare.vue') },
   { path: '/guide',     component: () => import('../views/RankingGuide.vue') },

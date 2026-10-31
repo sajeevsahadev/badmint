@@ -69,7 +69,8 @@
       "Bash(git -c user.email=sajeevsahadev@gmail.com -c 'user.name=Sajeev Sahadevan' commit -m 'feat\\(install\\): Android → Google Play link, drop add-to-home; iOS App Store coming soon *)",
       "Bash(git -c core.pager=cat push origin main)",
       "Bash(git -c user.email=sajeevsahadev@gmail.com -c 'user.name=Sajeev Sahadevan' commit -m 'fix\\(home\\): no-club welcome screen flashed/stuck on load — claim_my_pending_links blocked club load *)",
-      "Bash(git -c user.email=sajeevsahadev@gmail.com -c 'user.name=Sajeev Sahadevan' commit -am 'fix\\(nav\\): bottom nav Manage tab clipped on Samsung S-series — flex items couldn'\\\\''t shrink *)"
+      "Bash(git -c user.email=sajeevsahadev@gmail.com -c 'user.name=Sajeev Sahadevan' commit -am 'fix\\(nav\\): bottom nav Manage tab clipped on Samsung S-series — flex items couldn'\\\\''t shrink *)",
+      "Bash(git -c user.email=sajeevsahadev@gmail.com -c 'user.name=Sajeev Sahadevan' commit -am 'feat\\(video\\): Phase 0 AI coaching — record & store match videos *)"
     ],
     "defaultMode": "bypassPermissions"
   }
