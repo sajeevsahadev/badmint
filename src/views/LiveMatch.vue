@@ -3,10 +3,16 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
+import MatchVideoRecorder from '../components/MatchVideoRecorder.vue'
 
 const route  = useRoute()
 const router = useRouter()
 const { currentClub, isManager } = useClub()
+
+// ── Video recording (inherits this live match's context — no re-tagging) ──
+const showRecorder = ref(false)
+const recGameType  = computed(() => ((match.value?.side_a?.length ?? 0) === 1 ? 'singles' : 'doubles'))
+const recPlayerIds = computed(() => [...(match.value?.side_a ?? []), ...(match.value?.side_b ?? [])])
 
 const liveId  = route.params.id
 const match   = ref(null)
@@ -214,6 +220,11 @@ async function finishMatch() {
   finishing.value = false
   if (err) { finishError.value = err.message; return }
   showFinishModal.value = false
+  // Link any videos filmed during this live match to the match row it just became.
+  if (matchId) {
+    supabase.from('match_videos').update({ match_id: matchId })
+      .eq('live_match_id', liveId).is('match_id', null).then(undefined, () => {})
+  }
   if (currentClub.value) {
     const playedIds = [...(match.value?.side_a ?? []), ...(match.value?.side_b ?? [])]
     // supabase.rpc() is a thenable query builder with no .catch — use .then(ok, err)
@@ -556,6 +567,10 @@ onUnmounted(() => {
         </button>
         <span v-if="undoError" class="text-rose-500 text-[10px] mt-0.5">{{ undoError }}</span>
       </div>
+      <button v-if="match?.status === 'active'" @click="showRecorder = true"
+              class="btn-ghost text-sm flex items-center gap-1" title="Record this match for AI coaching">
+        🎥 <span class="font-semibold">Record</span>
+      </button>
       <div class="flex-1"></div>
       <button v-if="isManager() && match?.status === 'active'"
               @click="showFinishModal = true"
@@ -584,6 +599,30 @@ onUnmounted(() => {
               {{ finishing ? 'Saving…' : 'Yes, Record' }}
             </button>
           </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Video recorder (bottom sheet) — inherits club/players/singles-vs-doubles from this match -->
+    <Teleport to="body">
+      <div v-if="showRecorder" class="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-3">
+        <div class="card w-full max-w-md p-4 max-h-[92dvh] overflow-y-auto">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800">🎥 Record this match</h3>
+            <button @click="showRecorder = false" class="text-slate-400 text-xl leading-none px-2">✕</button>
+          </div>
+          <p class="mb-3 text-xs text-slate-500">
+            {{ recGameType === 'singles' ? 'Singles' : 'Doubles' }} ·
+            {{ sideBPlayers.map(p=>p.name).join(' / ') }} vs {{ sideAPlayers.map(p=>p.name).join(' / ') }}.
+            Prop a phone up in landscape (whole court in frame). The video links to this match automatically.
+          </p>
+          <MatchVideoRecorder v-if="match?.club_id"
+            :club-id="match.club_id"
+            :game-type="recGameType"
+            :player-ids="recPlayerIds"
+            :live-match-id="liveId"
+            :match-id="match.match_id || null"
+            compact />
         </div>
       </div>
     </Teleport>
