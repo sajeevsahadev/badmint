@@ -512,11 +512,11 @@ const needsClub = computed(() =>
         style="background:linear-gradient(90deg,transparent,rgba(0,168,204,.45) 35%,rgba(147,51,234,.40) 65%,transparent);" />
       <div class="mx-auto flex max-w-2xl">
         <RouterLink v-for="n in nav" :key="n.to" :to="n.to"
-          class="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs
+          class="relative flex flex-1 min-w-0 flex-col items-center gap-0.5 px-0.5 py-2.5 text-[11px]
                  text-slate-400 transition-all duration-200 font-medium"
           exact-active-class="!text-cyan-700 !font-bold">
           <span class="nav-icon-pill text-lg leading-none">{{ n.icon }}</span>
-          <span>{{ n.label }}</span>
+          <span class="w-full truncate text-center leading-tight">{{ n.label }}</span>
         </RouterLink>
       </div>
     </nav>
