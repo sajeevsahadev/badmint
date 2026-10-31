@@ -15,10 +15,9 @@ const { avatarMap, loadAvatars } = usePlayerAvatars()
 const router = useRouter()
 const { user } = useAuth()
 const { clubs, currentClub, selectClub } = useClub()
-const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
+const { isIOS, isAndroid, isInstalled, PLAY_STORE_URL } = useInstall()
 const { country, countryCode, flagEmoji, detectCountry } = useGeo()
 const showIOSGuide     = ref(false)
-const showAndroidGuide = ref(false)
 
 const topClubs    = ref([])
 const topPlayers  = ref([])
@@ -456,123 +455,58 @@ onMounted(() => {
         </div>
       </template>
 
-      <!-- ── Install App — kept at the bottom (native iOS/Android apps coming soon) ── -->
+      <!-- ── Get the App — Android on Google Play; iOS App Store coming soon ── -->
       <div v-if="!isInstalled" class="mb-2 fade-up">
         <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
-          📲 Get the App — No App Store Needed
+          📲 Get the App
         </h2>
         <div class="grid grid-cols-2 gap-2">
 
-          <!-- Android: tapping either triggers native install (if ready) or opens guide -->
-          <button
-            class="card p-4 flex flex-col gap-2.5 text-left w-full
-                   active:scale-[0.98] transition-all duration-150"
-            :class="canInstall ? 'card-neon hover:border-cyan-400/40' : 'hover:border-[rgba(15,23,42,0.20)]'"
-            @click="canInstall ? promptInstall() : (showAndroidGuide = true)">
+          <!-- Android: link straight to the Google Play listing -->
+          <a :href="PLAY_STORE_URL" target="_blank" rel="noopener"
+            class="card card-neon p-4 flex flex-col gap-2.5 text-left w-full
+                   hover:border-cyan-400/40 active:scale-[0.98] transition-all duration-150">
             <div class="flex items-center justify-between">
               <span class="text-2xl">🤖</span>
-              <span class="text-[9px] font-bold uppercase tracking-wide"
-                :class="canInstall ? 'text-neon' : 'text-slate-500'">
-                {{ canInstall ? 'Tap to Install' : 'Tap for Guide' }}
+              <span class="text-[9px] font-bold uppercase tracking-wide text-neon">
+                {{ isAndroid ? 'Your device' : 'Android' }}
               </span>
             </div>
-            <div class="text-xs font-bold text-slate-100">Android</div>
+            <div class="text-xs font-bold text-slate-100">Google Play</div>
             <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
-              {{ canInstall ? 'Works offline · No Play Store needed' : 'Open in Chrome on Android to install' }}
+              The official Badminton 360 Android app — free.
             </p>
-            <div class="text-xs text-center py-1.5 border rounded-xl mt-auto transition-colors"
-              :class="canInstall
-                ? 'btn-primary border-transparent'
-                : 'border-[rgba(15,23,42,0.15)] text-slate-400 hover:text-neon hover:border-neon/30'">
-              {{ canInstall ? 'Install Now →' : 'Show me how →' }}
+            <div class="text-xs text-center py-1.5 rounded-xl mt-auto btn-primary border border-transparent">
+              Get it on Play →
             </div>
-          </button>
+          </a>
 
-          <!-- iPhone / iPad: tapping opens the step-by-step guide -->
-          <button class="card p-4 flex flex-col gap-2.5 text-left w-full
-                         hover:border-violet-400/40 active:scale-[0.98] transition-all duration-150"
-            :class="isIOS ? 'card-violet' : 'opacity-70'"
-            @click="showIOSGuide = true">
+          <!-- iPhone / iPad: App Store build is on the way -->
+          <div class="card p-4 flex flex-col gap-2.5 text-left w-full opacity-80"
+            :class="isIOS ? 'card-violet opacity-100' : ''">
             <div class="flex items-center justify-between">
               <span class="text-2xl">🍎</span>
-              <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Tap for Guide</span>
+              <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Coming soon</span>
             </div>
             <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Add via Safari's Share menu — no App Store needed.
+            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
+              The App Store version is on the way.
+              <button class="text-violet underline" @click="showIOSGuide = true">Add to Home Screen</button>
+              meanwhile.
             </p>
             <div class="text-[10px] text-center text-violet py-1.5 border border-violet/30
                         rounded-xl mt-auto bg-violet/5">
-              Show me how →
+              App Store soon 🚀
             </div>
-          </button>
+          </div>
 
         </div>
-        <p class="text-[10px] text-slate-600 text-center mt-2">
-          Native iOS &amp; Android apps are on the way 🚀
-        </p>
       </div>
 
       <!-- ── Social footer — always visible (logged in or not) ── -->
       <div class="text-center pt-2 pb-4 fade-up">
         <SocialLinks />
       </div>
-
-      <!-- ── Android Install Guide ── -->
-      <Teleport to="body">
-        <div v-if="showAndroidGuide"
-          class="fixed inset-0 z-50 flex items-end"
-          style="background:rgba(0,0,0,.6); backdrop-filter:blur(4px)"
-          @click.self="showAndroidGuide = false">
-          <div class="w-full rounded-t-3xl px-6 pt-6 pb-10"
-            style="background:#0d1a2e; border-top:1px solid rgba(0,229,255,.25);
-                   box-shadow:0 -8px 40px rgba(0,229,255,.12);">
-            <div class="w-12 h-1 rounded-full bg-white/20 mx-auto mb-5"/>
-            <div class="text-center mb-6">
-              <div class="text-4xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🤖</div>
-              <h3 class="font-display text-lg font-bold text-slate-100">Add to Android Home Screen</h3>
-              <p class="text-[11px] text-slate-400 mt-1">Follow these steps in Chrome on Android</p>
-            </div>
-            <div class="space-y-3 mb-6">
-              <div class="flex items-center gap-4 card p-3.5">
-                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">🌐</div>
-                <div>
-                  <div class="text-sm font-semibold text-slate-100">Open in Chrome</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Must be Chrome browser — not Samsung Internet or Firefox</div>
-                </div>
-              </div>
-              <div class="flex items-center gap-4 card p-3.5">
-                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">⋮</div>
-                <div>
-                  <div class="text-sm font-semibold text-slate-100">Tap ⋮ (three-dot menu)</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Top-right corner of Chrome</div>
-                </div>
-              </div>
-              <div class="flex items-center gap-4 card p-3.5">
-                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.12); border:1px solid rgba(0,229,255,.25)">➕</div>
-                <div>
-                  <div class="text-sm font-semibold text-slate-100">"Add to Home screen"</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Or "Install app" — scroll down in the menu to find it</div>
-                </div>
-              </div>
-              <div class="flex items-center gap-4 card p-3.5">
-                <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-xl shrink-0"
-                  style="background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.25)">✓</div>
-                <div>
-                  <div class="text-sm font-semibold text-slate-100">Tap Add to confirm</div>
-                  <div class="text-[11px] text-slate-400 mt-0.5">Badminton 360 appears on your home screen — tap to launch the app</div>
-                </div>
-              </div>
-            </div>
-            <button class="btn-ghost w-full py-3 text-sm" @click="showAndroidGuide = false">
-              Got it — close
-            </button>
-          </div>
-        </div>
-      </Teleport>
 
       <!-- ── iOS Install Guide (bottom sheet) ── -->
       <Teleport to="body">

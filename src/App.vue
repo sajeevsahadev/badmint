@@ -19,7 +19,7 @@ import ProfileCompletionGate from './components/ProfileCompletionGate.vue'
 const { user, ready, signOut } = useAuth()
 const { syncFromProfile } = useTheme()
 const { clubs, currentClub, loadClubs, selectClub, superUser } = useClub()
-const { canInstall, isIOS, isInstalled, promptInstall } = useInstall()
+const { canInstall, isIOS, isAndroid, isInstalled, promptInstall, PLAY_STORE_URL } = useInstall()
 const { startSession, trackPage, endSession } = useSession()
 const { isLocked, armOnBoot, unlock } = useBiometricLock()
 const { resyncIfNeeded } = usePushNotifications()
@@ -381,14 +381,15 @@ const needsClub = computed(() =>
     <!-- ── Authenticated shell ─────────────────────────────────────────────── -->
     <div v-else class="mx-auto max-w-2xl px-4 pb-28 pt-safe">
 
-      <!-- PWA install banner -->
-      <div v-if="canInstall && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
-        <span class="text-2xl shrink-0">📲</span>
+      <!-- Google Play banner (Android) — now published on the Play Store -->
+      <div v-if="isAndroid && !isInstalled" class="card-neon mb-4 px-4 py-3 flex items-center gap-3 fade-up">
+        <span class="text-2xl shrink-0">🤖</span>
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-bold text-slate-800">Install Badminton 360 on Android</div>
-          <div class="text-xs text-slate-500">Works offline · No app store needed</div>
+          <div class="text-xs font-bold text-slate-800">Get Badminton 360 on Google Play</div>
+          <div class="text-xs text-slate-500">Official Android app · free</div>
         </div>
-        <button class="btn-primary text-xs px-3 py-1.5 shrink-0" @click="promptInstall">Install</button>
+        <a :href="PLAY_STORE_URL" target="_blank" rel="noopener"
+           class="btn-primary text-xs px-3 py-1.5 shrink-0">Get it</a>
       </div>
 
       <div v-if="isIOS && !isInstalled && showIOSHint"

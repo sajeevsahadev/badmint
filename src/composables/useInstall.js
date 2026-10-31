@@ -4,8 +4,14 @@ const deferredPrompt = ref(null)
 const canInstall     = ref(false)
 const isInstalled    = ref(false)
 
-const ua    = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-const isIOS = /iPad|iPhone|iPod/.test(ua) && !('MSStream' in window)
+const ua        = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+const isIOS     = /iPad|iPhone|iPod/.test(ua) && !('MSStream' in window)
+const isAndroid = /Android/.test(ua)
+
+// Badminton 360 is now published on the Google Play Store (TWA). Android users
+// are sent there instead of being prompted to "Add to Home screen". The iOS
+// App Store build is still on the way.
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=app.badminton360.twa'
 
 if (typeof window !== 'undefined') {
   isInstalled.value =
@@ -35,5 +41,5 @@ export function useInstall() {
       deferredPrompt.value = null
     }
   }
-  return { canInstall, isIOS, isInstalled, promptInstall }
+  return { canInstall, isIOS, isAndroid, isInstalled, promptInstall, PLAY_STORE_URL }
 }
