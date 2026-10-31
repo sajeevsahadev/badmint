@@ -172,12 +172,30 @@ async function init() {
   sessionStorage.removeItem('bm_skip_intro')
   armOnBoot()
   try {
-    // Auto-link any guest-player rows an admin pre-assigned to this user's email
-    // (pending links saved by link_guest_player when the account didn't exist yet).
-    await supabase.rpc('claim_my_pending_links').catch(() => {})
+    // Load clubs FIRST so the dashboard renders immediately for returning users.
+    // (Blocking this on claim_my_pending_links left currentClub null on first
+    //  paint → the "no club" welcome screen flashed and stuck until a navigation.)
     await loadClubs()
     await refreshPending()
   } catch {}
+
+  // Auto-link any guest-player rows an admin pre-assigned to this user's email
+  // (pending links saved by link_guest_player when the account didn't exist yet).
+  if (clubs.value.length === 0) {
+    // Only a possibly-new user with no clubs waits for this — it may hand them
+    // their first club, so it's worth blocking before the welcome/wizard shows.
+    try {
+      const { data: linked } = await supabase.rpc('claim_my_pending_links')
+      if (linked) { await loadClubs(); await refreshPending() }
+    } catch {}
+  } else {
+    // Returning user already has clubs — claim in the background, non-blocking.
+    supabase.rpc('claim_my_pending_links')
+      .then(async ({ data } = {}) => {
+        if (data) { await loadClubs().catch(() => {}); await refreshPending().catch(() => {}) }
+      })
+      .catch(() => {})
+  }
   // First-time users with no clubs get the setup wizard; returning users skip it.
   // But anyone arriving via a join/poll link is here to join a specific club —
   // don't interrupt them with the wizard.
