@@ -40,14 +40,21 @@ const subs    = ref([])
 const plans   = ref([])
 const subMsg  = ref('')
 const subForm = ref({ user_id: '', plan_code: 'player_pro', status: 'comp', period_end: '' })
+const eaReqs = ref([])
 async function loadSubs() {
   if (!users.value.length) await loadUsers()
-  const [{ data: list }, { data: pl }] = await Promise.all([
+  const [{ data: list }, { data: pl }, { data: ea }] = await Promise.all([
     supabase.rpc('admin_list_subscriptions'),
     supabase.rpc('get_subscription_plans'),
+    supabase.rpc('admin_list_ea_requests'),
   ])
   subs.value = list ?? []
   plans.value = pl ?? []
+  eaReqs.value = ea ?? []
+}
+async function decideEA(uid, approve) {
+  await supabase.rpc('admin_decide_ea_request', { p_user_id: uid, p_approve: approve })
+  await loadSubs()
 }
 async function setSub() {
   subMsg.value = ''
@@ -971,6 +978,26 @@ const statItems = computed(() => !stats.value ? [] : [
           <div class="flex items-center gap-3 mt-3">
             <button class="btn-primary px-4 py-2 text-sm" @click="setSub">Set subscription</button>
             <span v-if="subMsg" class="text-xs" :class="subMsg.includes('✓') ? 'text-emerald-600' : 'text-rose-500'">{{ subMsg }}</span>
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">
+            ✨ Early-access requests
+            <span v-if="eaReqs.filter(r => r.status === 'pending').length" class="ml-1 text-amber-600">
+              ({{ eaReqs.filter(r => r.status === 'pending').length }} pending)
+            </span>
+          </div>
+          <div v-if="!eaReqs.length" class="text-sm text-slate-400 py-2">No requests.</div>
+          <div v-for="r in eaReqs" :key="r.user_id" class="flex items-center justify-between border-b border-slate-100 py-2 last:border-0">
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-slate-800">{{ r.email }}</div>
+              <div class="text-xs text-slate-400">{{ r.status }} · {{ new Date(r.created_at).toLocaleDateString() }}</div>
+            </div>
+            <div v-if="r.status === 'pending'" class="flex gap-2 shrink-0">
+              <button class="btn-primary px-3 py-1 text-xs" @click="decideEA(r.user_id, true)">Approve</button>
+              <button class="btn-ghost px-3 py-1 text-xs" @click="decideEA(r.user_id, false)">Decline</button>
+            </div>
           </div>
         </div>
 

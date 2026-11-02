@@ -8,6 +8,7 @@ import { useClub } from '../composables/useClub'
 import { useEntitlements } from '../composables/useEntitlements'
 import { getPlaybackUrl } from '../lib/videoStorage'
 import PageHeader from '../components/PageHeader.vue'
+import AiHeroGraphic from '../components/AiHeroGraphic.vue'
 
 const router = useRouter()
 const { currentClub } = useClub()
@@ -15,11 +16,24 @@ const { hasEarlyAccess, loadEntitlements, loaded } = useEntitlements()
 
 const videos  = ref([])
 const playing = ref(null)
+const requestStatus = ref(null)   // null | 'pending' | 'approved' | 'declined'
+const requesting = ref(false)
 
 onMounted(async () => {
   await loadEntitlements()
-  if (hasEarlyAccess.value) await loadVideos()
+  if (hasEarlyAccess.value) { await loadVideos(); return }
+  // Non-holder: show any existing waitlist request so the button reflects state.
+  const { data } = await supabase.from('early_access_requests').select('status').maybeSingle()
+  requestStatus.value = data?.status ?? null
 })
+
+async function requestAccess() {
+  requesting.value = true
+  try {
+    const { data } = await supabase.rpc('request_early_access', { p_note: null })
+    requestStatus.value = data || 'pending'
+  } finally { requesting.value = false }
+}
 
 async function loadVideos() {
   if (!currentClub.value) return
@@ -49,6 +63,7 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
     <!-- EARLY ACCESS: the feature hub -->
     <div v-if="loaded && hasEarlyAccess">
+      <AiHeroGraphic class="mb-4" />
       <div class="card card-neon mb-4 p-4 flex items-center gap-3">
         <span class="badge-pending">✨ Early Access</span>
         <span class="text-sm text-slate-600">You're on the early-access list — thanks for testing!</span>
@@ -92,6 +107,7 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
     <!-- NOT EARLY ACCESS: coming-soon teaser -->
     <div v-if="loaded && !hasEarlyAccess">
+      <AiHeroGraphic class="mb-4" />
       <div class="card card-neon p-6 text-center">
         <div class="text-4xl mb-2">✨</div>
         <div class="gradient-text text-2xl font-display font-bold">Turn match footage into coaching</div>
@@ -99,12 +115,24 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
           Record a match and get a per-player breakdown of footwork, shots and positioning — plus a
           training plan to improve. A premium feature, rolling out now to early-access members.
         </p>
-        <div class="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700">
-          🚧 Coming soon — early access
+
+        <button v-if="requestStatus === null" :disabled="requesting" @click="requestAccess"
+          class="btn-primary w-full py-3 text-base mt-4 disabled:opacity-50">
+          {{ requesting ? 'Requesting…' : '✨ Request early access' }}
+        </button>
+        <div v-else-if="requestStatus === 'pending'"
+          class="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700">
+          ⏳ On the waitlist — we'll be in touch
         </div>
-        <p class="mt-4 text-xs text-slate-400">
-          Want in early? Ask your club admin, or watch this space — we're opening access gradually.
-        </p>
+        <div v-else-if="requestStatus === 'approved'"
+          class="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700">
+          ✅ Approved — reload to start
+        </div>
+        <div v-else
+          class="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-100 border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500">
+          Request received
+        </div>
+        <p class="mt-3 text-xs text-slate-400">We're opening access gradually — thanks for your patience.</p>
       </div>
 
       <div class="grid grid-cols-3 gap-3 mt-4">
