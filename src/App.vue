@@ -274,6 +274,7 @@ const nav = computed(() => [
 const clubFreeRoutes = [
   '/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin', '/share',
   '/settings/email', '/settings/notifications', '/settings/security', '/settings/appearance',
+  '/settings/subscription', '/ai',
   '/create-club',
 ]
 const needsClub = computed(() =>

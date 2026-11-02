@@ -32,7 +32,37 @@ function switchTab(t) {
   tab.value = t; err.value = ''
   if (t === 'security' && !sessions.value.length) loadSessions()
   if (t === 'blog' && !blogPosts.value.length) loadBlog()
+  if (t === 'subs') loadSubs()
 }
+
+// ── Subscriptions (Phase 2: provisioning; live card payments are a later phase) ──
+const subs    = ref([])
+const plans   = ref([])
+const subMsg  = ref('')
+const subForm = ref({ user_id: '', plan_code: 'player_pro', status: 'comp', period_end: '' })
+async function loadSubs() {
+  if (!users.value.length) await loadUsers()
+  const [{ data: list }, { data: pl }] = await Promise.all([
+    supabase.rpc('admin_list_subscriptions'),
+    supabase.rpc('get_subscription_plans'),
+  ])
+  subs.value = list ?? []
+  plans.value = pl ?? []
+}
+async function setSub() {
+  subMsg.value = ''
+  if (!subForm.value.user_id) { subMsg.value = 'Pick a user first'; return }
+  const { error } = await supabase.rpc('admin_set_subscription', {
+    p_user_id: subForm.value.user_id,
+    p_plan_code: subForm.value.plan_code,
+    p_status: subForm.value.status,
+    p_period_end: subForm.value.period_end || null,
+  })
+  if (error) { subMsg.value = error.message; return }
+  subMsg.value = 'Saved ✓'
+  await loadSubs()
+}
+const money = (cents, cur) => `${(cents / 100).toFixed(0)} ${cur || 'AED'}`
 
 // ── Blog ──
 const blogPosts   = ref([])
@@ -101,6 +131,7 @@ const TABS = [
   { v: 'facilities',  l: '🏢 Facilities' },
   { v: 'tournaments', l: '🏆 Tournaments' },
   { v: 'roles',       l: '🎖️ Roles' },
+  { v: 'subs',        l: '💳 Subs' },
   { v: 'announcements', l: '📢 Announcements' },
   { v: 'security',    l: '🔐 Security' },
   { v: 'chats',       l: '💬 Chats' },
@@ -901,6 +932,62 @@ const statItems = computed(() => !stats.value ? [] : [
       </div>
 
       <!-- ── ANNOUNCEMENTS ────────────────────────────────────────────── -->
+      <!-- ── Subscriptions ─────────────────────────────────────────── -->
+      <div v-if="tab === 'subs'" class="space-y-4 fade-up">
+        <div class="card card-amber p-3 text-xs text-slate-600">
+          💳 <b>Provisioning only.</b> Plans and entitlements are live here; card payments aren't wired yet
+          (payment provider + company registration pending). Use this to <b>comp</b> or manually assign a plan.
+        </div>
+
+        <div class="card p-4">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Plans</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div v-for="p in plans" :key="p.code" class="rounded-xl border border-slate-200 p-3 text-center">
+              <div class="font-bold text-slate-800">{{ p.name }}</div>
+              <div class="text-sm text-neon font-semibold">{{ p.price_cents ? money(p.price_cents, p.currency) + '/mo' : 'Free' }}</div>
+              <div class="text-[10px] text-slate-400 mt-1">{{ p.features?.ai_analysis ? '✨ AI analysis' : 'No AI' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Assign / comp a plan</div>
+          <div class="grid grid-cols-2 gap-2">
+            <select v-model="subForm.user_id" class="input">
+              <option value="">Select user…</option>
+              <option v-for="u in users" :key="u.user_id" :value="u.user_id">{{ u.email }}</option>
+            </select>
+            <select v-model="subForm.plan_code" class="input">
+              <option v-for="p in plans" :key="p.code" :value="p.code">{{ p.name }}</option>
+            </select>
+            <select v-model="subForm.status" class="input">
+              <option value="comp">Comp (free)</option>
+              <option value="active">Active (paid)</option>
+              <option value="trialing">Trialing</option>
+              <option value="canceled">Cancel</option>
+            </select>
+            <input v-model="subForm.period_end" type="date" class="input" title="Period end (optional)" />
+          </div>
+          <div class="flex items-center gap-3 mt-3">
+            <button class="btn-primary px-4 py-2 text-sm" @click="setSub">Set subscription</button>
+            <span v-if="subMsg" class="text-xs" :class="subMsg.includes('✓') ? 'text-emerald-600' : 'text-rose-500'">{{ subMsg }}</span>
+          </div>
+        </div>
+
+        <div class="card p-4">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Active subscriptions</div>
+          <div v-if="!subs.length" class="text-sm text-slate-400 py-2">None yet.</div>
+          <div v-for="s in subs" :key="s.user_id + s.plan_code" class="flex items-center justify-between border-b border-slate-100 py-2 last:border-0">
+            <div class="min-w-0">
+              <div class="truncate text-sm font-semibold text-slate-800">{{ s.email }}</div>
+              <div class="text-xs text-slate-400">{{ s.plan_name }} · {{ s.status }} · {{ s.provider }}
+                <span v-if="s.current_period_end"> · ends {{ new Date(s.current_period_end).toLocaleDateString() }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="tab === 'announcements'" class="space-y-4 fade-up">
         <div class="card p-4">
           <h3 class="font-bold text-slate-800 mb-4">Send Announcement</h3>

@@ -29,6 +29,7 @@ const routes = [
   { path: '/settings/notifications', component: () => import('../views/settings/PushSettings.vue') },
   { path: '/settings/security',     component: () => import('../views/settings/SecuritySettings.vue') },
   { path: '/settings/appearance',   component: () => import('../views/settings/AppearanceSettings.vue') },
+  { path: '/settings/subscription', component: () => import('../views/settings/SubscriptionSettings.vue') },
   { path: '/privacy',   component: () => import('../views/PrivacyPolicy.vue'), meta: { public: true } },
   { path: '/support',   component: () => import('../views/Support.vue'),       meta: { public: true } },
   { path: '/blog',       component: () => import('../views/Blog.vue'),     meta: { public: true } },

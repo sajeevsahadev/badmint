@@ -349,6 +349,12 @@ async function exportMyData() {
         <span class="text-sm font-medium text-slate-700 flex-1">Appearance</span>
         <span class="text-slate-300">›</span>
       </RouterLink>
+      <RouterLink to="/settings/subscription"
+        class="flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] transition border-t border-slate-100">
+        <span class="text-lg w-6 text-center shrink-0">💳</span>
+        <span class="text-sm font-medium text-slate-700 flex-1">Subscription</span>
+        <span class="text-slate-300">›</span>
+      </RouterLink>
     </div>
 
     <!-- Sign out -->
