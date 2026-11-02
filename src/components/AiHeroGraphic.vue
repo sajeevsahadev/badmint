@@ -1,25 +1,30 @@
 <script setup>
 // Marketing hero for AI Match Analysis — an animated mock of player tracking on a court,
-// in the style of the reference (bounding boxes, live-analysis badge, coverage stat).
-// Pure SVG/CSS, no data; used on the AI hub and marketing teasers.
+// in the style of the reference (bounding boxes, flying shuttle, live-analysis badge, stats).
+// Pure SVG/CSS; motion freezes under prefers-reduced-motion (global guard in style.css).
 </script>
 
 <template>
   <div class="ai-hero">
-    <svg viewBox="0 0 640 360" class="w-full h-auto block" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 640 360" class="w-full h-auto block" role="img"
+      aria-label="AI match analysis tracking two badminton players on court" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="aiCourt" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#1f8a63" /><stop offset="100%" stop-color="#166b4c" />
+          <stop offset="0%" stop-color="#1f8a63" /><stop offset="100%" stop-color="#145c42" />
         </linearGradient>
         <linearGradient id="aiBg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#0b2a4a" /><stop offset="100%" stop-color="#10233f" />
+          <stop offset="0%" stop-color="#0b2a4a" /><stop offset="55%" stop-color="#0e2947" /><stop offset="100%" stop-color="#141d3a" />
         </linearGradient>
+        <radialGradient id="aiGlow" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.35" /><stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />
+        </radialGradient>
       </defs>
 
       <rect x="0" y="0" width="640" height="360" fill="url(#aiBg)" rx="14" />
-      <!-- Court (perspective-ish trapezoid) -->
-      <polygon points="150,70 490,70 600,320 40,320" fill="url(#aiCourt)" opacity="0.95" />
-      <!-- lines -->
+      <ellipse cx="330" cy="150" rx="260" ry="150" fill="url(#aiGlow)" />
+
+      <!-- Court -->
+      <polygon points="150,70 490,70 600,320 40,320" fill="url(#aiCourt)" opacity="0.96" />
       <g stroke="#ffffff" stroke-opacity="0.7" stroke-width="1.5" fill="none">
         <polygon points="150,70 490,70 600,320 40,320" />
         <line x1="128" y1="195" x2="512" y2="195" stroke-width="2.5" />
@@ -29,30 +34,45 @@
       <!-- scanning line -->
       <rect class="scan" x="40" y="70" width="560" height="3" fill="#22d3ee" opacity="0.5" />
 
+      <!-- shuttle trajectory + flying shuttle -->
+      <path id="aiTraj" d="M289,250 Q330,80 388,150" fill="none" stroke="#e2f8ff"
+        stroke-width="2" stroke-dasharray="5 7" stroke-opacity="0.75" class="traj" />
+      <g>
+        <circle r="4.5" fill="#ffffff" />
+        <circle r="8" fill="#ffffff" fill-opacity="0.25" />
+        <animateMotion dur="3s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1"
+          calcMode="spline" keySplines="0.4 0 0.6 1" path="M289,250 Q330,80 388,150" />
+      </g>
+
       <!-- Player 1 (near) -->
       <g>
-        <rect x="250" y="210" width="78" height="92" fill="none" stroke="#22d3ee" stroke-width="2.5" rx="4" />
-        <rect x="250" y="192" width="92" height="16" fill="#0e7490" rx="3" />
+        <ellipse cx="289" cy="300" rx="34" ry="9" fill="#22d3ee" opacity="0.18" />
+        <rect x="250" y="210" width="78" height="92" fill="none" stroke="#22d3ee" stroke-width="2.5" rx="5">
+          <animate attributeName="stroke-opacity" values="1;0.55;1" dur="2.4s" repeatCount="indefinite" />
+        </rect>
+        <rect x="250" y="192" width="98" height="16" fill="#0e7490" rx="3" />
         <text x="256" y="204" fill="#fff" font-size="11" font-family="sans-serif" font-weight="700">Player 1 · 0.57</text>
-        <circle cx="289" cy="256" r="10" fill="#22d3ee" opacity="0.25" />
       </g>
       <!-- Player 2 (far) -->
       <g>
-        <rect x="360" y="110" width="56" height="70" fill="none" stroke="#fbbf24" stroke-width="2.5" rx="4" />
-        <rect x="360" y="94" width="78" height="15" fill="#b45309" rx="3" />
+        <ellipse cx="388" cy="182" rx="24" ry="6" fill="#fbbf24" opacity="0.18" />
+        <rect x="360" y="110" width="56" height="70" fill="none" stroke="#fbbf24" stroke-width="2.5" rx="5">
+          <animate attributeName="stroke-opacity" values="0.55;1;0.55" dur="2.4s" repeatCount="indefinite" />
+        </rect>
+        <rect x="360" y="94" width="80" height="15" fill="#b45309" rx="3" />
         <text x="365" y="105" fill="#fff" font-size="10" font-family="sans-serif" font-weight="700">Player 2 · 0.62</text>
       </g>
 
       <!-- Live Analysis pill -->
       <g>
-        <rect x="470" y="30" width="140" height="26" rx="13" fill="#000" opacity="0.45" />
-        <circle class="pulse" cx="486" cy="43" r="4" fill="#34d399" />
-        <text x="498" y="47" fill="#fff" font-size="12" font-family="sans-serif" font-weight="600">Live Analysis</text>
+        <rect x="470" y="28" width="142" height="26" rx="13" fill="#000" opacity="0.45" />
+        <circle class="pulse" cx="486" cy="41" r="4" fill="#34d399" />
+        <text x="498" y="45" fill="#fff" font-size="12" font-family="sans-serif" font-weight="600">Live Analysis</text>
       </g>
 
       <!-- Coverage stat -->
       <g>
-        <rect x="24" y="300" width="150" height="40" rx="8" fill="#000" opacity="0.5" />
+        <rect x="24" y="300" width="152" height="40" rx="8" fill="#000" opacity="0.5" />
         <text x="34" y="316" fill="#9ca3af" font-size="8" font-family="sans-serif" letter-spacing="1">COURT COVERAGE</text>
         <text x="34" y="334" fill="#fff" font-size="18" font-family="sans-serif" font-weight="800">94.3%</text>
       </g>
@@ -71,9 +91,11 @@
 </template>
 
 <style scoped>
-.ai-hero { border-radius: 14px; overflow: hidden; }
+.ai-hero { border-radius: 14px; overflow: hidden; box-shadow: 0 16px 40px rgba(2, 32, 71, 0.18); }
 .pulse { animation: aiPulse 1.3s ease-in-out infinite; }
 @keyframes aiPulse { 0%,100% { opacity: 1; r: 4; } 50% { opacity: 0.4; r: 6; } }
 .scan { animation: aiScan 3.2s linear infinite; }
 @keyframes aiScan { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 0.5; } 90% { opacity: 0.5; } 100% { transform: translateY(247px); opacity: 0; } }
+.traj { animation: aiDash 1.2s linear infinite; }
+@keyframes aiDash { to { stroke-dashoffset: -24; } }
 </style>

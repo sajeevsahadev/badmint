@@ -284,3 +284,34 @@ input, textarea, select, [contenteditable="true"], .select-all {
 .text-slate-100 { color: #0f172a; }
 .text-slate-200 { color: #1e293b; }
 .text-slate-300 { color: #334155; }
+
+/* ── Motion polish (AI feature surfaces; restrained, 1–2 key moves per view) ── */
+.lift { transition: transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s ease; }
+.lift:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(2,32,71,.10); }
+.press:active { transform: scale(.97); }
+
+.fade-up.d1 { animation-delay: .06s; }
+.fade-up.d2 { animation-delay: .12s; }
+.fade-up.d3 { animation-delay: .18s; }
+.fade-up.d4 { animation-delay: .24s; }
+.fade-up.d5 { animation-delay: .30s; }
+
+@keyframes float-soft { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.float-soft { animation: float-soft 4s ease-in-out infinite; }
+
+/* Animated sheen sweep for a hero CTA */
+.sheen { position: relative; overflow: hidden; }
+.sheen::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 32%, rgba(255,255,255,.35) 50%, transparent 68%);
+  transform: translateX(-120%); animation: sheen-sweep 3.4s ease-in-out infinite;
+}
+@keyframes sheen-sweep { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(120%); } }
+
+/* Accessibility: honour the OS "reduce motion" setting everywhere */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+}

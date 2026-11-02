@@ -54,8 +54,12 @@ const money = (c, cur) => `${(c / 100).toFixed(0)} ${cur || 'AED'}`
 
       <!-- Plans -->
       <div class="grid gap-3 sm:grid-cols-3 mb-4">
-        <div v-for="p in plans" :key="p.code" class="card p-4 text-center"
-          :class="current?.plan_code === p.code ? 'card-neon' : ''">
+        <div v-for="(p, i) in plans" :key="p.code" class="card p-4 text-center relative lift fade-up"
+          :class="[current?.plan_code === p.code ? 'card-neon pulse-glow' : '', 'd' + (i + 1)]">
+          <span v-if="p.code === 'player_pro'"
+            class="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">
+            ★ Popular
+          </span>
           <div class="font-display font-bold text-slate-800">{{ p.name }}</div>
           <div class="text-neon font-bold text-lg my-1">{{ p.price_cents ? money(p.price_cents, p.currency) : 'Free' }}
             <span v-if="p.price_cents" class="text-xs text-slate-400 font-normal">/mo</span>
@@ -74,7 +78,7 @@ const money = (c, cur) => `${(c / 100).toFixed(0)} ${cur || 'AED'}`
           Online card billing is being set up. In the meantime, AI Match Analysis is rolling out through
           the <b>early-access programme</b>.
         </p>
-        <button class="btn-primary w-full py-2.5 text-sm mt-3" @click="router.push('/ai')">
+        <button class="btn-primary sheen press w-full py-2.5 text-sm mt-3" @click="router.push('/ai')">
           {{ hasEarlyAccess ? 'Open AI Match Analysis' : 'See AI Match Analysis' }}
         </button>
       </div>
