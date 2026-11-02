@@ -529,10 +529,12 @@ const roleChip = r => ({
   app_admin:           'bg-rose-50 text-rose-700 border-rose-200',
   tournament_director: 'bg-violet-50 text-violet-700 border-violet-200',
   facility_manager:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+  early_access:        'bg-cyan-50 text-cyan-700 border-cyan-200',
 }[r] ?? 'bg-slate-100 text-slate-500 border-slate-200')
 
 const roleLabel = r => ({
   app_admin: '👑 Admin', tournament_director: '🏆 Director', facility_manager: '🏢 Facility Mgr',
+  early_access: '✨ Early Access',
 }[r] ?? r)
 
 const statusChip = s => ({
@@ -1218,6 +1220,7 @@ const statItems = computed(() => !stats.value ? [] : [
           <div>
             <label class="label">Role</label>
             <select v-model="grantForm.role" class="input">
+              <option value="early_access">✨ Early Access (AI features)</option>
               <option value="tournament_director">🏆 Tournament Director</option>
               <option value="facility_manager">🏢 Facility Manager</option>
               <option value="app_admin">👑 App Admin (caution!)</option>

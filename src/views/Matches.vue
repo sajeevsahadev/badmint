@@ -352,8 +352,8 @@ async function saveEdit() {
         {{ allExpanded ? '⊟ Collapse All' : '⊞ Expand All' }}
       </button>
       <button class="btn-ghost px-3 py-2 text-sm font-semibold"
-        @click="router.push('/record')" title="Record a match for AI coaching">
-        🎥 Record
+        @click="router.push('/ai')" title="AI Match Analysis">
+        ✨ AI Analysis
       </button>
       <button v-if="isManager()" class="btn-primary px-4 py-2 text-sm"
         @click="router.push('/match')">

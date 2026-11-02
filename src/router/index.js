@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { supabase } from '../lib/supabase'
+import { useEntitlements } from '../composables/useEntitlements'
 
 const routes = [
   { path: '/login',     component: () => import('../views/Login.vue'),        meta: { public: true } },
@@ -13,6 +14,7 @@ const routes = [
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
   { path: '/record',    component: () => import('../views/RecordVideo.vue') },
+  { path: '/ai',        component: () => import('../views/AiCoach.vue') },
   { path: '/players',   component: () => import('../views/Players.vue') },
   { path: '/compare',   component: () => import('../views/Compare.vue') },
   { path: '/guide',     component: () => import('../views/RankingGuide.vue') },
@@ -90,6 +92,13 @@ router.beforeEach(async (to) => {
   if (to.path === '/admin' && loggedIn) {
     const { data: roles } = await supabase.rpc('get_my_roles')
     if (!(roles ?? []).some(r => r.role === 'app_admin')) return '/dashboard'
+  }
+
+  // Premium AI tools are early-access only; non-holders are sent to the teaser hub.
+  if (to.path === '/record' && loggedIn) {
+    const { hasEarlyAccess, loadEntitlements } = useEntitlements()
+    await loadEntitlements()
+    if (!hasEarlyAccess.value) return '/ai'
   }
 })
 
