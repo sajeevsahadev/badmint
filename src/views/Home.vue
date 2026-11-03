@@ -220,6 +220,36 @@ onMounted(() => {
     <!-- ── Page content ── -->
     <div class="px-4 mx-auto max-w-2xl pb-10 pt-5">
 
+      <!-- ── Get the App — Android on Google Play; iOS App Store coming soon ── -->
+      <div v-if="!isInstalled" class="mb-5 fade-up">
+        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">📲 Get the App</h2>
+        <div class="grid grid-cols-2 gap-2.5">
+          <!-- Android: link straight to the Google Play listing -->
+          <a :href="PLAY_STORE_URL" target="_blank" rel="noopener"
+            class="card card-neon lift press p-4 flex flex-col gap-2.5 text-left w-full">
+            <div class="flex items-center justify-between">
+              <span class="text-2xl">🤖</span>
+              <span class="text-[9px] font-bold uppercase tracking-wide text-neon">{{ isAndroid ? 'Your device' : 'Android' }}</span>
+            </div>
+            <div class="text-sm font-bold text-slate-100">Google Play</div>
+            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">The official Badminton 360 Android app — free.</p>
+            <div class="sheen text-xs text-center py-2 rounded-xl mt-auto btn-primary">Get it on Play →</div>
+          </a>
+          <!-- iPhone / iPad: App Store build is on the way -->
+          <div class="card lift p-4 flex flex-col gap-2.5 text-left w-full"
+            :class="isIOS ? 'card-violet' : 'opacity-90'">
+            <div class="flex items-center justify-between">
+              <span class="text-2xl">🍎</span>
+              <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Coming soon</span>
+            </div>
+            <div class="text-sm font-bold text-slate-100">iPhone / iPad</div>
+            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">The App Store version is on the way.
+              <button class="text-violet underline" @click="showIOSGuide = true">Add to Home Screen</button> meanwhile.</p>
+            <div class="text-[10px] text-center text-violet py-2 border border-violet/30 rounded-xl mt-auto bg-violet/5">App Store soon 🚀</div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── My Teams (logged-in) ── -->
       <template v-if="user && clubs.length">
         <div class="mb-5 fade-up">
@@ -454,54 +484,6 @@ onMounted(() => {
           </RouterLink>
         </div>
       </template>
-
-      <!-- ── Get the App — Android on Google Play; iOS App Store coming soon ── -->
-      <div v-if="!isInstalled" class="mb-2 fade-up">
-        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
-          📲 Get the App
-        </h2>
-        <div class="grid grid-cols-2 gap-2">
-
-          <!-- Android: link straight to the Google Play listing -->
-          <a :href="PLAY_STORE_URL" target="_blank" rel="noopener"
-            class="card card-neon p-4 flex flex-col gap-2.5 text-left w-full
-                   hover:border-cyan-400/40 active:scale-[0.98] transition-all duration-150">
-            <div class="flex items-center justify-between">
-              <span class="text-2xl">🤖</span>
-              <span class="text-[9px] font-bold uppercase tracking-wide text-neon">
-                {{ isAndroid ? 'Your device' : 'Android' }}
-              </span>
-            </div>
-            <div class="text-xs font-bold text-slate-100">Google Play</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
-              The official Badminton 360 Android app — free.
-            </p>
-            <div class="text-xs text-center py-1.5 rounded-xl mt-auto btn-primary border border-transparent">
-              Get it on Play →
-            </div>
-          </a>
-
-          <!-- iPhone / iPad: App Store build is on the way -->
-          <div class="card p-4 flex flex-col gap-2.5 text-left w-full opacity-80"
-            :class="isIOS ? 'card-violet opacity-100' : ''">
-            <div class="flex items-center justify-between">
-              <span class="text-2xl">🍎</span>
-              <span class="text-[9px] text-violet font-bold uppercase tracking-wide">Coming soon</span>
-            </div>
-            <div class="text-xs font-bold text-slate-100">iPhone / iPad</div>
-            <p class="text-[10px] text-slate-400 leading-relaxed flex-1">
-              The App Store version is on the way.
-              <button class="text-violet underline" @click="showIOSGuide = true">Add to Home Screen</button>
-              meanwhile.
-            </p>
-            <div class="text-[10px] text-center text-violet py-1.5 border border-violet/30
-                        rounded-xl mt-auto bg-violet/5">
-              App Store soon 🚀
-            </div>
-          </div>
-
-        </div>
-      </div>
 
       <!-- ── Social footer — always visible (logged in or not) ── -->
       <div class="text-center pt-2 pb-4 fade-up">
