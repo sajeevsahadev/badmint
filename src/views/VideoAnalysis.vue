@@ -1,7 +1,7 @@
 <script setup>
 // Per-video analysis hub: play → tag who's who → (mark court swaps) → run analysis → read the
 // 3-lens report and chat about it. One video, one page. Early-access gated at the router.
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
@@ -50,7 +50,21 @@ function tagName(t) { return resolveTagName(t, nameMap.value) }
 function metricsFor(tagId) { return metrics.value.find(m => m.tag_id === tagId) || null }
 function reportsFor(tagId) { return reports.value.filter(r => r.tag_id === tagId) }
 
-onMounted(load)
+onMounted(async () => { await load(); if (status.value === 'analyzing') startPolling() })
+onBeforeUnmount(stopPolling)
+
+let pollTimer = null
+function startPolling() {
+  stopPolling()
+  let ticks = 0
+  pollTimer = setInterval(async () => {
+    ticks++
+    await load()
+    if (subjects.value.length && !activeSubject.value) activeSubject.value = subjects.value[0].id
+    if (status.value === 'done' || status.value === 'failed' || ticks > 90) stopPolling()
+  }, 5000)
+}
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
 
 async function load() {
   loading.value = true
@@ -80,14 +94,20 @@ async function addSwap() {
 }
 async function removeSwap(id) { await supabase.rpc('remove_court_event', { p_event_id: id }); await load() }
 
-// Phase A: produce a sample analysis so the report + chat are fully usable. Phase B swaps this for
-// request_video_analysis() + the Modal worker.
+// Tries the real engine (Modal via analyze-video). Until that's wired, the function returns 503 and
+// we fall back to a clearly-labelled sample analysis so the experience works today.
 async function runAnalysis() {
   working.value = true; err.value = ''
   try {
-    const { error } = await supabase.rpc('seed_mock_analysis', { p_video_id: videoId })
-    if (error) throw error
-    await load()
+    const { data, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: videoId } })
+    if (error || data?.error) {
+      const { error: se } = await supabase.rpc('seed_mock_analysis', { p_video_id: videoId })
+      if (se) throw se
+      await load()
+    } else {
+      await load()
+      if (status.value === 'analyzing') startPolling()
+    }
     if (subjects.value.length) activeSubject.value = subjects.value[0].id
   } catch (e) {
     err.value = e?.message || 'Analysis failed.'
