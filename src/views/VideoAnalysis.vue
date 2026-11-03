@@ -5,6 +5,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
+import { useAuth } from '../composables/useAuth'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
 import { resolveTagName } from '../lib/videoAnalysis'
@@ -16,6 +17,7 @@ import AnalysisChat from '../components/AnalysisChat.vue'
 const route  = useRoute()
 const router = useRouter()
 const { isManager } = useClub()
+const { user } = useAuth()
 const videoId = route.params.id
 
 const loading = ref(true)
@@ -36,7 +38,13 @@ const metrics = computed(() => data.value?.metrics || [])
 const reports = computed(() => data.value?.reports || [])
 const status  = computed(() => video.value?.status || 'uploaded')
 const tagged  = computed(() => video.value?.tag_status === 'tagged' && tags.value.length > 0)
-const subjects = computed(() => tags.value.filter(t => t.is_subject))
+// Show reports for marked subjects; if none were marked, fall back to everyone tagged.
+const subjects = computed(() => {
+  const subs = tags.value.filter(t => t.is_subject)
+  return subs.length ? subs : tags.value
+})
+// Managers OR the person who uploaded/recorded this video can edit tags/swaps (matches RLS).
+const canManage = computed(() => isManager() || (!!user.value && video.value?.uploaded_by === user.value.id))
 
 function tagName(t) { return resolveTagName(t, nameMap.value) }
 function metricsFor(tagId) { return metrics.value.find(m => m.tag_id === tagId) || null }
@@ -106,8 +114,11 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
 
       <!-- Step 1: tagging -->
       <div v-if="!tagged || retag" class="mb-4">
-        <PlayerTagger :video-id="videoId" :club-id="video.club_id" :game-type="video.game_type"
+        <PlayerTagger v-if="canManage" :video-id="videoId" :club-id="video.club_id" :game-type="video.game_type"
           :tracks="tracks" :existing-tags="tags" @saved="onTagged" @cancel="retag = false" />
+        <div v-else class="card p-6 text-center text-sm text-slate-500">
+          This video hasn't been tagged yet. Only the uploader or a club manager can tag the players.
+        </div>
       </div>
 
       <!-- Tagged summary + actions -->
@@ -115,7 +126,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         <div class="card p-4 mb-4">
           <div class="mb-2 flex items-center justify-between">
             <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Players in this video</div>
-            <button @click="retag = true" class="text-xs font-semibold text-neon">Fix tags</button>
+            <button v-if="canManage" @click="retag = true" class="text-xs font-semibold text-neon">Fix tags</button>
           </div>
           <div class="flex flex-wrap gap-2">
             <span v-for="t in tags" :key="t.id"
@@ -126,7 +137,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         </div>
 
         <!-- Court swaps -->
-        <div v-if="isManager()" class="card p-4 mb-4">
+        <div v-if="canManage" class="card p-4 mb-4">
           <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Court changes (ends swapped)</div>
           <p class="mt-1 text-xs text-slate-400">Add the time (seconds) players changed ends, if any. Positions flip from that point.</p>
           <div v-for="e in events" :key="e.id" class="mt-2 flex items-center justify-between text-sm">
@@ -142,16 +153,21 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
 
         <!-- Run analysis -->
         <div v-if="status !== 'done'" class="card card-neon p-4 mb-4 text-center">
-          <div class="text-sm font-semibold text-slate-800">Ready to analyse</div>
+          <div class="text-sm font-semibold text-slate-800">
+            {{ status === 'analyzing' ? 'Analysis in progress…' : 'Ready to analyse' }}
+          </div>
           <p class="mt-1 text-xs text-slate-500">
             We'll produce a per-player report across coach, physio and your own view.
           </p>
-          <button :disabled="working" @click="runAnalysis" class="btn-primary sheen press mt-3 w-full py-2.5 disabled:opacity-50">
-            {{ working ? 'Analysing…' : '✨ Run analysis' }}
-          </button>
-          <p class="mt-2 text-[11px] text-amber-600">
-            Early access: this currently returns <b>sample analysis</b> while our vision engine finishes training on real footage.
-          </p>
+          <template v-if="canManage">
+            <button :disabled="working" @click="runAnalysis" class="btn-primary sheen press mt-3 w-full py-2.5 disabled:opacity-50">
+              {{ working ? 'Analysing…' : '✨ Run analysis' }}
+            </button>
+            <p class="mt-2 text-[11px] text-amber-600">
+              Early access: this currently returns <b>sample analysis</b> while our vision engine finishes training on real footage.
+            </p>
+          </template>
+          <p v-else class="mt-2 text-xs text-slate-400">The uploader or a manager can run the analysis.</p>
           <p v-if="err" class="mt-2 text-xs text-red-600">{{ err }}</p>
         </div>
 
@@ -175,7 +191,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
             :video-id="videoId" :tag-id="activeSubject"
             :name="tagName(subjects.find(s => s.id === activeSubject))" />
 
-          <button @click="runAnalysis" :disabled="working" class="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-50">
+          <button v-if="canManage" @click="runAnalysis" :disabled="working" class="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-50">
             {{ working ? 'Re-running…' : '↻ Re-run analysis' }}
           </button>
         </div>
