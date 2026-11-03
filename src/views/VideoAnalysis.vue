@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
+import { resolveTagName } from '../lib/videoAnalysis'
 import PageHeader from '../components/PageHeader.vue'
 import PlayerTagger from '../components/PlayerTagger.vue'
 import AnalysisReport from '../components/AnalysisReport.vue'
@@ -37,11 +38,7 @@ const status  = computed(() => video.value?.status || 'uploaded')
 const tagged  = computed(() => video.value?.tag_status === 'tagged' && tags.value.length > 0)
 const subjects = computed(() => tags.value.filter(t => t.is_subject))
 
-function tagName(t) {
-  if (!t) return 'Player'
-  if (t.player_id && nameMap.value[t.player_id]) return nameMap.value[t.player_id]
-  return t.label || 'Player'
-}
+function tagName(t) { return resolveTagName(t, nameMap.value) }
 function metricsFor(tagId) { return metrics.value.find(m => m.tag_id === tagId) || null }
 function reportsFor(tagId) { return reports.value.filter(r => r.tag_id === tagId) }
 

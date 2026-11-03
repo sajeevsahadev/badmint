@@ -7,6 +7,7 @@ import { ref, onMounted, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
+import { expectedSides as sidesFor, slotsComplete, buildTags } from '../lib/videoAnalysis'
 
 const props = defineProps({
   videoId:      { type: String, required: true },
@@ -29,10 +30,7 @@ const sideLabel = (s) => ({
   far_left: 'Far · left', far_right: 'Far · right',
 }[s] || s || '')
 
-const expectedSides = computed(() =>
-  props.gameType === 'doubles'
-    ? ['near_left', 'near_right', 'far_left', 'far_right']
-    : ['near', 'far'])
+const expectedSides = computed(() => sidesFor(props.gameType))
 
 onMounted(async () => {
   const { data } = await supabase.from('players')
@@ -63,20 +61,13 @@ onMounted(async () => {
   }
 })
 
-const complete = computed(() => slots.value.every(s =>
-  (s.assign && s.assign.startsWith('p:')) || (s.assign === 'label' && s.label.trim())))
+const complete = computed(() => slotsComplete(slots.value))
 
 async function save() {
   err.value = ''
   saving.value = true
   try {
-    const tags = slots.value.map(s => ({
-      track_id:  s.track_id || null,
-      player_id: s.assign?.startsWith('p:') ? s.assign.slice(2) : null,
-      label:     s.assign === 'label' ? s.label.trim() : null,
-      court_side: s.court_side || null,
-      is_subject: !!s.is_subject,
-    }))
+    const tags = buildTags(slots.value)
     const { error } = await supabase.rpc('set_video_tags', { p_video_id: props.videoId, p_tags: tags })
     if (error) throw error
     emit('saved')
