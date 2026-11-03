@@ -5,8 +5,10 @@
 // go straight to R2 (never through Supabase). The R2 keys stay server-side as secrets.
 //
 // Secrets required (set with: supabase secrets set ...):
-//   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  (shared with the chat r2-upload-url fn),
-//   R2_VIDEO_BUCKET  (video-only, so it never collides with chat's bucket config)
+//   R2_ACCOUNT_ID  (same Cloudflare account as chat — shared, non-secret),
+//   R2_VIDEO_ACCESS_KEY_ID, R2_VIDEO_SECRET_ACCESS_KEY, R2_VIDEO_BUCKET
+//   — all VIDEO-ONLY, from the dedicated all-buckets "for videos" token, so chat's
+//     token/bucket (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / b360-chat-images) is never touched.
 //
 // Request body: { action: 'put' | 'get' | 'delete', clubId, key, contentType? }
 //   key MUST be "<clubId>/<uuid>.<ext>" — the caller must be a member of that club.
@@ -14,8 +16,8 @@ import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.20'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 
 const ACCOUNT  = Deno.env.get('R2_ACCOUNT_ID') ?? ''
-const KEY_ID   = Deno.env.get('R2_ACCESS_KEY_ID') ?? ''
-const SECRET   = Deno.env.get('R2_SECRET_ACCESS_KEY') ?? ''
+const KEY_ID   = Deno.env.get('R2_VIDEO_ACCESS_KEY_ID') ?? ''
+const SECRET   = Deno.env.get('R2_VIDEO_SECRET_ACCESS_KEY') ?? ''
 const BUCKET   = Deno.env.get('R2_VIDEO_BUCKET') ?? ''
 const SUPA_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
