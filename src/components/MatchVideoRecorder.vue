@@ -3,9 +3,9 @@
 // Context (club, players, singles/doubles, live/match link) is passed in, so the live-match
 // flow needs NO re-tagging — it just inherits what's already on screen. Used by LiveMatch.vue
 // and RecordVideo.vue so there is ONE capture implementation.
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { supabase } from '../lib/supabase'
-import { uploadMatchVideo, isR2 } from '../lib/videoStorage'
+import { uploadMatchVideo } from '../lib/videoStorage'
 
 const props = defineProps({
   clubId:       { type: String, required: true },
@@ -18,8 +18,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['saved'])
 
-// On the capped Supabase fallback keep live clips short; on R2 allow long matches.
-const maxSeconds = computed(() => (isR2 ? 60 * 60 : 3 * 60))
+// R2 storage — allow a full match.
+const maxSeconds = 60 * 60
 
 const stage       = ref('consent')   // consent | record | review | done
 const consent     = ref(false)
@@ -84,7 +84,7 @@ function startRecording() {
   elapsed.value = 0
   timer = setInterval(() => {
     elapsed.value++
-    if (elapsed.value >= maxSeconds.value) stopRecording()   // auto-stop at the cap
+    if (elapsed.value >= maxSeconds) stopRecording()   // auto-stop at the cap
   }, 1000)
 }
 

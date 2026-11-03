@@ -1,22 +1,17 @@
-// Match-video storage abstraction.
+// Match-video storage — Cloudflare R2 only.
 //
-// Provider is chosen by VITE_VIDEO_PROVIDER:
-//   'r2'       → Cloudflare R2 via the `video-sign` Edge Function (presigned URLs).
-//                The large bytes go straight to R2, never through Supabase. USE THIS in prod —
-//                Supabase free tier is only 1 GB and a single match video can exceed that.
-//   'supabase' → Supabase Storage (default). Dev/preview fallback ONLY, for small clips.
+// The big video bytes go straight to R2 via short-lived presigned URLs minted by the
+// `video-sign` Edge Function; they never pass through Supabase. (Supabase free tier is 1 GB —
+// a single match video can exceed that, so Supabase Storage is NOT used for video.)
+// Only lightweight metadata (match_videos rows) stays in Supabase.
 //
-// Either way the rest of the app calls the same three functions and stores `storage_path`
-// (an R2 key, or a Supabase object path) on match_videos. Switching providers changes only
-// this file + the env var.
+// R2 secrets live server-side on the Edge Function:
+//   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+// Switching storage would mean changing only this file + that function.
 import { supabase } from './supabase'
 
-const PROVIDER = (import.meta.env.VITE_VIDEO_PROVIDER || 'supabase').toLowerCase()
-const BUCKET = 'match-videos'
-export const isR2 = PROVIDER === 'r2'
-
-// Supabase-fallback safety cap: never let one upload threaten the 1 GB free tier.
-export const SUPABASE_MAX_BYTES = 80 * 1024 * 1024   // 80 MB
+// Kept for callers that still import it; video storage is always R2 now.
+export const isR2 = true
 
 export function extForMime(mime = '') {
   if (mime.includes('mp4'))       return 'mp4'
@@ -39,51 +34,28 @@ async function sign(action, { clubId, key, contentType }) {
   return data   // { url, method, contentType }
 }
 
-// Upload a recorded Blob/File. Returns the storage path/key to persist on match_videos.
+// Upload a recorded Blob/File straight to R2. Returns the storage key to persist on match_videos.
 export async function uploadMatchVideo(blob, { clubId, videoId, contentType }) {
   const ctype = contentType || blob.type
   const key   = buildKey(clubId, videoId, ctype)
-
-  if (isR2) {
-    const { url } = await sign('put', { clubId, key, contentType: ctype })
-    const res = await fetch(url, { method: 'PUT', body: blob, headers: { 'content-type': ctype } })
-    if (!res.ok) throw new Error(`Upload failed (R2 ${res.status})`)
-    return key
-  }
-
-  // Supabase fallback — guard the 1 GB free tier.
-  if (blob.size > SUPABASE_MAX_BYTES) {
-    throw new Error(
-      `This clip is ${(blob.size / 1048576).toFixed(0)} MB. The dev storage caps at ` +
-      `${SUPABASE_MAX_BYTES / 1048576} MB — record a shorter clip, or switch on Cloudflare R2.`
-    )
-  }
-  const { error } = await supabase.storage.from(BUCKET).upload(key, blob, { contentType: ctype, upsert: true })
-  if (error) throw error
+  const { url } = await sign('put', { clubId, key, contentType: ctype })
+  const res = await fetch(url, { method: 'PUT', body: blob, headers: { 'content-type': ctype } })
+  if (!res.ok) throw new Error(`Upload failed (R2 ${res.status})`)
   return key
 }
 
 // A short-lived URL to play a stored video.
-export async function getPlaybackUrl(storagePath, expiresInSeconds = 3600) {
+export async function getPlaybackUrl(storagePath) {
   if (!storagePath) return null
-  if (isR2) {
-    const clubId = String(storagePath).split('/')[0]
-    const { url } = await sign('get', { clubId, key: storagePath })
-    return url
-  }
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, expiresInSeconds)
-  if (error) throw error
-  return data?.signedUrl ?? null
+  const clubId = String(storagePath).split('/')[0]
+  const { url } = await sign('get', { clubId, key: storagePath })
+  return url
 }
 
-// Remove the stored object (row deletion is handled separately by the caller).
+// Remove the stored object (the match_videos row is deleted separately by the caller).
 export async function deleteMatchVideo(storagePath) {
   if (!storagePath) return
-  if (isR2) {
-    const clubId = String(storagePath).split('/')[0]
-    const { url } = await sign('delete', { clubId, key: storagePath })
-    await fetch(url, { method: 'DELETE' })
-    return
-  }
-  await supabase.storage.from(BUCKET).remove([storagePath])
+  const clubId = String(storagePath).split('/')[0]
+  const { url } = await sign('delete', { clubId, key: storagePath })
+  await fetch(url, { method: 'DELETE' })
 }
