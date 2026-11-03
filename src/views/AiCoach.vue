@@ -75,25 +75,30 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
         <span class="text-sm text-slate-600">You're on the early-access list — thanks for testing!</span>
       </div>
 
-      <button @click="router.push('/record')" class="btn-primary sheen press w-full py-3 text-base mb-4 fade-up d2">
-        🎥 Record a match to analyse
-      </button>
+      <div class="mb-4 grid grid-cols-2 gap-3 fade-up d2">
+        <button @click="router.push('/record')" class="btn-primary sheen press py-3 text-sm">
+          🎥 Record a match
+        </button>
+        <button @click="router.push('/record?upload=1')" class="btn-violet sheen press py-3 text-sm">
+          ⬆️ Upload a video
+        </button>
+      </div>
 
       <div class="card p-4 mb-4 lift fade-up d3">
-        <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Your recordings</div>
+        <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Your match videos</div>
         <div v-if="!videos.length" class="py-3 text-sm text-slate-400">
-          No recordings yet. Record a match and it will appear here, ready for analysis.
+          No videos yet. Record or upload a match and it will appear here, ready for analysis.
         </div>
-        <div v-for="v in videos" :key="v.id" class="border-b border-slate-100 py-2 last:border-0">
-          <div class="flex items-center justify-between gap-2">
-            <div class="min-w-0">
-              <div class="truncate text-sm font-semibold text-slate-800">{{ v.title }}</div>
-              <div class="text-xs text-slate-400">{{ v.game_type }} · {{ fmt(v.duration_s) }} ·
-                <span class="font-medium text-slate-500">{{ statusLabel(v.status) }}</span>
-              </div>
+        <button v-for="v in videos" :key="v.id" @click="router.push(`/ai/video/${v.id}`)"
+          class="flex w-full items-center justify-between gap-2 border-b border-slate-100 py-2.5 text-left last:border-0 hover:bg-slate-50">
+          <div class="min-w-0">
+            <div class="truncate text-sm font-semibold text-slate-800">{{ v.title }}</div>
+            <div class="text-xs text-slate-400">{{ v.game_type }} · {{ fmt(v.duration_s) }} ·
+              <span class="font-medium text-slate-500">{{ statusLabel(v.status) }}</span>
             </div>
           </div>
-        </div>
+          <span class="shrink-0 text-slate-300">›</span>
+        </button>
       </div>
 
       <div class="card card-violet p-4 lift fade-up d4">

@@ -6,6 +6,8 @@
 import { ref, onBeforeUnmount } from 'vue'
 import { supabase } from '../lib/supabase'
 import { uploadMatchVideo } from '../lib/videoStorage'
+import { CONSENT_VERSION } from '../lib/consent'
+import ConsentGate from './ConsentGate.vue'
 
 const props = defineProps({
   clubId:       { type: String, required: true },
@@ -128,6 +130,8 @@ async function upload() {
       game_type: props.gameType,
       player_ids: props.playerIds ?? [],
       consent: true,
+      consent_version: CONSENT_VERSION,
+      source: 'record',
       storage_path: path,
       duration_s: elapsed.value,
       size_bytes: recordedBlob.value.size,
@@ -156,14 +160,7 @@ defineExpose({ stage })
   <div>
     <!-- Consent — ethical + GDPR. Required once before the camera opens. -->
     <div v-if="stage === 'consent'">
-      <label class="card card-amber flex items-start gap-3 p-4 cursor-pointer"
-        :class="compact ? 'mb-3' : 'mb-4'">
-        <input type="checkbox" v-model="consent" class="mt-0.5 h-5 w-5 shrink-0 accent-cyan-600" />
-        <span class="text-sm text-slate-700">
-          <b>Everyone on court agrees to be recorded</b> for coaching analysis. The video is private
-          to this club and is deleted after analysis (or kept only as a private link).
-        </span>
-      </label>
+      <ConsentGate v-model="consent" :compact="compact" />
       <button :disabled="!consent" @click="startCamera"
         class="btn-primary w-full py-3 disabled:opacity-40 disabled:cursor-not-allowed">
         🎬 Open camera

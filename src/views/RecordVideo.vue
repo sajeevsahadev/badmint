@@ -3,15 +3,20 @@
 // title); the actual capture + upload is the shared MatchVideoRecorder component — the same one
 // embedded in the live-match page.
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { withNicknames } from '../lib/playerNames'
-import { getPlaybackUrl, deleteMatchVideo, isR2 } from '../lib/videoStorage'
+import { getPlaybackUrl, deleteMatchVideo } from '../lib/videoStorage'
 import MatchVideoRecorder from '../components/MatchVideoRecorder.vue'
+import MatchVideoUploader from '../components/MatchVideoUploader.vue'
 import PageHeader from '../components/PageHeader.vue'
 
+const route  = useRoute()
+const router = useRouter()
 const { currentClub, isManager } = useClub()
 
+const mode     = ref(route.query.upload ? 'upload' : 'record')
 const gameType = ref('doubles')
 const players  = ref([])
 const selected = ref(new Set())
@@ -66,7 +71,11 @@ async function remove(v) {
   if (playing.value?.id === v.id) playing.value = null
   await loadMyVideos()
 }
-function onSaved() { ready.value = false; selected.value = new Set(); title.value = ''; loadMyVideos() }
+function onSaved(videoId) {
+  ready.value = false; selected.value = new Set(); title.value = ''
+  if (videoId) router.push(`/ai/video/${videoId}`)   // straight to tagging + analysis
+  else loadMyVideos()
+}
 </script>
 
 <template>
@@ -87,6 +96,19 @@ function onSaved() { ready.value = false; selected.value = new Set(); title.valu
 
     <!-- Setup -->
     <div v-if="currentClub && !ready">
+      <div class="card p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">How are you adding the video?</div>
+        <div class="flex gap-2">
+          <button @click="mode = 'record'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
+            :class="mode === 'record' ? 'btn-primary' : 'btn-ghost'">🎥 Record now</button>
+          <button @click="mode = 'upload'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
+            :class="mode === 'upload' ? 'btn-violet' : 'btn-ghost'">⬆️ Upload a file</button>
+        </div>
+        <p class="mt-2 text-xs text-slate-400">
+          Upload is ideal for footage from a fixed court camera.
+        </p>
+      </div>
+
       <div class="card p-4 mb-4">
         <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Match type</div>
         <div class="flex gap-2">
@@ -145,8 +167,9 @@ function onSaved() { ready.value = false; selected.value = new Set(); title.valu
               </div>
             </div>
             <div class="flex shrink-0 gap-2">
-              <button @click="play(v)" class="btn-ghost px-3 py-1 text-xs">▶ Play</button>
-              <button v-if="isManager()" @click="remove(v)" class="btn-danger px-3 py-1 text-xs">Delete</button>
+              <button @click="router.push(`/ai/video/${v.id}`)" class="btn-primary px-3 py-1 text-xs">✨ Analyse</button>
+              <button @click="play(v)" class="btn-ghost px-3 py-1 text-xs">▶</button>
+              <button v-if="isManager()" @click="remove(v)" class="btn-danger px-3 py-1 text-xs">✕</button>
             </div>
           </div>
           <video v-if="playing?.id === v.id" :src="playing.url" controls playsinline
@@ -155,23 +178,26 @@ function onSaved() { ready.value = false; selected.value = new Set(); title.valu
       </div>
     </div>
 
-    <!-- Capture (shared component) -->
+    <!-- Capture / upload (shared components) -->
     <div v-if="currentClub && ready">
       <div class="card p-3 mb-3 flex items-center justify-between">
         <div class="text-sm text-slate-600">
-          <b>{{ gameType === 'singles' ? 'Singles' : 'Doubles' }}</b> · {{ selected.size }} players tagged
+          <b>{{ gameType === 'singles' ? 'Singles' : 'Doubles' }}</b> · {{ selected.size }} players
         </div>
         <button @click="ready = false" class="btn-ghost px-3 py-1 text-xs">← Back</button>
       </div>
-      <MatchVideoRecorder
+      <MatchVideoRecorder v-if="mode === 'record'"
         :club-id="currentClub.club_id"
         :game-type="gameType"
         :player-ids="[...selected]"
         :default-title="title"
         @saved="onSaved" />
-      <p v-if="!isR2" class="mt-3 text-center text-xs text-amber-600">
-        Dev storage (Supabase) — keep clips short. Turn on Cloudflare R2 for full-length matches.
-      </p>
+      <MatchVideoUploader v-else
+        :club-id="currentClub.club_id"
+        :game-type="gameType"
+        :player-ids="[...selected]"
+        :default-title="title"
+        @saved="onSaved" />
     </div>
   </div>
 </template>
