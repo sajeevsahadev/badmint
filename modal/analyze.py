@@ -34,6 +34,7 @@ image = (
         "supervision==0.23.0",
         "boto3==1.34.162",
         "supabase==2.7.4",
+        "fastapi==0.115.0",
     )
 )
 
