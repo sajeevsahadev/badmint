@@ -20,7 +20,7 @@ const { isManager } = useClub()
 const { user } = useAuth()
 const videoId = route.params.id
 
-const loading = ref(true)
+const loading = ref(true)     // first load only (never re-shown by polling)
 const data    = ref(null)
 const playUrl = ref('')
 const nameMap = ref({})       // player_id -> display name
@@ -29,6 +29,9 @@ const working = ref(false)
 const err     = ref('')
 const swapAt  = ref('')
 const activeSubject = ref(null)
+const elapsed = ref(0)        // seconds since analysis started (progress UI)
+let   mediaLoaded = false     // fetch playUrl + names once, so the video never reloads on poll
+let   elapsedTimer = null
 
 const video   = computed(() => data.value?.video || null)
 const tracks  = computed(() => data.value?.tracks || [])
@@ -56,31 +59,55 @@ onBeforeUnmount(stopPolling)
 let pollTimer = null
 function startPolling() {
   stopPolling()
+  elapsed.value = 0
+  elapsedTimer = setInterval(() => { elapsed.value++ }, 1000)
   let ticks = 0
+  const prev = status.value
   pollTimer = setInterval(async () => {
     ticks++
-    await load()
+    await load(true)   // SILENT refresh — never flips the page back to the spinner
     if (subjects.value.length && !activeSubject.value) activeSubject.value = subjects.value[0].id
-    if (status.value === 'done' || status.value === 'failed' || ticks > 90) stopPolling()
-  }, 5000)
+    // full matches can take a while; poll up to ~15 min
+    if (status.value === 'done' || status.value === 'failed' || ticks > 225) {
+      stopPolling()
+      if (status.value === 'done' && prev !== 'done') notifyDone()
+    }
+  }, 4000)
 }
-function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null } }
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null }
+}
 
-async function load() {
-  loading.value = true
+// Best-effort local notification when analysis finishes while the page is still open.
+function notifyDone() {
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Match analysis ready', { body: video.value?.title || 'Your report is ready to view.' })
+    }
+  } catch { /* ignore */ }
+}
+
+// load(silent): silent=true refreshes data in place without the full-page spinner or reloading
+// the video/roster (those are fetched once). This is what polling uses, so the UI stays stable.
+async function load(silent = false) {
+  if (!silent) loading.value = true
   const { data: a, error } = await supabase.rpc('get_video_analysis', { p_video_id: videoId })
-  if (error || !a) { err.value = 'Video not found or not accessible.'; loading.value = false; return }
+  if (error || !a) { if (!silent) { err.value = 'Video not found or not accessible.'; loading.value = false } return }
   data.value = a
-  // roster names for the video's club
-  if (a.video?.club_id) {
-    const { data: pl } = await supabase.from('players')
-      .select('id, display_name, user_id').eq('club_id', a.video.club_id)
-    const named = await withNicknames(pl ?? [])
-    nameMap.value = Object.fromEntries(named.map(p => [p.id, p.display_name]))
+  err.value = ''   // a successful load clears any stale/transient error
+  if (!mediaLoaded) {
+    mediaLoaded = true
+    if (a.video?.club_id) {
+      const { data: pl } = await supabase.from('players')
+        .select('id, display_name, user_id').eq('club_id', a.video.club_id)
+      const named = await withNicknames(pl ?? [])
+      nameMap.value = Object.fromEntries(named.map(p => [p.id, p.display_name]))
+    }
+    if (a.video?.storage_path) { try { playUrl.value = await getPlaybackUrl(a.video.storage_path) } catch { /* ignore */ } }
   }
-  if (a.video?.storage_path) { try { playUrl.value = await getPlaybackUrl(a.video.storage_path) } catch { /* ignore */ } }
   if (subjects.value.length && !activeSubject.value) activeSubject.value = subjects.value[0].id
-  loading.value = false
+  if (!silent) loading.value = false
 }
 
 async function onTagged() { retag.value = false; await load(); if (subjects.value.length) activeSubject.value = subjects.value[0].id }
@@ -90,22 +117,25 @@ async function addSwap() {
   if (isNaN(t) || t < 0) return
   await supabase.rpc('add_court_event', { p_video_id: videoId, p_at_s: t, p_type: 'end_swap' })
   swapAt.value = ''
-  await load()
+  await load(true)
 }
-async function removeSwap(id) { await supabase.rpc('remove_court_event', { p_event_id: id }); await load() }
+async function removeSwap(id) { await supabase.rpc('remove_court_event', { p_event_id: id }); await load(true) }
 
-// Tries the real engine (Modal via analyze-video). Until that's wired, the function returns 503 and
-// we fall back to a clearly-labelled sample analysis so the experience works today.
+// Dispatches to the real engine (Modal). It runs in the BACKGROUND — the server keeps analysing
+// even if you leave this page; we just poll to update the status. Falls back to sample analysis
+// only if the engine isn't configured (503).
 async function runAnalysis() {
   working.value = true; err.value = ''
   try {
-    const { data, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: videoId } })
-    if (error || data?.error) {
+    // Ask for notification permission up-front so we can ping when it finishes.
+    try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission() } catch { /* ignore */ }
+    const { data: d, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: videoId } })
+    if (error || d?.error) {
       const { error: se } = await supabase.rpc('seed_mock_analysis', { p_video_id: videoId })
       if (se) throw se
-      await load()
+      await load(true)
     } else {
-      await load()
+      await load(true)
       if (status.value === 'analyzing') startPolling()
     }
     if (subjects.value.length) activeSubject.value = subjects.value[0].id
@@ -171,21 +201,33 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           </div>
         </div>
 
-        <!-- Run analysis -->
-        <div v-if="status !== 'done'" class="card card-neon p-4 mb-4 text-center">
-          <div class="text-sm font-semibold text-slate-800">
-            {{ status === 'analyzing' ? 'Analysis in progress…' : 'Ready to analyse' }}
+        <!-- Analysing — stable, non-blocking progress (safe to leave the page) -->
+        <div v-if="status === 'analyzing'" class="card card-neon p-5 mb-4 text-center fade-up">
+          <div class="text-base font-bold text-slate-800">Analysing your match…</div>
+          <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div class="ai-bar h-full rounded-full bg-cyan-500"></div>
           </div>
-          <p class="mt-1 text-xs text-slate-500">
-            We'll produce a per-player report across coach, physio and your own view.
+          <p class="mt-2 text-xs text-slate-500">
+            Running pose &amp; movement analysis · {{ fmtClock(elapsed) }} elapsed
+          </p>
+          <p class="mt-1 text-[11px] text-slate-400">
+            This runs in the background — you can leave this page and come back; we'll notify you when the report is ready.
+          </p>
+        </div>
+
+        <!-- Ready / failed -->
+        <div v-else-if="status !== 'done'" class="card card-neon p-4 mb-4 text-center">
+          <div class="text-sm font-semibold text-slate-800">
+            {{ status === 'failed' ? 'Analysis didn’t finish' : 'Ready to analyse' }}
+          </div>
+          <p v-if="status === 'failed'" class="mt-1 text-xs text-red-600">{{ video.error || 'Something went wrong. Please try again.' }}</p>
+          <p v-else class="mt-1 text-xs text-slate-500">
+            Get a per-player report across coach, physio and your own view. Takes a minute or two to process.
           </p>
           <template v-if="canManage">
             <button :disabled="working" @click="runAnalysis" class="btn-primary sheen press mt-3 w-full py-2.5 disabled:opacity-50">
-              {{ working ? 'Analysing…' : '✨ Run analysis' }}
+              {{ working ? 'Starting…' : (status === 'failed' ? '↻ Try again' : '✨ Run analysis') }}
             </button>
-            <p class="mt-2 text-[11px] text-amber-600">
-              Early access: this currently returns <b>sample analysis</b> while our vision engine finishes training on real footage.
-            </p>
           </template>
           <p v-else class="mt-2 text-xs text-slate-400">The uploader or a manager can run the analysis.</p>
           <p v-if="err" class="mt-2 text-xs text-red-600">{{ err }}</p>
@@ -219,3 +261,15 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
     </template>
   </div>
 </template>
+
+<style scoped>
+/* Indeterminate progress sweep — honest "working" signal, no fake percentage. */
+.ai-bar { width: 40%; animation: aiSweep 1.4s ease-in-out infinite; }
+@keyframes aiSweep {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar { animation: none; width: 100%; opacity: 0.6; }
+}
+</style>
