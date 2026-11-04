@@ -60,15 +60,14 @@ Deno.serve(async (req) => {
       if (!adm) return json({ error: 'forbidden' }, 403)
     }
 
-    const url = `${ENDPOINT}/${BUCKET}/${key}`
     const method = action === 'get' ? 'GET' : action === 'delete' ? 'DELETE' : 'PUT'
-    // Sign ONLY the method/host (query-signed). We deliberately do NOT sign content-type: the browser
-    // still sends it on the PUT (R2 stores it as the object's type) but it stays an unsigned header, so
-    // it never enters the SigV4 SignedHeaders or the CORS preflight. This matches the working chat
-    // uploader (r2-upload-url) and avoids a preflight/"Failed to fetch" on the cross-origin PUT.
-    const reqToSign = new Request(url, { method })
-    // 1-hour presigned URL (query-signed so the browser can call it directly).
-    const signed = await aws.sign(reqToSign, { aws: { signQuery: true }, headers: { 'x-amz-expires': '3600' } })
+    // Query-signed presigned URL. X-Amz-Expires MUST go in the URL query and we sign a URL STRING
+    // (not a Request with a headers option) — exactly like the working chat uploader. Passing
+    // x-amz-expires as a header option makes aws4fetch produce a bad signature (R2 → 403
+    // SignatureDoesNotMatch, which surfaces in the browser as "Failed to fetch"). Content-type is
+    // left unsigned: the browser still sends it on the PUT and R2 stores it as the object type.
+    const url = `${ENDPOINT}/${BUCKET}/${key}?X-Amz-Expires=3600`
+    const signed = await aws.sign(url, { method, aws: { signQuery: true } })
     return json({ url: signed.url, method, contentType: contentType ?? null })
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500)
