@@ -62,10 +62,11 @@ Deno.serve(async (req) => {
 
     const url = `${ENDPOINT}/${BUCKET}/${key}`
     const method = action === 'get' ? 'GET' : action === 'delete' ? 'DELETE' : 'PUT'
-    const reqToSign = new Request(url, {
-      method,
-      headers: (method === 'PUT' && contentType) ? { 'content-type': contentType } : undefined,
-    })
+    // Sign ONLY the method/host (query-signed). We deliberately do NOT sign content-type: the browser
+    // still sends it on the PUT (R2 stores it as the object's type) but it stays an unsigned header, so
+    // it never enters the SigV4 SignedHeaders or the CORS preflight. This matches the working chat
+    // uploader (r2-upload-url) and avoids a preflight/"Failed to fetch" on the cross-origin PUT.
+    const reqToSign = new Request(url, { method })
     // 1-hour presigned URL (query-signed so the browser can call it directly).
     const signed = await aws.sign(reqToSign, { aws: { signQuery: true }, headers: { 'x-amz-expires': '3600' } })
     return json({ url: signed.url, method, contentType: contentType ?? null })
