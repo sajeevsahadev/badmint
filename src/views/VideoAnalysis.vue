@@ -9,16 +9,27 @@ import { useAuth } from '../composables/useAuth'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
 import { resolveTagName } from '../lib/videoAnalysis'
+import { useEntitlements } from '../composables/useEntitlements'
 import PageHeader from '../components/PageHeader.vue'
 import PlayerTagger from '../components/PlayerTagger.vue'
 import AnalysisReport from '../components/AnalysisReport.vue'
 import AnalysisChat from '../components/AnalysisChat.vue'
+import DeepCommentary from '../components/DeepCommentary.vue'
 
 const route  = useRoute()
 const router = useRouter()
 const { isManager } = useClub()
 const { user } = useAuth()
+const { hasEarlyAccess, loadEntitlements } = useEntitlements()
 const videoId = route.params.id
+const videoEl = ref(null)   // playback element, for deep-commentary timestamp seeking
+
+function seekTo(t) {
+  const v = videoEl.value
+  if (!v) return
+  try { v.currentTime = Math.max(0, Number(t) || 0); v.play?.().catch(() => {}); v.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { /* ignore */ }
+}
+const subjectsForDeep = computed(() => subjects.value.map(t => ({ id: t.id, name: tagName(t) })))
 
 const loading = ref(true)     // first load only (never re-shown by polling)
 const data    = ref(null)
@@ -53,7 +64,7 @@ function tagName(t) { return resolveTagName(t, nameMap.value) }
 function metricsFor(tagId) { return metrics.value.find(m => m.tag_id === tagId) || null }
 function reportsFor(tagId) { return reports.value.filter(r => r.tag_id === tagId) }
 
-onMounted(async () => { await load(); if (status.value === 'analyzing') startPolling() })
+onMounted(async () => { loadEntitlements(); await load(); if (status.value === 'analyzing') startPolling() })
 onBeforeUnmount(stopPolling)
 
 let pollTimer = null
@@ -159,7 +170,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
     <template v-else>
       <!-- Playback -->
       <div v-if="playUrl" class="mb-4 overflow-hidden rounded-xl bg-black">
-        <video :src="playUrl" controls playsinline class="w-full"></video>
+        <video ref="videoEl" :src="playUrl" controls playsinline class="w-full"></video>
       </div>
 
       <!-- Step 1: tagging -->
@@ -256,6 +267,11 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           <button v-if="canManage" @click="runAnalysis" :disabled="working" class="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-50">
             {{ working ? 'Re-running…' : '↻ Re-run analysis' }}
           </button>
+        </div>
+
+        <!-- Deep Analysis (premium): shot-by-shot coach commentary -->
+        <div v-if="hasEarlyAccess" class="mt-4">
+          <DeepCommentary :video-id="videoId" :can-manage="canManage" :subjects="subjectsForDeep" @seek="seekTo" />
         </div>
       </template>
     </template>

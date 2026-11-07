@@ -265,6 +265,162 @@ def _metrics_for(s, np):
     return {"metrics": metrics, "confidence": confidence}
 
 
+def _post(url, payload, key):
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "apikey": key,
+                 "Authorization": f"Bearer {key}", "x-analyze-secret": payload.get("secret", "")},
+        method="POST")
+    urllib.request.urlopen(req, timeout=120).read()
+
+
+def _detect_shots(frames, np, w, h, min_gap=0.5):
+    """Detect shots as wrist-speed peaks; derive coarse type + technique flags at contact."""
+    ts = [f[0] for f in frames]
+    speeds = [0.0]
+    for k in range(1, len(frames)):
+        prev, cur = frames[k - 1], frames[k]
+        d = 0.0
+        for i in (9, 10):  # wrists
+            if prev[2][i] > 0.3 and cur[2][i] > 0.3:
+                d = max(d, float(np.linalg.norm(cur[1][i] - prev[1][i])))
+        dt = max(1e-3, ts[k] - ts[k - 1])
+        speeds.append(d / dt / w)
+    speeds = np.array(speeds)
+    if len(speeds) < 3:
+        return []
+    thr = max(0.6, float(speeds.mean() + 1.2 * speeds.std()))
+    base_x = float(np.median([fr[3] for fr in frames]))
+    base_y = float(np.median([fr[4] for fr in frames]))
+    shots, last_t = [], -10.0
+    for k in range(1, len(speeds) - 1):
+        if speeds[k] >= thr and speeds[k] >= speeds[k - 1] and speeds[k] >= speeds[k + 1] and (ts[k] - last_t) > min_gap:
+            last_t = ts[k]
+            f = frames[k]
+            sc = f[2]
+            sh_y = np.mean([f[1][i][1] for i in (5, 6) if sc[i] > 0.3]) if (sc[5] > 0.3 or sc[6] > 0.3) else None
+            hip_y = np.mean([f[1][i][1] for i in (11, 12) if sc[i] > 0.3]) if (sc[11] > 0.3 or sc[12] > 0.3) else None
+            wy = min([f[1][i][1] for i in (9, 10) if sc[i] > 0.3], default=None)
+            el_y = min([f[1][i][1] for i in (7, 8) if sc[i] > 0.3], default=None)
+            torso = abs(hip_y - sh_y) if (hip_y is not None and sh_y is not None) else 0.2 * h
+            contact = (sh_y - wy) / (torso + 1e-3) if (sh_y is not None and wy is not None) else 0.0
+            overhead, low = contact > 0.3, contact < -0.3
+            elbow_up = (el_y is not None and sh_y is not None and el_y < sh_y)
+            spd = float(speeds[k])
+            typ = ("smash" if spd > thr * 1.6 else "clear") if overhead else ("net" if low else "drive")
+            after = [fr for fr in frames if 0 < fr[0] - ts[k] <= 1.5]
+            recovered = bool(after and min(float(np.hypot(fr[3] - base_x, fr[4] - base_y)) for fr in after) < 0.12)
+            shots.append({
+                "t": round(float(ts[k]), 1), "type": typ, "conf": 0.4 if overhead else 0.3,
+                "tech": {"contact": "overhead" if overhead else ("low" if low else "mid"),
+                         "elbow_up": bool(elbow_up), "recovered": recovered, "speed": round(spd, 2)},
+            })
+    return shots[:60]
+
+
+@app.function(image=image, timeout=1800, cpu=2.0, memory=4096, secrets=[secret])
+def analyze_deep(video_id: str):
+    URL = os.environ["SUPABASE_URL"]
+    KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+    def rest(method, path, body=None, prefer=None):
+        return _supa(method, path, KEY, URL, body, prefer)
+
+    def fail(msg):
+        try:
+            rest("POST", "rpc/fail_deep", {"p_video_id": video_id, "p_error": str(msg)[:480]})
+        except Exception:
+            pass
+        return {"ok": False, "error": str(msg)}
+
+    try:
+        import cv2
+        import numpy as np
+        import boto3
+        from botocore.config import Config
+        from rtmlib import Body
+
+        vrows = rest("GET", f"match_videos?id=eq.{video_id}&select=storage_path,game_type")
+        vid = vrows[0] if vrows else None
+        tags = rest("GET", f"video_player_tags?video_id=eq.{video_id}&select=id,court_side") or []
+        events = rest("GET", f"video_court_events?video_id=eq.{video_id}&select=at_s&order=at_s.asc") or []
+        if not vid or not vid.get("storage_path"):
+            return fail("video missing")
+        if not tags:
+            return fail("no player tags")
+        game = vid.get("game_type") or "singles"
+
+        s3 = boto3.client("s3", endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+                          aws_access_key_id=os.environ["R2_VIDEO_ACCESS_KEY_ID"],
+                          aws_secret_access_key=os.environ["R2_VIDEO_SECRET_ACCESS_KEY"],
+                          config=Config(signature_version="s3v4", region_name="auto"))
+        local = os.path.join(tempfile.gettempdir(), f"{video_id}_deep.mp4")
+        s3.download_file(os.environ["R2_VIDEO_BUCKET"], vid["storage_path"], local)
+
+        cap = cv2.VideoCapture(local)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
+        h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
+        # Denser sampling than the simple pass (shots are fast), capped at 1800 frames.
+        step = max(1, int(round(fps / 12.0)))
+        if total:
+            step = max(step, total // 1800)
+
+        model = Body(mode="balanced", backend="onnxruntime", device="cpu")
+        quad = {}
+        idx = -1
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            idx += 1
+            if idx % step != 0:
+                continue
+            t = idx / fps
+            kpts, scores = model(frame)
+            if kpts is None or len(kpts) == 0:
+                continue
+            for pk, ps in zip(kpts, scores):
+                if (ps > 0.3).sum() < 6:
+                    continue
+                foot = _foot_point(pk, ps)
+                if foot is None:
+                    continue
+                nx, ny = foot[0] / w, foot[1] / h
+                ud = "near" if ny > 0.5 else "far"
+                key = ud if game == "singles" else f"{ud}_{'left' if nx < 0.5 else 'right'}"
+                quad.setdefault(key, []).append((t, np.array(pk), np.array(ps), nx, ny))
+        cap.release()
+
+        if not quad:
+            return fail("no players detected")
+        duration = (total / fps) if total else max((q[-1][0] for q in quad.values()), default=0)
+        mid_t = duration / 2
+
+        rest("DELETE", f"analysis_shots?video_id=eq.{video_id}")
+        shot_rows = []
+        for tag in tags:
+            tside = _side_at(tag.get("court_side") or "", events, mid_t)
+            frames = quad.get(tside)
+            if not frames or len(frames) < 5:
+                continue
+            for i, sh in enumerate(_detect_shots(frames, np, w, h)):
+                shot_rows.append({"video_id": video_id, "tag_id": tag["id"], "idx": i, "t_s": sh["t"],
+                                  "shot_type": sh["type"], "confidence": sh["conf"], "technique": sh["tech"],
+                                  "is_mock": False})
+        if not shot_rows:
+            return fail("no shots detected — low resolution or the camera hides contact points")
+
+        rest("POST", "analysis_shots", body=shot_rows)
+        # Hand off to Gemini commentary (it writes analysis_commentary + finalize_deep + notify).
+        _post(f"{URL}/functions/v1/generate-commentary",
+              {"video_id": video_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, KEY)
+        return {"ok": True, "shots": len(shot_rows)}
+    except Exception as e:  # noqa
+        return fail(f"{type(e).__name__}: {e}")
+
+
 @app.function(image=image, secrets=[secret])
 @modal.fastapi_endpoint(method="POST")
 def web(data: dict):
@@ -275,5 +431,8 @@ def web(data: dict):
     video_id = data.get("video_id")
     if not video_id:
         return Response(status_code=400, content="missing video_id")
-    analyze.spawn(video_id)
-    return {"status": "queued", "video_id": video_id}
+    if data.get("deep"):
+        analyze_deep.spawn(video_id)
+    else:
+        analyze.spawn(video_id)
+    return {"status": "queued", "video_id": video_id, "deep": bool(data.get("deep"))}
