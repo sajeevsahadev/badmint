@@ -16,6 +16,20 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 
 function fmtClock(s: number) { const m = Math.floor(s / 60), x = Math.round(s % 60); return `${m}:${String(x).padStart(2, '0')}` }
 
+// Parse Gemini output into an array of lines, tolerating a bare array, a wrapped object
+// ({commentary:[...]}), or a single object.
+function toLines(raw: string): any[] {
+  let v: any = null
+  try { v = JSON.parse(raw) } catch { try { v = JSON.parse(raw.slice(raw.indexOf('['), raw.lastIndexOf(']') + 1)) } catch { v = null } }
+  if (!v) return []
+  if (Array.isArray(v)) return v
+  if (typeof v === 'object') {
+    for (const k of Object.keys(v)) if (Array.isArray(v[k])) return v[k]
+    if (v.text) return [v]
+  }
+  return []
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   try {
@@ -42,50 +56,69 @@ Deno.serve(async (req) => {
     }
 
     const subjects = (tags ?? []).filter((t: any) => t.is_subject)
-    const rowsToInsert: any[] = []
+    const subjIds = new Set(subjects.map((t: any) => t.id))
+    // ALL players' shots in ONE Gemini call per analysis (free tier = 20 req/day, so minimise calls).
+    const allShots = (shots ?? []).filter((s: any) => subjIds.has(s.tag_id)).slice(0, 50)
+    const tagOfShot: Record<string, string> = {}
+    const tOfShot: Record<string, number> = {}
+    for (const s of allShots) { tagOfShot[s.id] = s.tag_id; tOfShot[s.id] = Number(s.t_s) }
 
-    for (const subj of subjects) {
-      const myShots = (shots ?? []).filter((s: any) => s.tag_id === subj.id)
-      if (!myShots.length) continue
-      const name = nameByTag[subj.id]
-      const shotList = myShots.map((s: any) => ({
-        shot_id: s.id, time: fmtClock(Number(s.t_s)), t_s: Number(s.t_s),
+    let rowsToInsert: any[] = []
+    let debug: any = { shots: allShots.length }
+
+    if (allShots.length) {
+      const shotList = allShots.map((s: any) => ({
+        shot_id: s.id, player: nameByTag[s.tag_id], time: fmtClock(Number(s.t_s)),
         type: s.shot_type || 'unknown', confidence: s.confidence, technique: s.technique || {},
       }))
-
       const sys =
-        `You are an expert badminton coach giving BALL-BY-BALL commentary on ${name}'s shots, like a cricket ` +
-        `commentator crossed with a personal coach. For EACH shot in the JSON, write ONE short, specific, ` +
-        `encouraging-but-honest coaching line (max ~30 words) that references what actually happened and gives ` +
-        `a concrete correction when the technique flags show a fault (e.g. elbow dropped, contact behind the body, ` +
-        `no recovery to base). Use the shot time in your line. Do NOT invent shuttle placement or opponent actions ` +
-        `that are not in the data. If a shot type confidence is low, hedge ("looked like a clear"). ` +
-        `Output STRICT JSON: an array of {"shot_id": "<id>", "text": "<line>", "severity": "good|info|watch|warning"}. ` +
-        `Severity: good = well executed, watch = minor fix, warning = clear fault. Shots:\n${JSON.stringify(shotList)}`
+        `You are an expert badminton coach giving BALL-BY-BALL commentary, like a cricket commentator crossed ` +
+        `with a personal coach. The JSON lists shots by one or more players (field "player"). For EACH shot, ` +
+        `write ONE short, specific, honest coaching line (max ~28 words) addressed to that player by name, ` +
+        `referencing what happened and giving a concrete correction when a technique flag shows a fault ` +
+        `(elbow dropped, contact behind the body, no recovery to base). Use the shot time in the line. Do NOT ` +
+        `invent shuttle placement or opponent actions not in the data; hedge low-confidence shot types. ` +
+        `Output STRICT JSON: an array of {"shot_id":"<id>","text":"<line>","severity":"good|info|watch|warning"}, ` +
+        `exactly one per shot. Shots:\n${JSON.stringify(shotList)}`
 
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI}`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: sys }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json' },
-        }),
-      })
-      const out = await resp.json()
-      let text = out?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
-      let lines: any[] = []
-      try { lines = JSON.parse(text) } catch { try { lines = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1)) } catch { lines = [] } }
-
-      const tById: Record<string, number> = {}
-      for (const s of myShots) tById[s.id] = Number(s.t_s)
-      for (const ln of lines) {
-        const sid = ln.shot_id && tById[ln.shot_id] !== undefined ? ln.shot_id : null
-        rowsToInsert.push({
-          video_id, tag_id: subj.id, shot_id: sid,
-          t_s: sid ? tById[sid] : 0, lens: 'coach',
-          text: String(ln.text || '').slice(0, 500),
-          severity: ['good', 'info', 'watch', 'warning'].includes(ln.severity) ? ln.severity : 'info',
-        })
+      let text = '[]'
+      let finish = ''
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: sys }] }],
+              generationConfig: { temperature: 0.5, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+            }),
+          })
+          const out = await resp.json()
+          finish = out?.candidates?.[0]?.finishReason ?? (out?.error?.message ? 'ERR:' + out.error.message : 'none')
+          text = out?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
+          if (!finish.startsWith('ERR') && !finish.startsWith('EXC')) break
+        } catch (e) { finish = 'EXC:' + String(e) }
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
       }
+
+      const lines = toLines(text)
+      debug = { shots: allShots.length, finish, rawLen: text.length, parsed: lines.length }
+      rowsToInsert = lines.map((ln: any, i: number) => {
+        if (!ln || !ln.text) return null
+        const sid = (ln.shot_id && tagOfShot[ln.shot_id]) ? ln.shot_id : (allShots[i]?.id || null)
+        const tag = sid ? tagOfShot[sid] : (subjects[0]?.id || null)
+        return {
+          video_id, tag_id: tag, shot_id: sid, t_s: sid ? tOfShot[sid] : 0, lens: 'coach',
+          text: String(ln.text).slice(0, 500),
+          severity: ['good', 'info', 'watch', 'warning'].includes(ln.severity) ? ln.severity : 'info',
+        }
+      }).filter(Boolean)
+    }
+
+    // If we got nothing because the AI was rate-limited/errored, mark it failed (clear retry signal)
+    // rather than finalising an empty "done".
+    if (!rowsToInsert.length && String(debug?.finish || '').startsWith('ERR')) {
+      await supa.rpc('fail_deep', { p_video_id: video_id, p_error: 'AI commentary is busy right now — please try again in a few minutes.' })
+      return json({ ok: false, reason: 'rate_limited', debug })
     }
 
     // Replace any prior commentary for this video, then insert fresh.
@@ -103,7 +136,7 @@ Deno.serve(async (req) => {
       })
     } catch { /* ignore */ }
 
-    return json({ ok: true, lines: rowsToInsert.length })
+    return json({ ok: true, lines: rowsToInsert.length, debug })
   } catch (e) {
     try {
       const supa = createClient(SUPA_URL, SERVICE)
