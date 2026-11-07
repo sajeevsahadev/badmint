@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: sys }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 2048, responseMimeType: 'application/json' },
+          generationConfig: { temperature: 0.5, maxOutputTokens: 4096, responseMimeType: 'application/json' },
         }),
       })
       const out = await resp.json()

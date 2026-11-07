@@ -274,7 +274,7 @@ def _post(url, payload, key):
     urllib.request.urlopen(req, timeout=120).read()
 
 
-def _detect_shots(frames, np, w, h, min_gap=0.5):
+def _detect_shots(frames, np, w, h, min_gap=0.7):
     """Detect shots as wrist-speed peaks; derive coarse type + technique flags at contact."""
     ts = [f[0] for f in frames]
     speeds = [0.0]
@@ -284,12 +284,15 @@ def _detect_shots(frames, np, w, h, min_gap=0.5):
         for i in (9, 10):  # wrists
             if prev[2][i] > 0.3 and cur[2][i] > 0.3:
                 d = max(d, float(np.linalg.norm(cur[1][i] - prev[1][i])))
-        dt = max(1e-3, ts[k] - ts[k - 1])
-        speeds.append(d / dt / w)
+        dt = ts[k] - ts[k - 1]
+        if dt < 0.04:        # same/duplicate timestamp — ignore (prevents speed blow-ups)
+            speeds.append(0.0)
+        else:
+            speeds.append(d / dt / w)
     speeds = np.array(speeds)
     if len(speeds) < 3:
         return []
-    thr = max(0.6, float(speeds.mean() + 1.2 * speeds.std()))
+    thr = max(0.25, float(speeds.mean() + 1.5 * speeds.std()))
     base_x = float(np.median([fr[3] for fr in frames]))
     base_y = float(np.median([fr[4] for fr in frames]))
     shots, last_t = [], -10.0
@@ -315,7 +318,11 @@ def _detect_shots(frames, np, w, h, min_gap=0.5):
                 "tech": {"contact": "overhead" if overhead else ("low" if low else "mid"),
                          "elbow_up": bool(elbow_up), "recovered": recovered, "speed": round(spd, 2)},
             })
-    return shots[:60]
+    # Keep the most prominent ~28 shots per player (by wrist speed), back in time order, so the
+    # commentary stays focused and doesn't overflow the generator.
+    if len(shots) > 28:
+        shots = sorted(shots, key=lambda s: s["tech"]["speed"], reverse=True)[:28]
+    return sorted(shots, key=lambda s: s["t"])
 
 
 @app.function(image=image, timeout=1800, cpu=2.0, memory=4096, secrets=[secret])
@@ -381,6 +388,9 @@ def analyze_deep(video_id: str):
             kpts, scores = model(frame)
             if kpts is None or len(kpts) == 0:
                 continue
+            # Keep only the BEST person per court quadrant this frame — otherwise two detections in
+            # one quadrant create duplicate timestamps, collapsing dt and exploding the wrist speed.
+            best = {}
             for pk, ps in zip(kpts, scores):
                 if (ps > 0.3).sum() < 6:
                     continue
@@ -390,7 +400,11 @@ def analyze_deep(video_id: str):
                 nx, ny = foot[0] / w, foot[1] / h
                 ud = "near" if ny > 0.5 else "far"
                 key = ud if game == "singles" else f"{ud}_{'left' if nx < 0.5 else 'right'}"
-                quad.setdefault(key, []).append((t, np.array(pk), np.array(ps), nx, ny))
+                q = float(ps.mean())
+                if key not in best or q > best[key][0]:
+                    best[key] = (q, np.array(pk), np.array(ps), nx, ny)
+            for key, (_, pk2, ps2, nx2, ny2) in best.items():
+                quad.setdefault(key, []).append((t, pk2, ps2, nx2, ny2))
         cap.release()
 
         if not quad:
