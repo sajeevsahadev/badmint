@@ -42,6 +42,30 @@ export function buildTags(slots) {
   }))
 }
 
+// Human name for an analysis version, e.g. "Version 2 · 7 Nov 2026, 11:16 (latest)".
+export function versionLabel(run, latestVersion, locale) {
+  if (!run) return ''
+  let s = `Version ${run.version}`
+  const d = run.created_at ? new Date(run.created_at) : null
+  if (d && !isNaN(d.getTime())) {
+    s += ` · ${d.toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+  }
+  if (latestVersion != null && run.version === latestVersion) s += ' (latest)'
+  if (run.is_mock) s += ' · Sample'
+  return s
+}
+
+// R2 key of a player's photo: the tag's own photo, else its linked track's, else the track at the
+// same starting court position.
+export function tagThumbPath(tag, tracks = []) {
+  if (!tag) return null
+  if (tag.thumb_path) return tag.thumb_path
+  const byId = tag.track_id ? tracks.find(t => t.id === tag.track_id) : null
+  if (byId?.thumb_path) return byId.thumb_path
+  const bySide = tag.court_side ? tracks.find(t => t.court_side === tag.court_side && t.thumb_path) : null
+  return bySide?.thumb_path || null
+}
+
 // Display name for a tag: roster nickname if linked, else the typed label.
 export function resolveTagName(tag, nameMap = {}) {
   if (!tag) return 'Player'

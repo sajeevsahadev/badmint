@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   expectedSides, flipSide, courtSideAt, slotComplete, slotsComplete, buildTags, resolveTagName,
+  versionLabel, tagThumbPath,
 } from '../lib/videoAnalysis'
 import { CONSENT_VERSION, CONSENT_POINTS, CONSENT_SUMMARY } from '../lib/consent'
 
@@ -81,6 +82,40 @@ describe('resolveTagName', () => {
     expect(resolveTagName({ player_id: 'p1' }, { p1: 'Marcus' })).toBe('Marcus')
     expect(resolveTagName({ label: 'Opponent A' }, {})).toBe('Opponent A')
     expect(resolveTagName(null)).toBe('Player')
+  })
+})
+
+describe('versionLabel', () => {
+  const run = { version: 2, created_at: '2026-11-07T07:16:00Z', is_mock: false }
+  it('names the version and marks the latest', () => {
+    const s = versionLabel(run, 2, 'en-GB')
+    expect(s.startsWith('Version 2 · ')).toBe(true)
+    expect(s).toContain('2026')
+    expect(s.endsWith('(latest)')).toBe(true)
+  })
+  it('older versions are not marked latest; samples are flagged', () => {
+    expect(versionLabel({ ...run, version: 1 }, 2)).not.toContain('latest')
+    expect(versionLabel({ ...run, is_mock: true }, 3)).toContain('Sample')
+  })
+  it('copes with missing data', () => {
+    expect(versionLabel(null, 1)).toBe('')
+    expect(versionLabel({ version: 4 }, 4)).toBe('Version 4 (latest)')
+  })
+})
+
+describe('tagThumbPath', () => {
+  const tracks = [
+    { id: 't1', court_side: 'near_left', thumb_path: 'club/thumbs/v/near_left.jpg' },
+    { id: 't2', court_side: 'far_right', thumb_path: null },
+  ]
+  it('prefers the tag photo, then the linked track, then the same court position', () => {
+    expect(tagThumbPath({ thumb_path: 'own.jpg', track_id: 't1' }, tracks)).toBe('own.jpg')
+    expect(tagThumbPath({ track_id: 't1' }, tracks)).toBe('club/thumbs/v/near_left.jpg')
+    expect(tagThumbPath({ court_side: 'near_left' }, tracks)).toBe('club/thumbs/v/near_left.jpg')
+  })
+  it('returns null when no photo exists', () => {
+    expect(tagThumbPath({ court_side: 'far_right' }, tracks)).toBe(null)
+    expect(tagThumbPath(null, tracks)).toBe(null)
   })
 })
 

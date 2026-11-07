@@ -1,15 +1,16 @@
-// Kicks off real AI analysis: verifies the caller can manage the video, marks it 'analyzing',
-// and dispatches it to the Modal GPU worker. The worker calls finalize_analysis()/fail_analysis()
-// when done. Until MODAL_ANALYZE_URL + ANALYZE_SHARED_SECRET are set it returns 503 so the client
-// can fall back to sample analysis.
-//
-// Secrets (set when Modal is ready): MODAL_ANALYZE_URL, ANALYZE_SHARED_SECRET.
+// Kicks off work on the Modal worker:
+//   mode 'simple' | 'deep' — creates a NEW analysis version (analysis_runs row; earlier versions are
+//                            kept) and dispatches it. Uploader / club manager / app admin only.
+//   mode 'index'           — quick people-detection pass that produces each player's photo.
+//                            Any member of the video's club may trigger it.
+// Returns 503 until MODAL_ANALYZE_URL + ANALYZE_SHARED_SECRET are set (client falls back to samples).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4'
 
 const SUPA_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const MODAL_URL = Deno.env.get('MODAL_ANALYZE_URL') ?? ''
 const SECRET    = Deno.env.get('ANALYZE_SHARED_SECRET') ?? ''
+const ENGINE    = 'pose-v2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,43 +30,49 @@ Deno.serve(async (req) => {
     if (!u?.user) return json({ error: 'unauthorized' }, 401)
     const userId = u.user.id
 
-    const { video_id } = await req.json()
+    const body = await req.json()
+    const video_id = body.video_id
+    const mode: 'simple' | 'deep' | 'index' = body.mode === 'index' ? 'index' : (body.deep || body.mode === 'deep') ? 'deep' : 'simple'
     if (!video_id) return json({ error: 'bad request' }, 400)
 
     const { data: vid } = await supa.from('match_videos')
-      .select('club_id, uploaded_by, tag_status').eq('id', video_id).maybeSingle()
+      .select('club_id, uploaded_by, index_status').eq('id', video_id).maybeSingle()
     if (!vid) return json({ error: 'not found' }, 404)
 
-    let ok = vid.uploaded_by === userId
-    if (!ok) {
-      const { data: mem } = await supa.from('club_members')
-        .select('role').eq('club_id', vid.club_id).eq('user_id', userId).maybeSingle()
-      ok = !!mem && (mem.role === 'owner' || mem.role === 'manager')
-    }
-    if (!ok) {
-      const { data: adm } = await supa.from('app_roles')
-        .select('role').eq('user_id', userId).eq('role', 'app_admin').maybeSingle()
-      ok = !!adm
-    }
-    if (!ok) return json({ error: 'forbidden' }, 403)
+    const { data: mem } = await supa.from('club_members')
+      .select('role').eq('club_id', vid.club_id).eq('user_id', userId).maybeSingle()
+    const { data: adm } = await supa.from('app_roles')
+      .select('role').eq('user_id', userId).eq('role', 'app_admin').maybeSingle()
+    const canManage = vid.uploaded_by === userId || !!adm || (!!mem && (mem.role === 'owner' || mem.role === 'manager'))
+    const canView = canManage || !!mem
+    if (mode === 'index' ? !canView : !canManage) return json({ error: 'forbidden' }, 403)
 
-    // Engine not wired yet → let the client fall back to sample analysis. Status is untouched.
     if (!MODAL_URL || !SECRET) return json({ error: 'engine_not_configured' }, 503)
 
-    await supa.from('match_videos').update({ status: 'analyzing', error: null }).eq('id', video_id)
+    let run_id: string | null = null
+    if (mode === 'index') {
+      if (vid.index_status === 'indexing') return json({ status: 'indexing' })
+      await supa.from('match_videos').update({ index_status: 'indexing' }).eq('id', video_id)
+    } else {
+      const { data: rid, error: re } = await supa.rpc('start_analysis_run',
+        { p_video_id: video_id, p_kind: mode, p_is_mock: false, p_engine: ENGINE })
+      if (re) return json({ error: 'could not start run', detail: re.message }, 500)
+      run_id = rid as string
+    }
 
-    // Dispatch (fire-and-forget on the worker side; it writes results + sets status when done).
     const resp = await fetch(MODAL_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-analyze-secret': SECRET },
-      body: JSON.stringify({ video_id, secret: SECRET }),
+      body: JSON.stringify({ video_id, run_id, mode, secret: SECRET }),
     })
     if (!resp.ok) {
       const t = await resp.text()
-      await supa.from('match_videos').update({ status: 'failed', error: `dispatch ${resp.status}` }).eq('id', video_id)
+      if (mode === 'index') await supa.from('match_videos').update({ index_status: 'failed' }).eq('id', video_id)
+      else await supa.rpc(mode === 'deep' ? 'fail_deep' : 'fail_analysis',
+        { p_video_id: video_id, p_error: `dispatch ${resp.status}`, p_run_id: run_id })
       return json({ error: 'dispatch_failed', detail: t.slice(0, 200) }, 502)
     }
-    return json({ status: 'analyzing' })
+    return json({ status: mode === 'index' ? 'indexing' : 'analyzing', mode, run_id })
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500)
   }

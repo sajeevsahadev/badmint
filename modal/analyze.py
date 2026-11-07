@@ -1,53 +1,59 @@
 """
-Badminton 360 — Phase B GPU analysis worker (Modal).
+Badminton 360 — AI analysis worker (Modal).
 
-Pipeline (open-source, Apache/MIT only):
-  R2 download -> sample up to ~600 frames across the whole video -> person pose
-  (rtmlib Body = RTMDet + RTMPose, 17 keypoints, onnxruntime) -> assign each detected
-  person to a court quadrant (near/far, +left/right for doubles) -> accumulate movement &
-  pose metrics per quadrant -> map quadrants to the user's tags by court side (honouring
-  end-swap events) -> write player_metrics -> finalize_analysis() builds the 3-lens reports.
+Three jobs, all writing to Supabase over PostgREST (works with the new sb_secret_ key):
+  index_video   — quick pass: find the people, crop a photo of each, save tracks + thumbnails.
+  analyze       — Simple analysis (movement / landing / lunge metrics per player) -> a VERSIONED run.
+  analyze_deep  — Deep analysis (shot-by-shot) -> a VERSIONED run -> generate-commentary (Gemini).
 
-Supabase is reached over PostgREST (not the supabase-py client) so the new `sb_secret_` API-key
-format works; the key authenticates as service_role and bypasses RLS.
+Detection model (pose-v2), calibrated against a hand-labelled clip:
+  * near vs far court decided by body-size clustering (2-means on bbox height) — NOT frame midline
+    (with a low camera the far court sits below the midline);
+  * one person per slot; identity followed by CONTINUITY per court side (doubles partners who swap
+    left/right stay the same person); slots are named by STARTING position = what the user tagged;
+  * wrist motion measured RELATIVE to the player's own shoulders, in torso-lengths/sec over a 0.2 s
+    window, so handheld-camera pans and walking cancel out;
+  * a stroke = wrist-speed peak >= SHOT_T with swing amplitude >= SHOT_A, kept only if an opponent
+    stroke occurs 0.3–2.5 s before/after (drops warm-up gestures between rallies).
+Honesty: stroke height (overhead / mid / low) and swing direction are reported; exact shot names,
+placement, footwork recovery and shuttle speed are NOT claimed (need shuttle tracking — next phase).
 
-Honesty: metrics are camera-geometry heuristics (no full court homography yet) — confidence is
-modest and surfaced as "(estimate)" in the UI.
-
-Deploy:  modal deploy modal/analyze.py
-Secrets (Modal secret "badminton-ai"): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, R2_ACCOUNT_ID,
-  R2_VIDEO_ACCESS_KEY_ID, R2_VIDEO_SECRET_ACCESS_KEY, R2_VIDEO_BUCKET, ANALYZE_SHARED_SECRET.
+Deploy:  python -m modal deploy modal/analyze.py
+Secret "badminton-ai": SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, R2_ACCOUNT_ID, R2_VIDEO_ACCESS_KEY_ID,
+  R2_VIDEO_SECRET_ACCESS_KEY, R2_VIDEO_BUCKET, ANALYZE_SHARED_SECRET.
 """
 import json
+import math
 import os
 import tempfile
 import urllib.request
 
 import modal
 
+_PKGS = ["opencv-python-headless==4.10.0.84", "numpy==1.26.4", "rtmlib==0.0.13", "supervision==0.23.0",
+         "boto3==1.34.162", "supabase==2.7.4", "fastapi==0.115.0", "tqdm==4.66.5"]
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("libgl1", "libglib2.0-0", "ffmpeg")
-    .pip_install(
-        "opencv-python-headless==4.10.0.84",
-        "numpy==1.26.4",
-        "onnxruntime==1.18.1",
-        "rtmlib==0.0.13",
-        "supervision==0.23.0",
-        "boto3==1.34.162",
-        "supabase==2.7.4",
-        "fastapi==0.115.0",
-        "tqdm==4.66.5",
-    )
+    .pip_install(*_PKGS, "onnxruntime==1.18.1")
+)
+# Deep analysis samples up to 15 fps -> GPU. onnxruntime-gpu 1.18 is built for CUDA 11.8 + cuDNN 8.
+gpu_image = (
+    modal.Image.from_registry("nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04", add_python="3.11")
+    .apt_install("libgl1", "libglib2.0-0", "ffmpeg")
+    .pip_install(*_PKGS, "onnxruntime-gpu==1.18.1")
 )
 
 app = modal.App("badminton-ai")
 secret = modal.Secret.from_name("badminton-ai")
 
-MAX_FRAMES = 600
-L_HIP, R_HIP, L_KNEE, R_KNEE, L_ANK, R_ANK = 11, 12, 13, 14, 15, 16
+ENGINE = "pose-v2"
+SHOT_T, SHOT_A, SHOT_GAP = 3.5, 0.6, 0.8       # torso-lengths/sec, torso-lengths, seconds
+RALLY_LO, RALLY_HI = 0.3, 2.5                   # opponent stroke must fall in this window
 
 
+# ---------------------------------------------------------------- small utils
 def _flip_side(side: str) -> str:
     swap = {"near": "far", "far": "near", "left": "right", "right": "left"}
     return "_".join(swap.get(tok, tok) for tok in (side or "").split("_"))
@@ -73,366 +79,484 @@ def _supa(method, path, key, url, body=None, prefer=None):
         return json.loads(txt) if txt.strip() else None
 
 
-@app.function(image=image, timeout=1200, cpu=2.0, memory=4096, secrets=[secret])
-def analyze(video_id: str):
-    URL = os.environ["SUPABASE_URL"]
-    KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-
-    def rest(method, path, body=None, prefer=None):
-        return _supa(method, path, KEY, URL, body, prefer)
-
-    def fail(msg):
-        try:
-            rest("POST", "rpc/fail_analysis", {"p_video_id": video_id, "p_error": str(msg)[:480]})
-        except Exception:
-            pass
-        return {"ok": False, "error": str(msg)}
-
-    try:
-        import cv2
-        import numpy as np
-        import boto3
-        from botocore.config import Config
-        from rtmlib import Body
-
-        vrows = rest("GET", f"match_videos?id=eq.{video_id}&select=storage_path,game_type")
-        vid = vrows[0] if vrows else None
-        tags = rest("GET", f"video_player_tags?video_id=eq.{video_id}&select=id,court_side") or []
-        events = rest("GET", f"video_court_events?video_id=eq.{video_id}&select=at_s&order=at_s.asc") or []
-        if not vid or not vid.get("storage_path"):
-            return fail("video or storage_path missing")
-        if not tags:
-            return fail("no player tags — tag the video before analysing")
-        game = vid.get("game_type") or "singles"
-
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-            aws_access_key_id=os.environ["R2_VIDEO_ACCESS_KEY_ID"],
-            aws_secret_access_key=os.environ["R2_VIDEO_SECRET_ACCESS_KEY"],
-            config=Config(signature_version="s3v4", region_name="auto"),
-        )
-        local = os.path.join(tempfile.gettempdir(), f"{video_id}.mp4")
-        s3.download_file(os.environ["R2_VIDEO_BUCKET"], vid["storage_path"], local)
-
-        cap = cv2.VideoCapture(local)
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
-        h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
-
-        step = max(1, int(round(fps / 5.0)))
-        if total:
-            step = max(step, total // MAX_FRAMES)
-
-        model = Body(mode="balanced", backend="onnxruntime", device="cpu")
-
-        quad = {}
-        idx = -1
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            idx += 1
-            if idx % step != 0:
-                continue
-            t = idx / fps
-            kpts, scores = model(frame)
-            if kpts is None or len(kpts) == 0:
-                continue
-            for person_k, person_s in zip(kpts, scores):
-                if (person_s > 0.3).sum() < 6:
-                    continue
-                foot = _foot_point(person_k, person_s)
-                if foot is None:
-                    continue
-                nx, ny = foot[0] / w, foot[1] / h
-                ud = "near" if ny > 0.5 else "far"
-                key = ud if game == "singles" else f"{ud}_{'left' if nx < 0.5 else 'right'}"
-                s = quad.setdefault(key, dict(ts=[], x=[], y=[], knee=[], lunge=[], hops=0, prev_y=None))
-                s["ts"].append(t); s["x"].append(nx); s["y"].append(ny)
-                s["knee"].append(_knee_angle(person_k, person_s))
-                s["lunge"].append(_lunge_depth(person_k, person_s, w))
-                if s["prev_y"] is not None and foot[1] < s["prev_y"] - 0.01 * h:
-                    s["hops"] += 1
-                s["prev_y"] = foot[1]
-        cap.release()
-
-        if not quad:
-            return fail("no players detected — check camera angle / lighting")
-
-        duration = (total / fps) if total else max((max(s["ts"]) for s in quad.values()), default=0)
-        mid_t = duration / 2
-
-        rows = []
-        for tag in tags:
-            tside = _side_at(tag.get("court_side") or "", events, mid_t)
-            s = quad.get(tside)
-            if not s or len(s["ts"]) < 3:
-                continue
-            m = _metrics_for(s, np)
-            rows.append({"video_id": video_id, "tag_id": tag["id"],
-                         "metrics": m["metrics"], "confidence": m["confidence"], "is_mock": False})
-
-        if not rows:
-            return fail("could not map detected players to the tagged court positions")
-
-        rest("POST", "player_metrics?on_conflict=video_id,tag_id", body=rows, prefer="resolution=merge-duplicates")
-        rest("PATCH", f"match_videos?id=eq.{video_id}", body={"duration_s": int(duration)})
-        rest("POST", "rpc/finalize_analysis", body={"p_video_id": video_id})
-        _notify_done(video_id, URL, KEY)
-        return {"ok": True, "players": len(rows)}
-    except Exception as e:  # noqa
-        return fail(f"{type(e).__name__}: {e}")
-
-
-def _notify_done(video_id, url, key):
-    """Best-effort Web Push to the uploader that the report is ready. Never fails the analysis."""
-    try:
-        req = urllib.request.Request(
-            f"{url}/functions/v1/notify-analysis",
-            data=json.dumps({"video_id": video_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}).encode(),
-            headers={
-                "content-type": "application/json",
-                "apikey": key,
-                "Authorization": f"Bearer {key}",
-                "x-analyze-secret": os.environ.get("ANALYZE_SHARED_SECRET", ""),
-            },
-            method="POST",
-        )
-        urllib.request.urlopen(req, timeout=15).read()
-    except Exception:
-        pass
-
-
-def _foot_point(body, bs):
-    import numpy as np
-    pts = [body[i] for i in (L_ANK, R_ANK) if bs[i] > 0.3]
-    if not pts:
-        pts = [body[i] for i in (L_HIP, R_HIP) if bs[i] > 0.3]
-    if not pts:
-        return None
-    return np.mean(pts, axis=0)
-
-
-def _angle(a, b, c):
-    import numpy as np
-    ba, bc = a - b, c - b
-    cos = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
-    return float(np.degrees(np.arccos(np.clip(cos, -1, 1))))
-
-
-def _knee_angle(body, bs):
-    import numpy as np
-    vals = []
-    for hip, knee, ank in ((L_HIP, L_KNEE, L_ANK), (R_HIP, R_KNEE, R_ANK)):
-        if min(bs[hip], bs[knee], bs[ank]) > 0.3:
-            vals.append(_angle(np.array(body[hip]), np.array(body[knee]), np.array(body[ank])))
-    return min(vals) if vals else None
-
-
-def _lunge_depth(body, bs, w):
-    if min(bs[L_ANK], bs[R_ANK]) < 0.3:
-        return None
-    return float(abs(body[L_ANK][0] - body[R_ANK][0]) / (w * 0.25))
-
-
-def _metrics_for(s, np):
-    xs, ys = np.array(s["x"]), np.array(s["y"])
-    dur = max(1e-3, s["ts"][-1] - s["ts"][0])
-    coverage = _clamp((float(np.ptp(xs)) + float(np.ptp(ys))) * 120)  # range of movement -> 0..100
-    base = np.array([np.median(xs), np.median(ys)])
-    dist = np.sqrt((xs - base[0]) ** 2 + (ys - base[1]) ** 2)
-    away = dist > (dist.mean() + 0.3 * dist.std()) if len(dist) else np.array([False])
-    recovery = _clamp(0.6 + float(away.mean()) * 2.0, 0.6, 3.0)
-    split = _clamp((s["hops"] / dur) * 60)
-    knees = [k for k in s["knee"] if k is not None]
-    landing = _clamp(((float(np.mean(knees)) - 90) / 80) * 65 + 30) if knees else 60.0
-    lunges = [l for l in s["lunge"] if l is not None]
-    deep = [l for l in lunges if l > 0.8]
-    lunge_risk = _clamp(float(np.mean(deep)) * 60) if deep else 30.0
-    backcourt = _clamp(float(np.mean(ys < 0.35)) * 100)
-    metrics = {
-        "coverage_pct": round(coverage, 1), "recovery_s": round(recovery, 2),
-        "split_step_pct": round(split, 1), "landing_score": round(landing, 1),
-        "lunge_depth_risk": round(lunge_risk, 1), "backcourt_overreach": round(backcourt, 1),
-    }
-    confidence = {
-        "coverage_pct": 0.55, "recovery_s": 0.45, "split_step_pct": 0.4,
-        "landing_score": 0.4, "lunge_depth_risk": 0.35, "backcourt_overreach": 0.35,
-        "_note": "camera-geometry heuristic — no court homography yet",
-    }
-    return {"metrics": metrics, "confidence": confidence}
-
-
 def _post(url, payload, key):
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(),
         headers={"content-type": "application/json", "apikey": key,
                  "Authorization": f"Bearer {key}", "x-analyze-secret": payload.get("secret", "")},
         method="POST")
-    urllib.request.urlopen(req, timeout=120).read()
+    urllib.request.urlopen(req, timeout=140).read()
 
 
-def _detect_shots(frames, np, w, h, min_gap=0.7):
-    """Detect shots as wrist-speed peaks; derive coarse type + technique flags at contact."""
-    ts = [f[0] for f in frames]
-    speeds = [0.0]
-    for k in range(1, len(frames)):
-        prev, cur = frames[k - 1], frames[k]
-        d = 0.0
-        for i in (9, 10):  # wrists
-            if prev[2][i] > 0.3 and cur[2][i] > 0.3:
-                d = max(d, float(np.linalg.norm(cur[1][i] - prev[1][i])))
-        dt = ts[k] - ts[k - 1]
-        if dt < 0.04:        # same/duplicate timestamp — ignore (prevents speed blow-ups)
-            speeds.append(0.0)
-        else:
-            speeds.append(d / dt / w)
-    speeds = np.array(speeds)
-    if len(speeds) < 3:
-        return []
-    thr = max(0.25, float(speeds.mean() + 1.5 * speeds.std()))
-    base_x = float(np.median([fr[3] for fr in frames]))
-    base_y = float(np.median([fr[4] for fr in frames]))
-    shots, last_t = [], -10.0
-    for k in range(1, len(speeds) - 1):
-        if speeds[k] >= thr and speeds[k] >= speeds[k - 1] and speeds[k] >= speeds[k + 1] and (ts[k] - last_t) > min_gap:
-            last_t = ts[k]
-            f = frames[k]
-            sc = f[2]
-            sh_y = np.mean([f[1][i][1] for i in (5, 6) if sc[i] > 0.3]) if (sc[5] > 0.3 or sc[6] > 0.3) else None
-            hip_y = np.mean([f[1][i][1] for i in (11, 12) if sc[i] > 0.3]) if (sc[11] > 0.3 or sc[12] > 0.3) else None
-            wy = min([f[1][i][1] for i in (9, 10) if sc[i] > 0.3], default=None)
-            el_y = min([f[1][i][1] for i in (7, 8) if sc[i] > 0.3], default=None)
-            torso = abs(hip_y - sh_y) if (hip_y is not None and sh_y is not None) else 0.2 * h
-            contact = (sh_y - wy) / (torso + 1e-3) if (sh_y is not None and wy is not None) else 0.0
-            overhead, low = contact > 0.3, contact < -0.3
-            elbow_up = (el_y is not None and sh_y is not None and el_y < sh_y)
-            spd = float(speeds[k])
-            typ = ("smash" if spd > thr * 1.6 else "clear") if overhead else ("net" if low else "drive")
-            after = [fr for fr in frames if 0 < fr[0] - ts[k] <= 1.5]
-            recovered = bool(after and min(float(np.hypot(fr[3] - base_x, fr[4] - base_y)) for fr in after) < 0.12)
-            shots.append({
-                "t": round(float(ts[k]), 1), "type": typ, "conf": 0.4 if overhead else 0.3,
-                "tech": {"contact": "overhead" if overhead else ("low" if low else "mid"),
-                         "elbow_up": bool(elbow_up), "recovered": recovered, "speed": round(spd, 2)},
-            })
-    # Keep the most prominent ~28 shots per player (by wrist speed), back in time order, so the
-    # commentary stays focused and doesn't overflow the generator.
-    if len(shots) > 28:
-        shots = sorted(shots, key=lambda s: s["tech"]["speed"], reverse=True)[:28]
-    return sorted(shots, key=lambda s: s["t"])
+def _ctx():
+    URL, KEY = os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    return URL, KEY, (lambda m, p, b=None, pr=None: _supa(m, p, KEY, URL, b, pr))
 
 
-@app.function(image=image, timeout=1800, cpu=2.0, memory=4096, secrets=[secret])
-def analyze_deep(video_id: str):
-    URL = os.environ["SUPABASE_URL"]
-    KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+def _s3():
+    import boto3
+    from botocore.config import Config
+    return boto3.client("s3", endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+                        aws_access_key_id=os.environ["R2_VIDEO_ACCESS_KEY_ID"],
+                        aws_secret_access_key=os.environ["R2_VIDEO_SECRET_ACCESS_KEY"],
+                        config=Config(signature_version="s3v4", region_name="auto"))
 
-    def rest(method, path, body=None, prefer=None):
-        return _supa(method, path, KEY, URL, body, prefer)
+
+def _load_video(rest, video_id):
+    rows = rest("GET", f"match_videos?id=eq.{video_id}&select=storage_path,game_type")
+    vid = rows[0] if rows else None
+    if not vid or not vid.get("storage_path"):
+        raise RuntimeError("video missing")
+    tags = rest("GET", f"video_player_tags?video_id=eq.{video_id}&select=id,court_side,is_subject") or []
+    events = rest("GET", f"video_court_events?video_id=eq.{video_id}&select=at_s&order=at_s.asc") or []
+    ext = vid["storage_path"].rsplit(".", 1)[-1]
+    local = os.path.join(tempfile.gettempdir(), f"{video_id}.{ext}")
+    if not os.path.exists(local):
+        _s3().download_file(os.environ["R2_VIDEO_BUCKET"], vid["storage_path"], local)
+    return vid, tags, events, local
+
+
+# ---------------------------------------------------------------- pose pass
+def _people(kpts, scores):
+    import numpy as np
+    out = []
+    if kpts is None or scores is None:
+        return out
+    for pk, ps in zip(kpts, scores):
+        good = ps > 0.3
+        if good.sum() < 6:
+            continue
+        pts = pk[good]
+        x1, y1, x2, y2 = float(pts[:, 0].min()), float(pts[:, 1].min()), float(pts[:, 0].max()), float(pts[:, 1].max())
+        feet = [pk[i] for i in (15, 16) if ps[i] > 0.3] or [pk[i] for i in (11, 12) if ps[i] > 0.3]
+        if not feet:
+            continue
+        fx, fy = (float(v) for v in np.mean(feet, axis=0))
+        out.append({"k": np.array(pk), "s": np.array(ps), "bh": y2 - y1, "bbox": (x1, y1, x2, y2),
+                    "fx": fx, "fy": fy, "conf": float(ps.mean())})
+    return out
+
+
+def _pose_pass(path, model, target_fps, max_frames, t_max=None, kf_every=1.0, kf_until=120.0):
+    """Run pose on sampled frames. Also keeps 1-per-second JPEG keyframes (for photo crops)."""
+    import cv2
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    W = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
+    H = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
+    step = max(1, int(round(fps / target_fps)))
+    if total and max_frames:
+        limit = min(total, int((t_max or 1e9) * fps))
+        step = max(step, math.ceil(limit / max_frames))
+    frames, keyframes, idx, next_kf = [], {}, -1, 0.0
+    scale = min(1.0, 1280.0 / max(W, H))
+    while True:
+        if not cap.grab():
+            break
+        idx += 1
+        if idx % step:
+            continue
+        t = idx / fps
+        if t_max is not None and t > t_max:
+            break
+        ok, frame = cap.retrieve()
+        if not ok:
+            continue
+        kpts, scores = model(frame)
+        frames.append((t, _people(kpts, scores)))
+        if t >= next_kf and t <= kf_until:
+            next_kf = t + kf_every
+            small = cv2.resize(frame, (int(W * scale), int(H * scale))) if scale < 1 else frame
+            keyframes[round(t, 3)] = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 88])[1].tobytes()
+    cap.release()
+    duration = (total / fps) if total else (frames[-1][0] if frames else 0.0)
+    return frames, keyframes, {"fps": fps, "W": W, "H": H, "duration": duration, "step": step, "scale": scale}
+
+
+def _height_threshold(hs):
+    import numpy as np
+    if len(hs) < 4:
+        return None
+    x = np.log(np.array(hs))
+    c1, c2 = np.percentile(x, 25), np.percentile(x, 75)
+    for _ in range(25):
+        a, b = x[np.abs(x - c1) <= np.abs(x - c2)], x[np.abs(x - c1) > np.abs(x - c2)]
+        if len(a) == 0 or len(b) == 0:
+            break
+        c1, c2 = a.mean(), b.mean()
+    if abs(c2 - c1) < math.log(1.35):
+        return None                      # one size cluster -> everyone on one side of the net
+    return float(math.exp((c1 + c2) / 2))
+
+
+def _dist(prev, p):
+    if prev is None:
+        return 1e6
+    return math.hypot(p["fx"] - prev["fx"], p["fy"] - prev["fy"]) / max(p["bh"], 1.0)
+
+
+def _assign_slots(frames, game, events, W):
+    """{slot: [(t, person), ...]}; slot = the player's STARTING position (what the user tagged)."""
+    thr = _height_threshold([p["bh"] for _, ppl in frames for p in ppl])
+    per = 2 if game == "doubles" else 1
+    swaps = sorted(float(e.get("at_s", 0)) for e in events)
+    slots, state, last_n = {}, {}, 0
+    for t, ppl in frames:
+        n = sum(1 for s in swaps if s <= t)
+        if n != last_n:                  # ends changed: re-initialise identities
+            state, last_n = {}, n
+        for side in ("near", "far"):
+            if thr is None:
+                grp = ppl if side == "near" else []
+            else:
+                grp = [p for p in ppl if (p["bh"] >= thr) == (side == "near")]
+            grp = sorted(grp, key=lambda p: -p["conf"])[:per]
+            if not grp:
+                continue
+            if per == 1:
+                key = _flip_side(side) if n % 2 else side
+                slots.setdefault(key, []).append((t, grp[0]))
+                continue
+            st = state.setdefault(side, {})
+            if len(grp) == 2 and not st:
+                l, r = sorted(grp, key=lambda p: p["fx"])
+                assign = [("A", l), ("B", r)]
+            elif len(grp) == 2:
+                a, b = grp
+                same = _dist(st.get("A"), a) + _dist(st.get("B"), b)
+                cross = _dist(st.get("A"), b) + _dist(st.get("B"), a)
+                assign = [("A", a), ("B", b)] if same <= cross else [("A", b), ("B", a)]
+            else:
+                p = grp[0]
+                if not st:
+                    assign = [("A" if p["fx"] < W / 2 else "B", p)]
+                else:
+                    assign = [("A" if _dist(st.get("A"), p) <= _dist(st.get("B"), p) else "B", p)]
+            for lbl, p in assign:
+                st[lbl] = p
+                base = f"{side}_{'left' if lbl == 'A' else 'right'}"
+                slots.setdefault(_flip_side(base) if n % 2 else base, []).append((t, p))
+    return slots
+
+
+# ---------------------------------------------------------------- photo crops
+def _crops(slots, keyframes, meta, events):
+    """Pick each slot's clearest view among the 1 fps keyframes (before any end change) -> JPEG bytes."""
+    import cv2
+    import numpy as np
+    first_swap = min((float(e.get("at_s", 0)) for e in events), default=1e9)
+    out = {}
+    for slot, items in slots.items():
+        best, best_score = None, -1.0
+        for t, p in items:
+            kt = round(t, 3)
+            if t >= first_swap or kt not in keyframes:
+                continue
+            x1, y1, x2, y2 = p["bbox"]
+            inside = 1.0 if (x1 > 4 and y1 > 4 and x2 < meta["W"] - 4 and y2 < meta["H"] - 4) else 0.4
+            score = p["conf"] * inside * p["bh"]
+            if score > best_score:
+                best, best_score = (kt, p["bbox"]), score
+        if not best:
+            continue
+        img = cv2.imdecode(np.frombuffer(keyframes[best[0]], np.uint8), cv2.IMREAD_COLOR)
+        s = meta["scale"]
+        x1, y1, x2, y2 = (v * s for v in best[1])
+        pw, ph = (x2 - x1) * 0.18, (y2 - y1) * 0.08
+        X1, Y1 = int(max(0, x1 - pw)), int(max(0, y1 - ph))
+        X2, Y2 = int(min(img.shape[1], x2 + pw)), int(min(img.shape[0], y2 + ph))
+        crop = img[Y1:Y2, X1:X2]
+        if crop.size == 0:
+            continue
+        hh = 260
+        crop = cv2.resize(crop, (max(1, int(crop.shape[1] * hh / crop.shape[0])), hh))
+        out[slot] = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+    return out
+
+
+def _save_people(rest, video_id, storage_path, slots, crops):
+    """Replace tracks with one per slot (+ photo) and attach photos to the matching tags."""
+    club = storage_path.split("/")[0]
+    s3 = _s3()
+    rest("DELETE", f"video_person_tracks?video_id=eq.{video_id}")
+    for slot, items in slots.items():
+        thumb = None
+        if slot in crops:
+            thumb = f"{club}/thumbs/{video_id}/{slot}.jpg"
+            s3.put_object(Bucket=os.environ["R2_VIDEO_BUCKET"], Key=thumb, Body=crops[slot], ContentType="image/jpeg")
+        row = rest("POST", "video_person_tracks", [{
+            "video_id": video_id, "track_label": slot, "court_side": slot, "thumb_path": thumb,
+            "first_seen_s": round(items[0][0], 2), "last_seen_s": round(items[-1][0], 2),
+            "confidence": round(sum(p["conf"] for _, p in items) / len(items), 2), "is_mock": False,
+        }], "return=representation")
+        tid = row[0]["id"] if row else None
+        patch = {"track_id": tid}
+        if thumb:
+            patch["thumb_path"] = thumb
+        rest("PATCH", f"video_player_tags?video_id=eq.{video_id}&court_side=eq.{slot}", patch)
+
+
+# ---------------------------------------------------------------- motion + strokes
+def _rel(p):
+    import numpy as np
+    k, s = p["k"], p["s"]
+    if s[5] < 0.4 or s[6] < 0.4:
+        return None
+    sh = (k[5] + k[6]) / 2
+    torso = float(np.linalg.norm((k[11] + k[12]) / 2 - sh)) if (s[11] > 0.4 and s[12] > 0.4) else p["bh"] * 0.3
+    torso = max(torso, 1.0)
+    return {i: (k[i] - sh) / torso for i in (9, 10) if s[i] > 0.5}, sh, torso
+
+
+def _wseries(items, win=0.2):
+    """Body-relative wrist speed (torso-lengths/sec) over a ~0.2 s window — fps independent."""
+    import numpy as np
+    out = [(t, p, _rel(p)) for t, p in items]
+    sp = []
+    for i, (t, p, r) in enumerate(out):
+        j = i
+        while j > 0 and t - out[j - 1][0] <= win + 0.02:
+            j -= 1
+        v = 0.0
+        if j < i and r and out[j][2] and (t - out[j][0]) > 0.05:
+            r0 = out[j][2]
+            for w_ in (9, 10):
+                if w_ in r[0] and w_ in r0[0]:
+                    v = max(v, float(np.linalg.norm(r[0][w_] - r0[0][w_]) / (t - out[j][0])))
+        sp.append(v)
+    return out, np.array(sp)
+
+
+def _strokes(items):
+    """Candidate strokes for one slot: [(t, info)]."""
+    import numpy as np
+    out, sp = _wseries(items)
+    res, last = [], -9.0
+    for i in range(1, len(sp) - 1):
+        if not (sp[i] >= SHOT_T and sp[i] >= sp[i - 1] and sp[i] >= sp[i + 1] and out[i][0] - last > SHOT_GAP):
+            continue
+        t = out[i][0]
+        win = [o for o in out if abs(o[0] - t) <= 0.3 and o[2]]
+        pos = [r[0][j] for _, _, r in win for j in r[0]]
+        if len(pos) < 2:
+            continue
+        arr = np.array(pos)
+        amp = float(np.ptp(arr[:, 1]) + np.ptp(arr[:, 0]))
+        if amp < SHOT_A:
+            continue
+        last = t
+        r = out[i][2]
+        p = out[i][1]
+        # fastest wrist at the peak -> stroke height relative to the shoulder (y grows downward)
+        wy = min(r[0][j][1] for j in r[0]) if r and r[0] else 0.0
+        contact = -float(wy)                      # >0 above shoulder, <0 below
+        height = "overhead" if contact > 0.3 else ("low" if contact < -1.0 else "mid")
+        k, s = p["k"], p["s"]
+        elbow_up = bool(min((k[e][1] for e in (7, 8) if s[e] > 0.4), default=1e9) <
+                        min((k[q][1] for q in (5, 6) if s[q] > 0.4), default=-1e9))
+        before = [o for o in out if 0 < t - o[0] <= 0.2 and o[2]]
+        after = [o for o in out if 0 < o[0] - t <= 0.2 and o[2]]
+        swing = "flat"
+        if before and after:
+            yb = np.mean([min(v[1] for v in o[2][0].values()) for o in before if o[2][0]] or [0])
+            ya = np.mean([min(v[1] for v in o[2][0].values()) for o in after if o[2][0]] or [0])
+            swing = "downward" if ya - yb > 0.25 else ("upward" if yb - ya > 0.25 else "flat")
+        res.append((t, {
+            "type": height if height != "mid" else "drive",
+            "conf": 0.45 if height == "overhead" else 0.35,
+            "tech": {"height": height, "elbow_up": elbow_up, "swing": swing,
+                     "pace": "fast" if sp[i] >= 2 * SHOT_T else "moderate"},
+        }))
+    return res
+
+
+def _rally_filter(by_slot, events):
+    flat = [(t, _side_at(slot, events, t).split("_")[0]) for slot, v in by_slot.items() for t, _ in v]
+    keep = {}
+    for slot, v in by_slot.items():
+        keep[slot] = []
+        for t, info in v:
+            side = _side_at(slot, events, t).split("_")[0]
+            if any(os_ != side and RALLY_LO <= abs(t - ot) <= RALLY_HI for ot, os_ in flat):
+                keep[slot].append((t, info))
+    return keep
+
+
+# ---------------------------------------------------------------- simple metrics (camera-compensated)
+def _camera_offsets(slots):
+    """Estimate handheld-camera pan as the median frame-to-frame shift of everyone visible."""
+    import numpy as np
+    by_t = {}
+    for slot, items in slots.items():
+        for t, p in items:
+            by_t.setdefault(round(t, 3), {})[slot] = (p["fx"], p["fy"], p["bh"])
+    ts = sorted(by_t)
+    cx = cy = 0.0
+    off, prev = {}, None
+    for t in ts:
+        if prev is not None:
+            common = [s for s in by_t[t] if s in by_t[prev]]
+            if len(common) >= 2:
+                dx = [by_t[t][s][0] - by_t[prev][s][0] for s in common]
+                dy = [by_t[t][s][1] - by_t[prev][s][1] for s in common]
+                cx += float(np.median(dx)); cy += float(np.median(dy))
+        off[t] = (cx, cy)
+        prev = t
+    return off
+
+
+def _metrics(items, off):
+    import numpy as np
+    bh = float(np.median([p["bh"] for _, p in items])) or 1.0
+    xs = np.array([(p["fx"] - off.get(round(t, 3), (0, 0))[0]) / bh for t, p in items])
+    ys = np.array([(p["fy"] - off.get(round(t, 3), (0, 0))[1]) / bh for t, p in items])
+    ts = [t for t, _ in items]
+    dur = max(1e-3, ts[-1] - ts[0])
+    coverage = _clamp((float(np.ptp(xs)) + float(np.ptp(ys))) * 25)
+    base = np.array([np.median(xs), np.median(ys)])
+    dist = np.sqrt((xs - base[0]) ** 2 + (ys - base[1]) ** 2)
+    away = dist > (dist.mean() + 0.3 * dist.std()) if len(dist) else np.array([False])
+    recovery = _clamp(0.6 + float(away.mean()) * 2.0, 0.6, 3.0)
+    hops = sum(1 for i in range(1, len(ys)) if ys[i] < ys[i - 1] - 0.04)
+    split = _clamp((hops / dur) * 60)
+    knees = []
+    for _, p in items:
+        k, s = p["k"], p["s"]
+        for hip, knee, ank in ((11, 13, 15), (12, 14, 16)):
+            if min(s[hip], s[knee], s[ank]) > 0.3:
+                ba, bc = k[hip] - k[knee], k[ank] - k[knee]
+                c = float(np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6))
+                knees.append(math.degrees(math.acos(max(-1, min(1, c)))))
+    landing = _clamp(((float(np.mean(knees)) - 90) / 80) * 65 + 30) if knees else 60.0
+    spreads = [abs(p["k"][15][0] - p["k"][16][0]) / (0.5 * p["bh"]) for _, p in items
+               if p["s"][15] > 0.3 and p["s"][16] > 0.3 and p["bh"] > 0]
+    deep = [v for v in spreads if v > 0.8]
+    lunge_risk = _clamp(float(np.mean(deep)) * 60) if deep else 30.0
+    metrics = {"coverage_pct": round(coverage, 1), "recovery_s": round(recovery, 2),
+               "split_step_pct": round(split, 1), "landing_score": round(landing, 1),
+               "lunge_depth_risk": round(lunge_risk, 1)}
+    confidence = {"coverage_pct": 0.45, "recovery_s": 0.4, "split_step_pct": 0.35, "landing_score": 0.45,
+                  "lunge_depth_risk": 0.4, "_note": "pose estimate, camera-pan compensated; no court homography yet"}
+    return {"metrics": metrics, "confidence": confidence}
+
+
+# ---------------------------------------------------------------- jobs
+def _body(device):
+    from rtmlib import Body
+    return Body(mode="balanced", backend="onnxruntime", device=device)
+
+
+@app.function(image=image, timeout=900, cpu=2.0, memory=4096, secrets=[secret])
+def index_video(video_id: str):
+    URL, KEY, rest = _ctx()
+    try:
+        vid, tags, events, local = _load_video(rest, video_id)
+        frames, kf, meta = _pose_pass(local, _body("cpu"), target_fps=3, max_frames=240, t_max=90, kf_until=90)
+        slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
+        if not slots:
+            raise RuntimeError("no players detected")
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        rest("PATCH", f"match_videos?id=eq.{video_id}", {"index_status": "done"})
+        return {"ok": True, "slots": list(slots)}
+    except Exception as e:  # noqa
+        try:
+            rest("PATCH", f"match_videos?id=eq.{video_id}", {"index_status": "failed"})
+        except Exception:
+            pass
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+@app.function(image=image, timeout=1200, cpu=2.0, memory=4096, secrets=[secret])
+def analyze(video_id: str, run_id: str = None):
+    URL, KEY, rest = _ctx()
 
     def fail(msg):
         try:
-            rest("POST", "rpc/fail_deep", {"p_video_id": video_id, "p_error": str(msg)[:480]})
+            rest("POST", "rpc/fail_analysis", {"p_video_id": video_id, "p_error": str(msg)[:480], "p_run_id": run_id})
         except Exception:
             pass
         return {"ok": False, "error": str(msg)}
 
     try:
-        import cv2
-        import numpy as np
-        import boto3
-        from botocore.config import Config
-        from rtmlib import Body
-
-        vrows = rest("GET", f"match_videos?id=eq.{video_id}&select=storage_path,game_type")
-        vid = vrows[0] if vrows else None
-        tags = rest("GET", f"video_player_tags?video_id=eq.{video_id}&select=id,court_side") or []
-        events = rest("GET", f"video_court_events?video_id=eq.{video_id}&select=at_s&order=at_s.asc") or []
-        if not vid or not vid.get("storage_path"):
-            return fail("video missing")
+        vid, tags, events, local = _load_video(rest, video_id)
         if not tags:
-            return fail("no player tags")
-        game = vid.get("game_type") or "singles"
-
-        s3 = boto3.client("s3", endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-                          aws_access_key_id=os.environ["R2_VIDEO_ACCESS_KEY_ID"],
-                          aws_secret_access_key=os.environ["R2_VIDEO_SECRET_ACCESS_KEY"],
-                          config=Config(signature_version="s3v4", region_name="auto"))
-        local = os.path.join(tempfile.gettempdir(), f"{video_id}_deep.mp4")
-        s3.download_file(os.environ["R2_VIDEO_BUCKET"], vid["storage_path"], local)
-
-        cap = cv2.VideoCapture(local)
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        w = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
-        h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
-        # Denser sampling than the simple pass (shots are fast), capped at 1800 frames.
-        step = max(1, int(round(fps / 12.0)))
-        if total:
-            step = max(step, total // 1800)
-
-        model = Body(mode="balanced", backend="onnxruntime", device="cpu")
-        quad = {}
-        idx = -1
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            idx += 1
-            if idx % step != 0:
-                continue
-            t = idx / fps
-            kpts, scores = model(frame)
-            if kpts is None or len(kpts) == 0:
-                continue
-            # Keep only the BEST person per court quadrant this frame — otherwise two detections in
-            # one quadrant create duplicate timestamps, collapsing dt and exploding the wrist speed.
-            best = {}
-            for pk, ps in zip(kpts, scores):
-                if (ps > 0.3).sum() < 6:
-                    continue
-                foot = _foot_point(pk, ps)
-                if foot is None:
-                    continue
-                nx, ny = foot[0] / w, foot[1] / h
-                ud = "near" if ny > 0.5 else "far"
-                key = ud if game == "singles" else f"{ud}_{'left' if nx < 0.5 else 'right'}"
-                q = float(ps.mean())
-                if key not in best or q > best[key][0]:
-                    best[key] = (q, np.array(pk), np.array(ps), nx, ny)
-            for key, (_, pk2, ps2, nx2, ny2) in best.items():
-                quad.setdefault(key, []).append((t, pk2, ps2, nx2, ny2))
-        cap.release()
-
-        if not quad:
-            return fail("no players detected")
-        duration = (total / fps) if total else max((q[-1][0] for q in quad.values()), default=0)
-        mid_t = duration / 2
-
-        rest("DELETE", f"analysis_shots?video_id=eq.{video_id}")
-        shot_rows = []
+            return fail("no player tags — tag the video before analysing")
+        frames, kf, meta = _pose_pass(local, _body("cpu"), target_fps=5, max_frames=900)
+        slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
+        if not slots:
+            return fail("no players detected — check camera angle / lighting")
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        off = _camera_offsets(slots)
+        rows = []
         for tag in tags:
-            tside = _side_at(tag.get("court_side") or "", events, mid_t)
-            frames = quad.get(tside)
-            if not frames or len(frames) < 5:
+            items = slots.get(tag.get("court_side") or "")
+            if not items or len(items) < 5:
                 continue
-            for i, sh in enumerate(_detect_shots(frames, np, w, h)):
-                shot_rows.append({"video_id": video_id, "tag_id": tag["id"], "idx": i, "t_s": sh["t"],
-                                  "shot_type": sh["type"], "confidence": sh["conf"], "technique": sh["tech"],
-                                  "is_mock": False})
-        if not shot_rows:
-            return fail("no shots detected — low resolution or the camera hides contact points")
-
-        rest("POST", "analysis_shots", body=shot_rows)
-        # Hand off to Gemini commentary (it writes analysis_commentary + finalize_deep + notify).
-        _post(f"{URL}/functions/v1/generate-commentary",
-              {"video_id": video_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, KEY)
-        return {"ok": True, "shots": len(shot_rows)}
+            m = _metrics(items, off)
+            rows.append({"video_id": video_id, "tag_id": tag["id"], "run_id": run_id,
+                         "metrics": m["metrics"], "confidence": m["confidence"], "is_mock": False})
+        if not rows:
+            return fail("could not match detected players to the tagged positions")
+        rest("POST", "player_metrics?on_conflict=run_id,tag_id", rows, "resolution=merge-duplicates")
+        rest("PATCH", f"match_videos?id=eq.{video_id}", {"duration_s": int(meta["duration"])})
+        rest("POST", "rpc/finalize_analysis", {"p_video_id": video_id, "p_run_id": run_id})
+        _notify(video_id, URL, KEY)
+        return {"ok": True, "players": len(rows)}
     except Exception as e:  # noqa
         return fail(f"{type(e).__name__}: {e}")
+
+
+@app.function(image=gpu_image, gpu="L4", timeout=1800, memory=8192, secrets=[secret])
+def analyze_deep(video_id: str, run_id: str = None):
+    URL, KEY, rest = _ctx()
+
+    def fail(msg):
+        try:
+            rest("POST", "rpc/fail_deep", {"p_video_id": video_id, "p_error": str(msg)[:480], "p_run_id": run_id})
+        except Exception:
+            pass
+        return {"ok": False, "error": str(msg)}
+
+    try:
+        import onnxruntime as ort
+        device = "cuda" if "CUDAExecutionProvider" in ort.get_available_providers() else "cpu"
+        vid, tags, events, local = _load_video(rest, video_id)
+        if not tags:
+            return fail("no player tags")
+        frames, kf, meta = _pose_pass(local, _body(device), target_fps=15, max_frames=4000)
+        slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
+        if not slots:
+            return fail("no players detected")
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        strokes = _rally_filter({s: _strokes(items) for s, items in slots.items()}, events)
+        tag_by_side = {t.get("court_side"): t["id"] for t in tags}
+        shot_rows = []
+        for slot, lst in strokes.items():
+            tag_id = tag_by_side.get(slot)
+            if not tag_id:
+                continue
+            for i, (t, info) in enumerate(lst):
+                shot_rows.append({"video_id": video_id, "run_id": run_id, "tag_id": tag_id, "idx": i,
+                                  "t_s": round(t, 2), "shot_type": info["type"], "confidence": info["conf"],
+                                  "technique": info["tech"], "meta": {"engine": ENGINE, "device": device},
+                                  "is_mock": False})
+        if shot_rows:
+            rest("POST", "analysis_shots", shot_rows)
+        # Commentary step also handles the "no strokes" case and finalises the run.
+        _post(f"{URL}/functions/v1/generate-commentary",
+              {"video_id": video_id, "run_id": run_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, KEY)
+        return {"ok": True, "shots": len(shot_rows), "device": device, "frames": len(frames)}
+    except Exception as e:  # noqa
+        return fail(f"{type(e).__name__}: {e}")
+
+
+def _notify(video_id, url, key):
+    try:
+        _post(f"{url}/functions/v1/notify-analysis",
+              {"video_id": video_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, key)
+    except Exception:
+        pass
 
 
 @app.function(image=image, secrets=[secret])
@@ -445,8 +569,12 @@ def web(data: dict):
     video_id = data.get("video_id")
     if not video_id:
         return Response(status_code=400, content="missing video_id")
-    if data.get("deep"):
-        analyze_deep.spawn(video_id)
+    mode = data.get("mode") or ("deep" if data.get("deep") else "simple")
+    run_id = data.get("run_id")
+    if mode == "index":
+        index_video.spawn(video_id)
+    elif mode == "deep":
+        analyze_deep.spawn(video_id, run_id)
     else:
-        analyze.spawn(video_id)
-    return {"status": "queued", "video_id": video_id, "deep": bool(data.get("deep"))}
+        analyze.spawn(video_id, run_id)
+    return {"status": "queued", "video_id": video_id, "mode": mode, "run_id": run_id}

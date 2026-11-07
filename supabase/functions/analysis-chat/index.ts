@@ -50,11 +50,19 @@ Deno.serve(async (req) => {
     }
     if (!ok) return json({ error: 'forbidden' }, 403)
 
-    // Pull this player's grounding data.
-    const [{ data: metricRow }, { data: reportRows }, { data: tagRow }] = await Promise.all([
-      supa.from('player_metrics').select('metrics, confidence, is_mock').eq('video_id', video_id).eq('tag_id', tag_id).maybeSingle(),
-      supa.from('analysis_reports').select('lens, content').eq('video_id', video_id).eq('tag_id', tag_id),
+    // Pull this player's grounding data from the LATEST COMPLETED versions (simple + deep).
+    const latestRun = async (kind: string) => {
+      const { data } = await supa.from('analysis_runs').select('id').eq('video_id', video_id).eq('kind', kind)
+        .eq('status', 'done').order('version', { ascending: false }).limit(1).maybeSingle()
+      return data?.id ?? null
+    }
+    const [simpleRun, deepRun] = await Promise.all([latestRun('simple'), latestRun('deep')])
+    const none = { data: null }
+    const [{ data: metricRow }, { data: reportRows }, { data: tagRow }, { data: deepLines }] = await Promise.all([
+      simpleRun ? supa.from('player_metrics').select('metrics, confidence, is_mock').eq('run_id', simpleRun).eq('tag_id', tag_id).maybeSingle() : none,
+      simpleRun ? supa.from('analysis_reports').select('lens, content').eq('run_id', simpleRun).eq('tag_id', tag_id) : none,
       supa.from('video_player_tags').select('label, player_id, court_side').eq('id', tag_id).maybeSingle(),
+      deepRun ? supa.from('analysis_commentary').select('t_s, text').eq('run_id', deepRun).eq('tag_id', tag_id).order('t_s').limit(30) : none,
     ])
 
     let name = tagRow?.label || 'the player'
@@ -70,6 +78,7 @@ Deno.serve(async (req) => {
       confidence: metricRow?.confidence ?? {},
       is_sample_data: !!metricRow?.is_mock,
       reports: Object.fromEntries((reportRows ?? []).map((r: any) => [r.lens, r.content])),
+      shot_by_shot_commentary: (deepLines ?? []).map((l: any) => ({ t_s: l.t_s, text: l.text })),
     }
 
     // Ensure a thread.

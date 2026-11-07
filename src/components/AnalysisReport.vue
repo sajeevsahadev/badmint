@@ -6,6 +6,7 @@ import { ref, computed } from 'vue'
 
 const props = defineProps({
   name:    { type: String, default: 'Player' },
+  photo:   { type: String, default: '' },        // presigned URL of the player's crop from the video
   metrics: { type: Object, default: null },   // player_metrics row { metrics, confidence, is_mock }
   reports: { type: Array,  default: () => [] }, // analysis_reports rows for this tag
 })
@@ -35,9 +36,12 @@ const metricRows = computed(() => ([
 
 <template>
   <div class="card p-4">
-    <div class="mb-3 flex items-center justify-between">
-      <div class="font-display text-lg font-bold text-slate-800">{{ name }}</div>
-      <span v-if="isMock" class="badge-pending">Sample data</span>
+    <div class="mb-3 flex items-center justify-between gap-2">
+      <div class="flex min-w-0 items-center gap-2">
+        <img v-if="photo" :src="photo" :alt="name" class="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover object-top" />
+        <div class="truncate font-display text-lg font-bold text-slate-800">{{ name }}</div>
+      </div>
+      <span v-if="isMock" class="badge-pending shrink-0">Sample data</span>
     </div>
 
     <!-- Lens switch -->

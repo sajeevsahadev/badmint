@@ -3,7 +3,7 @@
 // each track to a roster player (or a placeholder like "Opponent A"). If no tracks exist yet
 // (pre-pipeline, or a fresh upload), we synthesise one slot per expected court position so the
 // user can still name who is where. This is the only identity step — we never use face recognition.
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
@@ -15,7 +15,7 @@ const props = defineProps({
   gameType:     { type: String, default: 'doubles' },
   tracks:       { type: Array,  default: () => [] },   // from the pipeline (may be empty)
   existingTags: { type: Array,  default: () => [] },
-  thumbBase:    { type: String, default: '' },
+  photos:       { type: Object, default: () => ({}) }, // R2 key -> presigned URL (from the parent)
 })
 const emit = defineEmits(['saved', 'cancel'])
 
@@ -32,19 +32,16 @@ const sideLabel = (s) => ({
 
 const expectedSides = computed(() => sidesFor(props.gameType))
 
-onMounted(async () => {
-  const { data } = await supabase.from('players')
-    .select('id, display_name, user_id')
-    .eq('club_id', props.clubId).eq('is_active', true).order('display_name')
-  roster.value = await withNicknames(data ?? [])
-
-  // Build one slot per real track, or synthesise slots per expected court position.
-  const base = props.tracks.length
-    ? props.tracks.map(t => ({ track_id: t.id, court_side: t.court_side, thumb_path: t.thumb_path, label_hint: t.track_label }))
-    : expectedSides.value.map((s, i) => ({ track_id: null, court_side: s, thumb_path: null, label_hint: 'P' + (i + 1) }))
-
-  slots.value = base.map((b) => {
-    const prior = props.existingTags.find(g => (b.track_id && g.track_id === b.track_id) || (!b.track_id && g.court_side === b.court_side))
+// One slot per expected court position (in a fixed order), filled from the detected track at that
+// position when we have one — so a photo of the person appears next to the name picker.
+function buildSlots() {
+  const prevBySide = Object.fromEntries(slots.value.map(s => [s.court_side, s]))
+  slots.value = expectedSides.value.map((side, i) => {
+    const tr = props.tracks.find(t => t.court_side === side)
+    const b = { track_id: tr?.id || null, court_side: side, thumb_path: tr?.thumb_path || null, label_hint: 'P' + (i + 1) }
+    const cur = prevBySide[side]
+    if (cur) return { ...b, assign: cur.assign, label: cur.label, is_subject: cur.is_subject }   // keep in-progress edits
+    const prior = props.existingTags.find(g => (b.track_id && g.track_id === b.track_id) || g.court_side === side)
     return {
       ...b,
       assign: prior?.player_id ? ('p:' + prior.player_id) : (prior?.label ? 'label' : ''),
@@ -52,14 +49,28 @@ onMounted(async () => {
       is_subject: prior ? prior.is_subject : true,
     }
   })
-})
+}
 
-const thumbUrls = ref({})
 onMounted(async () => {
-  for (const t of props.tracks) {
-    if (t.thumb_path) { try { thumbUrls.value[t.id] = await getPlaybackUrl(t.thumb_path) } catch { /* ignore */ } }
-  }
+  buildSlots()
+  const { data } = await supabase.from('players')
+    .select('id, display_name, user_id')
+    .eq('club_id', props.clubId).eq('is_active', true).order('display_name')
+  roster.value = await withNicknames(data ?? [])
 })
+// Photos can arrive while the tagger is open (the people-detection pass finishes in the background).
+watch(() => props.tracks.map(t => `${t.id}:${t.court_side}:${t.thumb_path}`).join('|'), buildSlots)
+
+const fetched = ref({})
+function photoFor(s) {
+  if (!s.thumb_path) return ''
+  if (props.photos[s.thumb_path]) return props.photos[s.thumb_path]
+  if (!(s.thumb_path in fetched.value)) {
+    fetched.value = { ...fetched.value, [s.thumb_path]: '' }
+    getPlaybackUrl(s.thumb_path).then(u => { fetched.value = { ...fetched.value, [s.thumb_path]: u || '' } }).catch(() => {})
+  }
+  return fetched.value[s.thumb_path] || ''
+}
 
 const complete = computed(() => slotsComplete(slots.value))
 
@@ -83,15 +94,15 @@ async function save() {
   <div class="card p-4">
     <div class="mb-1 text-sm font-bold text-slate-800">Who's who in this video?</div>
     <p class="mb-3 text-xs text-slate-500">
-      Tap to name each person on court. We analyse everyone, so name opponents too (reports are
-      generated for anyone marked “analyse”). You can fix this later if a name is wrong.
+      Name each person by where they stand <b>at the start of the video</b>. We analyse everyone, so name
+      opponents too (reports are generated for anyone marked “analyse”). You can fix this later.
     </p>
 
     <div class="space-y-3">
       <div v-for="(s, i) in slots" :key="i" class="rounded-xl border border-slate-200 p-3">
         <div class="flex items-center gap-3">
-          <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-xs font-bold text-slate-400">
-            <img v-if="s.track_id && thumbUrls[s.track_id]" :src="thumbUrls[s.track_id]" class="h-full w-full object-cover" />
+          <div class="flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-xs font-bold text-slate-400">
+            <img v-if="photoFor(s)" :src="photoFor(s)" alt="Player photo" class="h-full w-full object-cover object-top" />
             <span v-else>{{ s.label_hint }}</span>
           </div>
           <div class="min-w-0 flex-1">
