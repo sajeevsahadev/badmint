@@ -30,6 +30,13 @@ function toLines(raw: string): any[] {
   return []
 }
 
+// Pull every complete {...} line out of a reply that was cut off mid-array.
+function salvage(raw: string): any[] {
+  const out: any[] = []
+  for (const m of raw.match(/\{[^{}]*"text"[^{}]*\}/g) || []) { try { out.push(JSON.parse(m)) } catch { /* skip */ } }
+  return out
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   let video_id = '', run_id: string | null = null
@@ -65,7 +72,7 @@ Deno.serve(async (req) => {
     }
 
     const subjIds = new Set((tags ?? []).filter((t: any) => t.is_subject).map((t: any) => t.id))
-    const allShots = (shots ?? []).filter((s: any) => subjIds.has(s.tag_id)).slice(0, 60)
+    const allShots = (shots ?? []).filter((s: any) => subjIds.has(s.tag_id)).slice(0, 400)
 
     // Honest "nothing to say" result — e.g. a warm-up clip with no real strokes.
     if (!allShots.length) {
@@ -89,7 +96,7 @@ Deno.serve(async (req) => {
       }
     })
 
-    const sys =
+    const rules =
       `You are an experienced badminton coach giving short ball-by-ball feedback, like a cricket commentator ` +
       `crossed with a personal coach. You can ONLY see these pose-estimation measurements per stroke (there is NO ` +
       `shuttle tracking): stroke_height (overhead = racket hand above the shoulder, mid, low = below the hip), swing ` +
@@ -105,42 +112,60 @@ Deno.serve(async (req) => {
       `NEVER mention footwork recovery, base position, where the shuttle went, whether the rally was won or lost, ` +
       `the opponent's intent, or any numbers/speeds. Do not repeat the same sentence — vary the wording.\n` +
       `severity: "watch" when the line is a correction, "good" only for a fast overhead with the elbow up, otherwise "info".\n` +
-      `Output STRICT JSON: an array of {"shot_id":"<id>","text":"<line>","severity":"good|info|watch"}, one per stroke.\n` +
-      `Strokes:\n${JSON.stringify(shotList)}`
+      `Output STRICT JSON: an array of {"shot_id":"<id>","text":"<line>","severity":"good|info|watch"}, one per stroke.\n`
 
-    let text = '[]', finish = ''
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI}`, {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: sys }] }],
-            generationConfig: { temperature: 0.6, maxOutputTokens: 8192, responseMimeType: 'application/json' },
-          }),
-        })
-        const out = await resp.json()
-        finish = out?.candidates?.[0]?.finishReason ?? (out?.error?.message ? 'ERR:' + out.error.message : 'none')
-        text = out?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
-        if (!finish.startsWith('ERR') && !finish.startsWith('EXC')) break
-      } catch (e) { finish = 'EXC:' + String(e) }
-      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
+    // Long matches have hundreds of strokes: send them in batches of 20 (in parallel) so no single reply
+    // hits the output-token limit (the model's thinking also counts against it).
+    async function commentBatch(batch: any[]): Promise<{ rows: any[], finish: string }> {
+      let text = '[]', finish = ''
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: rules + `Strokes:\n${JSON.stringify(batch)}` }] }],
+              generationConfig: { temperature: 0.6, maxOutputTokens: 16384, responseMimeType: 'application/json' },
+            }),
+          })
+          const out = await resp.json()
+          finish = out?.candidates?.[0]?.finishReason ?? (out?.error?.message ? 'ERR:' + out.error.message : 'none')
+          text = out?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '[]'
+          if (!finish.startsWith('ERR') && !finish.startsWith('EXC')) break
+        } catch (e) { finish = 'EXC:' + String(e) }
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
+      }
+      let lines = toLines(text)
+      if (!lines.length) lines = salvage(text)          // truncated reply: keep every complete line
+      const rows = lines.map((ln: any, i: number) => {
+        if (!ln || !ln.text) return null
+        const sid = (ln.shot_id && tagOfShot[ln.shot_id]) ? ln.shot_id : (batch[i]?.shot_id || null)
+        if (!sid) return null
+        return {
+          video_id, run_id, tag_id: tagOfShot[sid], shot_id: sid, t_s: tOfShot[sid], lens: 'coach',
+          text: String(ln.text).slice(0, 500),
+          severity: ['good', 'info', 'watch', 'warning'].includes(ln.severity) ? ln.severity : 'info',
+        }
+      }).filter(Boolean)
+      return { rows, finish }
     }
 
-    const lines = toLines(text)
-    const rows = lines.map((ln: any, i: number) => {
-      if (!ln || !ln.text) return null
-      const sid = (ln.shot_id && tagOfShot[ln.shot_id]) ? ln.shot_id : (ordered[i]?.id || null)
-      if (!sid) return null
-      return {
-        video_id, run_id, tag_id: tagOfShot[sid], shot_id: sid, t_s: tOfShot[sid], lens: 'coach',
-        text: String(ln.text).slice(0, 500),
-        severity: ['good', 'info', 'watch', 'warning'].includes(ln.severity) ? ln.severity : 'info',
-      }
-    }).filter(Boolean)
+    const batches: any[][] = []
+    for (let i = 0; i < shotList.length; i += 20) batches.push(shotList.slice(i, i + 20))
+    const results: { rows: any[], finish: string }[] = []
+    for (let i = 0; i < batches.length; i += 8) {          // at most 8 calls in flight
+      results.push(...await Promise.all(batches.slice(i, i + 8).map(commentBatch)))
+    }
+    const seen = new Set<string>()
+    const rows = results.flatMap(r => r.rows).filter((r: any) => !seen.has(r.shot_id) && seen.add(r.shot_id))
+    const finish = results.map(r => r.finish).join(',')
 
-    if (!rows.length && finish.startsWith('ERR')) {
-      await supa.rpc('fail_deep', { p_video_id: video_id, p_error: 'AI commentary is busy right now — please try again in a few minutes.', p_run_id: run_id })
-      return json({ ok: false, reason: 'rate_limited', finish })
+    // Strokes existed but no commentary came back → a clear, retryable failure (never an empty "done").
+    if (!rows.length) {
+      const busy = /ERR|EXC/.test(finish)
+      await supa.rpc('fail_deep', { p_video_id: video_id, p_run_id: run_id,
+        p_error: busy ? 'AI commentary is busy right now — please try again in a few minutes.'
+                      : 'Could not write commentary for this video — please re-analyse.' })
+      return json({ ok: false, reason: busy ? 'rate_limited' : 'empty', finish })
     }
 
     if (run_id) await supa.from('analysis_commentary').delete().eq('run_id', run_id)   // idempotent retry of THIS version only
