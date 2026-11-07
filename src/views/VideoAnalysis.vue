@@ -270,18 +270,51 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         </div>
 
         <!-- AI Match Analysis tiers. Each is gated by its own entitlement so subscriptions slot in later. -->
-        <div class="mb-4 flex gap-1 rounded-2xl bg-slate-100 p-1">
-          <button @click="tier = 'quick'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="tier === 'quick' ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">📊 Quick Report</button>
-          <button @click="tier = 'deep'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="tier === 'deep' ? 'bg-white text-violet-700 shadow' : 'text-slate-500'">
-            🎙️ Deep Coaching <span class="ml-1 rounded bg-violet-100 px-1 text-[9px] font-bold text-violet-700">PREMIUM</span>
+        <!-- Two separate products: pick one (cards), its content lives in its own framed panel below. -->
+        <div class="mb-3 grid grid-cols-2 gap-2.5" role="tablist" aria-label="Analysis type">
+          <button role="tab" :aria-selected="tier === 'quick'" @click="tier = 'quick'"
+            class="tier-tab" :class="tier === 'quick' ? 'tier-tab-quick' : ''">
+            <span class="flex items-center justify-between">
+              <span class="tier-icon bg-cyan-50 text-cyan-600">📊</span>
+              <span v-if="tier === 'quick'" class="tier-check bg-cyan-500">✓</span>
+            </span>
+            <span class="mt-2 block text-[15px] font-bold text-slate-800">Quick Report</span>
+            <span class="mt-0.5 block text-[11px] leading-snug text-slate-500">Ratings, coach &amp; physio view, AI chat</span>
+          </button>
+          <button role="tab" :aria-selected="tier === 'deep'" @click="tier = 'deep'"
+            class="tier-tab" :class="tier === 'deep' ? 'tier-tab-deep' : ''">
+            <span class="flex items-center justify-between">
+              <span class="tier-icon bg-violet-50 text-violet-600">🎙️</span>
+              <span v-if="tier === 'deep'" class="tier-check bg-violet-500">✓</span>
+              <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold tracking-wide text-amber-700">PREMIUM</span>
+            </span>
+            <span class="mt-2 block text-[15px] font-bold text-slate-800">Deep Coaching</span>
+            <span class="mt-0.5 block text-[11px] leading-snug text-slate-500">Head coach report, voice, every stroke</span>
           </button>
         </div>
 
+        <section class="tier-panel" :class="tier === 'deep' ? 'tier-panel-deep' : 'tier-panel-quick'">
+        <header class="tier-head">
+          <div class="min-w-0">
+            <div class="text-[10px] font-bold uppercase tracking-[0.14em]"
+              :class="tier === 'deep' ? 'text-violet-600' : 'text-cyan-700'">
+              {{ tier === 'deep' ? 'Premium · Deep Coaching' : 'Quick Report' }}
+            </div>
+            <div class="mt-0.5 text-base font-bold text-slate-800">
+              {{ tier === 'deep' ? 'Your head coach’s breakdown' : 'Match overview per player' }}
+            </div>
+            <p class="mt-0.5 text-xs text-slate-500">
+              {{ tier === 'deep'
+                ? 'KPIs vs your last match, a coach verdict you can listen to, drills — and every stroke explained.'
+                : 'Movement and technique ratings with coach, physio and player views. Ask the AI anything.' }}
+            </p>
+          </div>
+        </header>
+        <div class="tier-body">
+
         <!-- Locked tier (shown once subscriptions are live and the user's plan doesn't include it) -->
         <div v-if="(tier === 'quick' && !canQuickReport) || (tier === 'deep' && !canDeepCoaching)"
-          class="card p-6 mb-4 text-center">
+          class="card p-6 text-center">
           <div class="text-2xl">🔒</div>
           <div class="mt-1 text-sm font-semibold text-slate-800">{{ tier === 'deep' ? 'Deep Coaching' : 'Quick Report' }} isn't included in your plan</div>
           <p class="mt-1 text-xs text-slate-500">It's rolling out to early-access members first.</p>
@@ -379,12 +412,35 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         <DeepCommentary v-if="tier === 'deep' && canDeepCoaching" :video-id="videoId" :can-manage="canManage" :is-admin="isAppAdmin"
           :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo"
           @run="id => deepRunId = id" @done="coachRef?.load()" />
+        </div>
+        </section>
       </template>
     </template>
   </div>
 </template>
 
 <style scoped>
+/* Tier picker + framed panel: Quick (cyan) and Deep (violet) read as two separate products. */
+.tier-tab {
+  text-align: left; border-radius: 1.1rem; padding: 0.8rem 0.85rem; background: #fff;
+  border: 1.5px solid #e2e8f0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.tier-tab:active { transform: scale(0.98); }
+.tier-tab-quick { border-color: #22b8d8; box-shadow: 0 6px 18px -8px rgba(0, 153, 184, 0.45); }
+.tier-tab-deep  { border-color: #8b5cf6; box-shadow: 0 6px 18px -8px rgba(139, 92, 246, 0.5); }
+.tier-icon { display: inline-flex; height: 2rem; width: 2rem; align-items: center; justify-content: center; border-radius: 0.7rem; font-size: 1rem; }
+.tier-check { display: inline-flex; height: 1.25rem; width: 1.25rem; align-items: center; justify-content: center; border-radius: 9999px; color: #fff; font-size: 0.7rem; font-weight: 700; }
+
+.tier-panel { border-radius: 1.5rem; overflow: hidden; border: 1.5px solid; margin-bottom: 1rem; background: #fff; }
+.tier-panel-quick { border-color: #bdeaf5; }
+.tier-panel-deep  { border-color: #ddd0fd; }
+.tier-head { padding: 0.95rem 1rem 0.85rem; border-bottom: 1px solid; }
+.tier-panel-quick .tier-head { background: linear-gradient(135deg, #e8f9fd, #ffffff); border-color: #d5f1f8; border-left: 4px solid #00b4d8; }
+.tier-panel-deep  .tier-head { background: linear-gradient(135deg, #f3edff, #ffffff); border-color: #ebe3fe; border-left: 4px solid #8b5cf6; }
+.tier-body { padding: 0.75rem; }
+.tier-panel-quick .tier-body { background: #f6fcfe; }
+.tier-panel-deep  .tier-body { background: #faf8ff; }
 /* Indeterminate progress sweep — honest "working" signal, no fake percentage. */
 .ai-bar { width: 40%; animation: aiSweep 1.4s ease-in-out infinite; }
 @keyframes aiSweep {
