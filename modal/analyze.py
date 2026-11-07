@@ -255,37 +255,126 @@ def _assign_slots(frames, game, events, W):
 
 
 # ---------------------------------------------------------------- photo crops
-def _crops(slots, keyframes, meta, events):
-    """Pick each slot's clearest view among the 1 fps keyframes (before any end change) -> JPEG bytes."""
+def _inside(p, meta):
+    x1, y1, x2, y2 = p["bbox"]
+    return x1 > 4 and y1 > 4 and x2 < meta["W"] - 4 and y2 < meta["H"] - 4
+
+
+def _overlap(a, b, pad=0.10):
+    """Boxes touch (each widened by pad) -> a crop of one would show part of the other."""
+    ax1, ay1, ax2, ay2 = a["bbox"]
+    bx1, by1, bx2, by2 = b["bbox"]
+    pa, pb = (ax2 - ax1) * pad, (bx2 - bx1) * pad
+    return ax1 - pa < bx2 + pb and bx1 - pb < ax2 + pa and ay1 < by2 and by1 < ay2
+
+
+def _is_fixture(p, frames, i, window=30.0, near=0.35, share=0.75):
+    """A spectator / umpire / coach by the post keeps the same spot; a player leaves it once rallies start.
+    True when p's foot position stays occupied in >= share of the frames over the next `window` seconds."""
+    t0, seen, hit = frames[i][0], 0, 0
+    for t, ppl in frames[i + 1:]:
+        if t - t0 > window:
+            break
+        seen += 1
+        if any(_dist(p, q) < near for q in ppl):
+            hit += 1
+    return seen >= 8 and hit / seen >= share
+
+
+def _formation_frame(frames, keyframes, meta, events, game):
+    """Earliest keyframe (normally the first serve) where EVERY player is visible at once, inside the frame,
+    clear of everyone else and standing still. Photos all come from this one frame, with left/right read
+    from it, so two slots can never get the same person (the per-slot tracker can briefly hand one
+    player to both partner slots when the other is undetected)."""
+    per = 2 if game == "doubles" else 1
+    first_swap = min((float(e.get("at_s", 0)) for e in events), default=1e9)
+    thr = _height_threshold([p["bh"] for _, ppl in frames for p in ppl])
+    if thr is None:
+        return None
+    at = {round(t, 3): i for i, (t, _) in enumerate(frames)}
+    for kt in sorted(keyframes):
+        if kt >= first_swap:
+            break
+        i = at.get(kt)
+        if i is None:
+            continue
+        everyone = frames[i][1]
+        ppl = [p for p in everyone if p["conf"] > 0.45 and not _is_fixture(p, frames, i)]
+        near = sorted([p for p in ppl if p["bh"] >= thr], key=lambda p: -p["conf"])[:per]
+        far = sorted([p for p in ppl if p["bh"] < thr], key=lambda p: -p["conf"])[:per]
+        if len(near) < per or len(far) < per:
+            continue
+        chosen = near + far
+        if not all(_inside(p, meta) for p in chosen):
+            continue
+        if any(_overlap(a, b) for a in chosen for b in everyone if a is not b):
+            continue
+        if i + 1 < len(frames) and frames[i + 1][0] - kt < 1.5:
+            nxt = frames[i + 1][1]
+            if not nxt or any(min(_dist(c, q) for q in nxt) > 0.4 for c in chosen):
+                continue                   # someone is moving -> not a set formation
+        if per == 1:
+            return kt, {"near": near[0], "far": far[0]}
+        out = {}
+        for side, grp in (("near", near), ("far", far)):
+            l, r = sorted(grp, key=lambda p: p["fx"])
+            out[f"{side}_left"], out[f"{side}_right"] = l, r
+        return kt, out
+    return None
+
+
+def _crop_jpeg(keyframe, bbox, meta):
     import cv2
     import numpy as np
-    first_swap = min((float(e.get("at_s", 0)) for e in events), default=1e9)
+    img = cv2.imdecode(np.frombuffer(keyframe, np.uint8), cv2.IMREAD_COLOR)
+    s = meta["scale"]
+    x1, y1, x2, y2 = (v * s for v in bbox)
+    pw, ph = (x2 - x1) * 0.18, (y2 - y1) * 0.08
+    X1, Y1 = int(max(0, x1 - pw)), int(max(0, y1 - ph))
+    X2, Y2 = int(min(img.shape[1], x2 + pw)), int(min(img.shape[0], y2 + ph))
+    crop = img[Y1:Y2, X1:X2]
+    if crop.size == 0:
+        return None
+    hh = 260
+    crop = cv2.resize(crop, (max(1, int(crop.shape[1] * hh / crop.shape[0])), hh))
+    return cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+
+
+def _crops(slots, keyframes, meta, events, frames=None, game=None):
+    """Player photos -> {slot: JPEG}. Prefer one formation frame for everybody; otherwise fall back to
+    each slot's clearest isolated view, never reusing the same box for two slots. No photo beats a wrong one."""
     out = {}
+    form = _formation_frame(frames, keyframes, meta, events, game) if frames else None
+    if form:
+        kt, people = form
+        for slot, p in people.items():
+            if slot in slots:
+                jpg = _crop_jpeg(keyframes[kt], p["bbox"], meta)
+                if jpg:
+                    out[slot] = jpg
+        return out
+    first_swap = min((float(e.get("at_s", 0)) for e in events), default=1e9)
+    everyone_at = {round(t, 3): ppl for t, ppl in (frames or [])}
+    used = []
     for slot, items in slots.items():
         best, best_score = None, -1.0
         for t, p in items:
             kt = round(t, 3)
             if t >= first_swap or kt not in keyframes:
                 continue
-            x1, y1, x2, y2 = p["bbox"]
-            inside = 1.0 if (x1 > 4 and y1 > 4 and x2 < meta["W"] - 4 and y2 < meta["H"] - 4) else 0.4
-            score = p["conf"] * inside * p["bh"]
+            if any(_overlap(p, q) for q in everyone_at.get(kt, []) if q is not p):
+                continue
+            if any(u[0] == kt and u[1] == p["bbox"] for u in used):
+                continue
+            score = p["conf"] * (1.0 if _inside(p, meta) else 0.4) * p["bh"]
             if score > best_score:
                 best, best_score = (kt, p["bbox"]), score
         if not best:
             continue
-        img = cv2.imdecode(np.frombuffer(keyframes[best[0]], np.uint8), cv2.IMREAD_COLOR)
-        s = meta["scale"]
-        x1, y1, x2, y2 = (v * s for v in best[1])
-        pw, ph = (x2 - x1) * 0.18, (y2 - y1) * 0.08
-        X1, Y1 = int(max(0, x1 - pw)), int(max(0, y1 - ph))
-        X2, Y2 = int(min(img.shape[1], x2 + pw)), int(min(img.shape[0], y2 + ph))
-        crop = img[Y1:Y2, X1:X2]
-        if crop.size == 0:
-            continue
-        hh = 260
-        crop = cv2.resize(crop, (max(1, int(crop.shape[1] * hh / crop.shape[0])), hh))
-        out[slot] = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+        used.append(best)
+        jpg = _crop_jpeg(keyframes[best[0]], best[1], meta)
+        if jpg:
+            out[slot] = jpg
     return out
 
 
@@ -527,7 +616,7 @@ def index_video(video_id: str, user_id: str = None):
         slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
         if not slots:
             raise RuntimeError("no players detected")
-        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
         rest("PATCH", f"match_videos?id=eq.{video_id}", {"index_status": "done"})
         return {"ok": True, "slots": list(slots)}
     except Exception as e:  # noqa
@@ -568,7 +657,7 @@ def _analyze(video_id, run_id, URL, KEY, rest):
         slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
         if not slots:
             return fail("no players detected — check camera angle / lighting")
-        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
         off = _camera_offsets(slots)
         rows = []
         for tag in tags:
@@ -622,7 +711,7 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
         if not slots:
             return fail("no players detected")
-        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
+        _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
         strokes = _rally_filter({s: _strokes(items) for s, items in slots.items()}, events)
         off = _camera_offsets(slots)
         tag_by_side = {t.get("court_side"): t["id"] for t in tags}
