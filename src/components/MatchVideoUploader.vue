@@ -55,14 +55,13 @@ function reset() {
 
 async function upload() {
   if (!file.value) return
-  uploading.value = true; err.value = ''; progress.value = 5
+  uploading.value = true; err.value = ''; progress.value = 1
   try {
     const videoId = crypto.randomUUID()
-    progress.value = 15
     const path = await uploadMatchVideo(file.value, {
       clubId: props.clubId, videoId, contentType: file.value.type,
+      onProgress: (p) => { progress.value = Math.max(1, Math.min(99, p)) },
     })
-    progress.value = 85
     const { error } = await supabase.from('match_videos').insert({
       id: videoId,
       club_id: props.clubId,

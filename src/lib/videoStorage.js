@@ -35,13 +35,38 @@ async function sign(action, { clubId, key, contentType }) {
 }
 
 // Upload a recorded Blob/File straight to R2. Returns the storage key to persist on match_videos.
-export async function uploadMatchVideo(blob, { clubId, videoId, contentType }) {
+// Uses XHR (not fetch) for real upload progress, a long timeout, and one automatic retry — large
+// videos on mobile connections were failing with an opaque "Failed to fetch" on a transient drop.
+export async function uploadMatchVideo(blob, { clubId, videoId, contentType, onProgress }) {
   const ctype = contentType || blob.type
   const key   = buildKey(clubId, videoId, ctype)
   const { url } = await sign('put', { clubId, key, contentType: ctype })
-  const res = await fetch(url, { method: 'PUT', body: blob, headers: { 'content-type': ctype } })
-  if (!res.ok) throw new Error(`Upload failed (R2 ${res.status})`)
+  await putWithProgress(url, blob, ctype, onProgress)
   return key
+}
+
+function putWithProgress(url, blob, ctype, onProgress, attempt = 0) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url, true)
+    xhr.setRequestHeader('content-type', ctype)
+    xhr.timeout = 20 * 60 * 1000   // 20 min — generous for long videos on slow mobile links
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`Upload failed (storage ${xhr.status}). Please try again.`))
+    }
+    const retryOr = (msg) => {
+      if (attempt < 1) {
+        setTimeout(() => putWithProgress(url, blob, ctype, onProgress, attempt + 1).then(resolve, reject), 1200)
+      } else reject(new Error(msg))
+    }
+    xhr.onerror = () => retryOr('Upload failed — network dropped. Check your connection and try again.')
+    xhr.ontimeout = () => retryOr('Upload timed out — try a stronger connection or a shorter clip.')
+    xhr.send(blob)
+  })
 }
 
 // A short-lived URL to play a stored video.
