@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
@@ -34,6 +34,7 @@ function switchTab(t) {
   if (t === 'blog' && !blogPosts.value.length) loadBlog()
   if (t === 'subs') loadSubs()
   if (t === 'ai') loadAi()
+  if (t === 'roles') loadRoleUsers()
 }
 
 // ── AI Match Analysis usage & cost (who uses it, where, and what it costs us) ──
@@ -48,7 +49,7 @@ const AI_FEATURES = {
 }
 async function loadAi() {
   aiBusy.value = true
-  if (!users.value.length) await loadUsers()
+  await loadRoleUsers()
   const { data, error } = await supabase.rpc('admin_ai_overview', { p_days: aiDays.value })
   if (error) err.value = error.message
   else { ai.value = data; aiRateEdit.value = Object.fromEntries((data?.rates ?? []).map(r => [r.key, r.usd])) }
@@ -63,7 +64,7 @@ async function saveAiRate(key) {
 const aed = (usd) => (Number(usd || 0) * Number(ai.value?.usd_to_aed || 3.6725))
 const fmtUsd = (v) => `$${Number(v || 0).toFixed(Number(v || 0) < 1 ? 4 : 2)}`
 const fmtAed = (v) => `${aed(v).toFixed(2)} AED`
-const eaMembers = computed(() => users.value.filter(u => u.roles?.some(r => r.role === 'early_access')))
+const eaMembers = computed(() => roleUsers.value.filter(u => u.roles?.some(r => r.role === 'early_access')))
 const aiMonthly = computed(() => {     // per active AI user, scaled to 30 days
   const t = ai.value?.totals; if (!t || !t.users) return null
   const perUserUsd = Number(t.cost_usd) / t.users * (30 / Math.max(1, ai.value.days))
@@ -382,8 +383,85 @@ async function loadTournaments() {
   if (!error) tournaments.value = data ?? []
 }
 
+// ── Roles tab: pick a role → see who has it, add or remove people ──
+const ROLE_DEFS = [
+  { v: 'early_access',        icon: '✨', name: 'Early Access',        color: 'text-cyan-700',    ring: 'border-cyan-300 bg-cyan-50',
+    desc: 'Sees AI Match Analysis (Quick Report + Deep Coaching) before public launch.' },
+  { v: 'tournament_director', icon: '🏆', name: 'Tournament Director', color: 'text-violet-700',  ring: 'border-violet-300 bg-violet-50',
+    desc: 'Creates tournaments up to a quota; runs brackets, registrations and results.' },
+  { v: 'facility_manager',    icon: '🏢', name: 'Facility Manager',    color: 'text-emerald-700', ring: 'border-emerald-300 bg-emerald-50',
+    desc: 'Manages a linked facility: schedule, bookings, court promotions.' },
+  { v: 'app_admin',           icon: '👑', name: 'App Admin',           color: 'text-rose-700',    ring: 'border-rose-300 bg-rose-50',
+    desc: 'Full platform control, including this panel. Grant with care.' },
+]
+const roleUsers   = ref([])          // everyone holding any app role (uncapped — admin_get_role_holders)
+const activeRole  = ref('early_access')
+const roleQuery   = ref('')
+const roleBusy    = ref('')
+const roleSearchHits = ref([])
+let roleSearchTimer = null
+async function loadRoleUsers() {
+  const { data, error } = await supabase.rpc('admin_get_role_holders')
+  if (error) err.value = error.message
+  roleUsers.value = data ?? []
+}
+const hasRole = (u, role) => (u.roles ?? []).some(r => r.role === role)
+const roleCount = (role) => roleUsers.value.filter(u => hasRole(u, role)).length
+const roleHolders = computed(() => roleUsers.value.filter(u => hasRole(u, activeRole.value)))
+// "Add someone" searches ALL users on the server (the local users list is capped).
+watch(roleQuery, (q) => {
+  clearTimeout(roleSearchTimer)
+  if (!q.trim()) { roleSearchHits.value = []; return }
+  roleSearchTimer = setTimeout(async () => {
+    const { data } = await supabase.rpc('get_all_users', { p_search: q.trim() })
+    if (roleQuery.value === q) roleSearchHits.value = data ?? []
+  }, 250)
+})
+const roleCandidates = computed(() => {
+  const holders = new Set(roleHolders.value.map(u => u.user_id))
+  return roleSearchHits.value.filter(u => !holders.has(u.user_id)).slice(0, 8)
+})
+const roleMeta = (u, role) => (u.roles ?? []).find(r => r.role === role) || {}
+const personName = (u) => u.nickname || u.full_name || u.email
+async function addToRole(u) {
+  const role = activeRole.value
+  if (role === 'tournament_director' || role === 'facility_manager') { openGrant(u, role); return }
+  if (role === 'app_admin' && !confirm(`Make ${personName(u)} an App Admin? They will get full platform control.`)) return
+  roleBusy.value = u.user_id; err.value = ''
+  const { error } = await supabase.rpc('grant_role', { p_user_id: u.user_id, p_role: role,
+    p_tournament_quota: null, p_facility_id: null, p_notes: null })
+  roleBusy.value = ''
+  if (error) { err.value = error.message; return }
+  flash(`${ROLE_DEFS.find(r => r.v === role)?.name} granted to ${personName(u)}`)
+  roleQuery.value = ''
+  await Promise.all([loadRoleUsers(), loadUsers()])
+}
+
+// ── Clubs tab: tap a club → its profile, stats and everyone in it ──
+const clubDetail = ref(null)       // { club, stats, members, guests } | { loading: true }
+const clubMemberQuery = ref('')
+async function openClub(c) {
+  clubMemberQuery.value = ''
+  clubDetail.value = { loading: true, club: { name: c.name, id: c.club_id } }
+  const { data, error } = await supabase.rpc('admin_get_club_detail', { p_club_id: c.club_id })
+  if (error) { err.value = error.message; clubDetail.value = null; return }
+  clubDetail.value = data
+}
+const clubMembersShown = computed(() => {
+  const q = clubMemberQuery.value.trim().toLowerCase()
+  const ms = clubDetail.value?.members ?? []
+  return q ? ms.filter(m => [m.name, m.email].some(s => (s || '').toLowerCase().includes(q))) : ms
+})
+const memberRoleChip = r => ({ owner: 'bg-amber-50 text-amber-700 border-amber-200', manager: 'bg-violet-50 text-violet-700 border-violet-200' }[r]
+  ?? 'bg-slate-50 text-slate-500 border-slate-200')
+const seenText = (s) => {
+  if (!s) return 'never seen'
+  const m = (Date.now() - new Date(s).getTime()) / 60000
+  return m < 10 ? 'online now' : m < 1440 ? 'seen today' : `seen ${Math.round(m / 1440)}d ago`
+}
+
 // ── Grant / revoke roles ──
-function openGrant(u) {
+function openGrant(u, role = 'tournament_director') {
   grantPanel.value = {
     userId: u.user_id,
     email:  u.email,
@@ -391,7 +469,7 @@ function openGrant(u) {
   }
   const existingDir = (u.roles ?? []).find(r => r.role === 'tournament_director')
   grantForm.value = {
-    role:  'tournament_director',
+    role,
     quota: existingDir?.tournament_quota ?? 1,
     notes: existingDir?.notes ?? '',
   }
@@ -410,16 +488,17 @@ async function grant() {
   if (error) { err.value = error.message; return }
   flash(`Role granted to ${grantPanel.value.name}`)
   grantPanel.value = null
-  await loadUsers()
+  roleQuery.value = ''
+  await Promise.all([loadUsers(), loadRoleUsers()])
 }
 
 async function revoke(userId, role, name) {
-  if (!confirm(`Remove ${role} from ${name}?`)) return
+  if (!confirm(`Remove ${roleLabel(role)} from ${name}?`)) return
   err.value = ''
   const { error } = await supabase.rpc('revoke_role', { p_user_id: userId, p_role: role })
   if (error) { err.value = error.message; return }
-  flash(`${role} revoked from ${name}`)
-  await loadUsers()
+  flash(`${roleLabel(role)} removed from ${name}`)
+  await Promise.all([loadUsers(), loadRoleUsers()])
 }
 
 // ── User lifecycle (deactivate / delete) ──
@@ -839,9 +918,10 @@ const statItems = computed(() => !stats.value ? [] : [
             @click="clubSearch = ''">✕</button>
         </div>
         <div class="space-y-2">
-          <div v-for="c in filteredClubs" :key="c.club_id" class="card p-4">
+          <div v-for="c in filteredClubs" :key="c.club_id" class="card p-4 transition hover:shadow-md">
             <div class="flex items-start gap-2">
-              <div class="flex-1 min-w-0">
+              <div class="flex-1 min-w-0 cursor-pointer" role="button" tabindex="0" :title="`Open ${c.name}`"
+                @click="openClub(c)" @keydown.enter="openClub(c)">
                 <div class="flex items-center gap-2">
                   <span v-if="c.club_rank" class="text-xs font-bold text-gold shrink-0">#{{ c.club_rank }}</span>
                   <p class="font-semibold text-slate-800 text-sm truncate">{{ c.name }}</p>
@@ -854,6 +934,7 @@ const statItems = computed(() => !stats.value ? [] : [
                   <span class="text-[10px] text-slate-400">👥 {{ c.member_count }}</span>
                   <span class="text-[10px] text-slate-400">🎯 {{ c.matches_30d }}/mo</span>
                   <span class="text-[10px] text-slate-400">📅 {{ fmtShort(c.created_at) }}</span>
+                  <span class="text-[10px] font-semibold text-cyan-600">View members ›</span>
                 </div>
               </div>
               <div class="flex items-center gap-1.5 shrink-0 ml-auto">
@@ -1237,34 +1318,74 @@ const statItems = computed(() => !stats.value ? [] : [
 
       <!-- ── ROLES ─────────────────────────────────────────────────────── -->
       <div v-if="tab === 'roles'" class="space-y-4 fade-up">
-        <div class="card p-4">
-          <h3 class="font-bold text-slate-800 mb-3">Role Permissions</h3>
-          <div class="space-y-3 text-sm">
-            <div class="flex gap-3 pb-3 border-b border-slate-100">
-              <span class="text-xl w-8 shrink-0">👑</span>
-              <div>
-                <p class="font-semibold text-rose-700">App Admin</p>
-                <p class="text-xs text-slate-500 mt-0.5">Full platform control. Grant/revoke roles. View all data. Unlimited tournament creation.</p>
-              </div>
+        <!-- Pick a role -->
+        <div class="grid grid-cols-2 gap-2">
+          <button v-for="r in ROLE_DEFS" :key="r.v" @click="activeRole = r.v; roleQuery = ''"
+            class="rounded-2xl border-2 p-3 text-left transition"
+            :class="activeRole === r.v ? r.ring : 'border-slate-200 bg-white hover:border-slate-300'">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">{{ r.icon }}</span>
+              <span class="ml-auto font-display text-xl font-bold text-slate-800">{{ roleCount(r.v) }}</span>
             </div>
-            <div class="flex gap-3 pb-3 border-b border-slate-100">
-              <span class="text-xl w-8 shrink-0">🏆</span>
-              <div>
-                <p class="font-semibold text-violet-700">Tournament Director</p>
-                <p class="text-xs text-slate-500 mt-0.5">Can create tournaments up to their quota. Manages bracket, registrations, results. Default quota: 1.</p>
-              </div>
-            </div>
-            <div class="flex gap-3">
-              <span class="text-xl w-8 shrink-0">🏢</span>
-              <div>
-                <p class="font-semibold text-emerald-700">Facility Manager</p>
-                <p class="text-xs text-slate-500 mt-0.5">Manages their linked facility: schedule, bookings, court promotions. Linked to one facility.</p>
-              </div>
-            </div>
-          </div>
+            <div class="mt-1 text-sm font-bold" :class="r.color">{{ r.name }}</div>
+            <div class="text-[10px] leading-snug text-slate-500">{{ r.desc }}</div>
+          </button>
         </div>
 
-        <div class="card-amber p-4">
+        <!-- People with the selected role -->
+        <div class="card overflow-hidden">
+          <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+            <span>{{ ROLE_DEFS.find(r => r.v === activeRole)?.icon }}</span>
+            <p class="text-sm font-bold text-slate-800">{{ ROLE_DEFS.find(r => r.v === activeRole)?.name }}</p>
+            <span class="ml-auto text-xs text-slate-400">{{ roleHolders.length }} {{ roleHolders.length === 1 ? 'person' : 'people' }}</span>
+          </div>
+
+          <!-- Add a person -->
+          <div class="border-b border-slate-100 px-4 py-3">
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">＋</span>
+              <input v-model="roleQuery" placeholder="Add someone — search name or email…"
+                class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs text-slate-700 outline-none focus:border-cyan-400" />
+            </div>
+            <div v-if="roleQuery.trim()" class="mt-2 space-y-1">
+              <div v-for="u in roleCandidates" :key="u.user_id" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-xs font-semibold text-slate-800">{{ personName(u) }}</p>
+                  <p class="truncate text-[10px] text-slate-400">{{ u.email }}</p>
+                </div>
+                <button class="btn-primary shrink-0 px-3 py-1 text-xs" :disabled="roleBusy === u.user_id" @click="addToRole(u)">
+                  {{ roleBusy === u.user_id ? '…' : 'Add' }}
+                </button>
+              </div>
+              <p v-if="!roleCandidates.length" class="py-1 text-center text-[11px] text-slate-400">No one else matches.</p>
+            </div>
+          </div>
+
+          <div v-for="u in roleHolders" :key="u.user_id"
+            class="flex items-center gap-3 border-b border-slate-50 px-4 py-3 last:border-0">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-semibold text-slate-800">{{ personName(u) }}</p>
+              <p class="truncate text-xs text-slate-400">{{ u.email }}</p>
+              <p class="text-[10px] text-slate-400">
+                <span v-if="roleMeta(u, activeRole).granted_at">since {{ fmtShort(roleMeta(u, activeRole).granted_at) }}</span>
+                <span v-if="roleMeta(u, activeRole).notes"> · {{ roleMeta(u, activeRole).notes }}</span>
+              </p>
+            </div>
+            <div v-if="activeRole === 'tournament_director'" class="shrink-0 text-right">
+              <p class="text-xs font-bold text-violet-600">{{ u.tournaments_created }} / {{ roleMeta(u, activeRole).tournament_quota ?? '∞' }}</p>
+              <p class="text-[9px] text-slate-400">created / quota</p>
+            </div>
+            <button v-if="activeRole === 'tournament_director'" class="btn-ghost shrink-0 px-2 py-1 text-[11px]"
+              title="Change quota" @click="openGrant(u, 'tournament_director')">✏️</button>
+            <button class="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] text-slate-500 hover:border-rose-300 hover:text-rose-600"
+              @click="revoke(u.user_id, activeRole, personName(u))">Remove</button>
+          </div>
+          <p v-if="!roleHolders.length" class="px-4 py-6 text-center text-sm text-slate-400">
+            Nobody has this role yet — search above to add someone.
+          </p>
+        </div>
+
+        <div v-if="activeRole === 'tournament_director'" class="card-amber p-4">
           <p class="text-xs font-bold text-amber-700 mb-1">⚠️ Tournament Creation Policy</p>
           <p class="text-xs text-slate-600 leading-relaxed">
             Regular users and club managers <strong>cannot</strong> create tournaments.
@@ -1272,29 +1393,6 @@ const statItems = computed(() => !stats.value ? [] : [
           </p>
         </div>
 
-        <div class="card overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-100">
-            <p class="text-xs font-bold text-slate-600">Current Tournament Directors</p>
-          </div>
-          <div v-for="u in users.filter(u => u.roles?.some(r => r.role === 'tournament_director'))"
-            :key="u.user_id"
-            class="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0">
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-semibold text-slate-800 truncate">{{ u.full_name || u.nickname || u.email }}</p>
-              <p class="text-xs text-slate-400 truncate">{{ u.email }}</p>
-            </div>
-            <div class="text-right shrink-0">
-              <p class="text-xs font-bold text-violet-600">
-                {{ u.tournaments_created }} / {{ u.roles.find(r => r.role === 'tournament_director')?.tournament_quota ?? '∞' }}
-              </p>
-              <p class="text-[9px] text-slate-400">created / quota</p>
-            </div>
-          </div>
-          <p v-if="!users.some(u => u.roles?.some(r => r.role === 'tournament_director'))"
-            class="px-4 py-6 text-sm text-slate-400 text-center">
-            No directors yet.
-          </p>
-        </div>
       </div>
 
       <!-- ── Security / Login Audit ─────────────────────────────────── -->
@@ -1502,6 +1600,103 @@ const statItems = computed(() => !stats.value ? [] : [
 
   <!-- ── Modals ─────────────────────────────────────────────────────── -->
   <Teleport to="body">
+
+    <!-- Club detail sheet -->
+    <div v-if="clubDetail"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style="background:rgba(0,0,0,.5);backdrop-filter:blur(4px)"
+      @click.self="clubDetail = null">
+      <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl bg-slate-50">
+        <!-- header -->
+        <div class="flex items-start gap-3 border-b border-slate-200 bg-white p-5">
+          <img v-if="clubDetail.club?.logo_url" :src="clubDetail.club.logo_url" alt="" class="h-12 w-12 shrink-0 rounded-xl object-cover" />
+          <div v-else class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-xl">🏸</div>
+          <div class="min-w-0 flex-1">
+            <h3 class="truncate font-display text-lg font-bold text-slate-800">{{ clubDetail.club?.name }}</h3>
+            <p v-if="!clubDetail.loading" class="truncate text-xs text-slate-400">
+              {{ [clubDetail.club.region, clubDetail.club.country_code].filter(Boolean).join(' · ') || 'No location' }}
+              · created {{ fmtShort(clubDetail.club.created_at) }}
+            </p>
+          </div>
+          <button class="text-xl text-slate-400 hover:text-slate-700" @click="clubDetail = null">✕</button>
+        </div>
+
+        <div v-if="clubDetail.loading" class="space-y-2 p-5">
+          <div v-for="i in 4" :key="i" class="h-12 shimmer rounded-xl" />
+        </div>
+
+        <div v-else class="space-y-3 overflow-y-auto p-4">
+          <!-- profile -->
+          <div class="card space-y-1 p-3 text-xs text-slate-600">
+            <p v-if="clubDetail.club.description" class="text-sm text-slate-700">{{ clubDetail.club.description }}</p>
+            <p><span class="text-slate-400">Created by</span> {{ clubDetail.club.created_by_email || '—' }}</p>
+            <p v-if="clubDetail.club.facility_name"><span class="text-slate-400">Plays at</span> {{ clubDetail.club.facility_name }}
+              <span v-if="clubDetail.club.facility_address" class="text-slate-400"> · {{ clubDetail.club.facility_address }}</span></p>
+            <p><span class="text-slate-400">Joining</span> {{ clubDetail.club.join_policy || '—' }}
+              · {{ clubDetail.club.is_public ? 'listed publicly' : 'not listed' }}
+              <span v-if="clubDetail.club.currency"> · {{ clubDetail.club.currency }}</span></p>
+          </div>
+
+          <!-- stats -->
+          <div class="grid grid-cols-3 gap-2">
+            <div v-for="s in [
+                { l: 'Members', v: clubDetail.stats.members },
+                { l: 'Active players', v: `${clubDetail.stats.active_players}/${clubDetail.stats.players}` },
+                { l: 'Matches', v: clubDetail.stats.matches },
+                { l: 'Last 30 days', v: clubDetail.stats.matches_30d },
+                { l: 'Last played', v: clubDetail.stats.last_played ? fmtShort(clubDetail.stats.last_played) : '—' },
+                { l: 'Join requests', v: clubDetail.stats.pending_requests },
+              ]" :key="s.l" class="card p-2.5 text-center">
+              <div class="font-display text-base font-bold text-slate-800">{{ s.v }}</div>
+              <div class="text-[10px] text-slate-400">{{ s.l }}</div>
+            </div>
+          </div>
+
+          <!-- members -->
+          <div class="card overflow-hidden">
+            <div class="flex items-center gap-2 border-b border-slate-100 px-3 py-2.5">
+              <p class="text-xs font-bold text-slate-700">Members · {{ clubDetail.members.length }}</p>
+              <input v-model="clubMemberQuery" placeholder="Search…"
+                class="ml-auto w-32 rounded-lg border border-slate-200 px-2 py-1 text-[11px] outline-none focus:border-cyan-400" />
+            </div>
+            <div v-for="m in clubMembersShown" :key="m.user_id" class="flex items-center gap-2 border-b border-slate-50 px-3 py-2.5 last:border-0">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <RouterLink v-if="m.player_id" :to="`/player/${m.player_id}?admin=1`" class="truncate text-sm font-semibold text-slate-800 hover:text-neon"
+                    @click="clubDetail = null">{{ m.name }}</RouterLink>
+                  <span v-else class="truncate text-sm font-semibold text-slate-800">{{ m.name }}</span>
+                  <span class="shrink-0 rounded border px-1.5 text-[9px] font-bold uppercase" :class="memberRoleChip(m.role)">{{ m.role }}</span>
+                  <span v-for="r in m.app_roles" :key="r" class="shrink-0 rounded border px-1 text-[9px]" :class="roleChip(r)">{{ roleLabel(r) }}</span>
+                </div>
+                <p class="truncate text-[11px] text-slate-400">{{ m.email }}</p>
+                <p class="text-[10px] text-slate-400">
+                  {{ m.games }} games<span v-if="m.elo"> · Elo {{ Math.round(m.elo) }}</span>
+                  <span v-if="m.is_active === false"> · inactive</span> · {{ seenText(m.last_seen) }}
+                </p>
+              </div>
+            </div>
+            <p v-if="!clubMembersShown.length" class="px-3 py-4 text-center text-xs text-slate-400">No members match.</p>
+          </div>
+
+          <!-- guests -->
+          <div v-if="clubDetail.guests.length" class="card overflow-hidden">
+            <p class="border-b border-slate-100 px-3 py-2.5 text-xs font-bold text-slate-700">
+              Guest players (no account) · {{ clubDetail.guests.length }}
+            </p>
+            <div v-for="g in clubDetail.guests" :key="g.player_id" class="flex items-center gap-2 border-b border-slate-50 px-3 py-2 last:border-0">
+              <RouterLink :to="`/player/${g.player_id}?admin=1`" class="min-w-0 flex-1 truncate text-sm text-slate-700 hover:text-neon"
+                @click="clubDetail = null">{{ g.name }}</RouterLink>
+              <span class="shrink-0 text-[10px] text-slate-400">
+                {{ g.games }} games<span v-if="g.pending_email"> · ✉️ {{ g.pending_email }}</span><span v-if="!g.is_active"> · inactive</span>
+              </span>
+            </div>
+          </div>
+
+          <RouterLink :to="`/club/${clubDetail.club.id}?admin=1`" @click="clubDetail = null"
+            class="btn-primary block w-full py-2.5 text-center text-sm">Open public club profile →</RouterLink>
+        </div>
+      </div>
+    </div>
 
     <!-- Grant Role Modal -->
     <div v-if="grantPanel"
