@@ -580,6 +580,9 @@ def _analyze(video_id, run_id, URL, KEY, rest):
                          "metrics": m["metrics"], "confidence": m["confidence"], "is_mock": False})
         if not rows:
             return fail("could not match detected players to the tagged positions")
+        rows = _retag(rest, video_id, tags, rows)
+        if not rows:
+            return fail("player tags were removed while the analysis was running — tag the players and try again")
         rest("POST", "player_metrics?on_conflict=run_id,tag_id", rows, "resolution=merge-duplicates")
         rest("PATCH", f"match_videos?id=eq.{video_id}", {"duration_s": int(meta["duration"])})
         rest("POST", "rpc/finalize_analysis", {"p_video_id": video_id, "p_run_id": run_id})
@@ -635,6 +638,8 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
                                   "t_s": round(t, 2), "shot_type": info["type"], "confidence": info["conf"],
                                   "technique": info["tech"], "meta": {"engine": ENGINE, "device": device},
                                   "is_mock": False})
+        shot_rows = _retag(rest, video_id, tags, shot_rows)
+        motion_rows = _retag(rest, video_id, tags, motion_rows)
         if shot_rows:
             rest("POST", "analysis_shots", shot_rows)
         if motion_rows and run_id:
@@ -646,6 +651,20 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         return {"ok": True, "shots": len(shot_rows), "device": device, "frames": len(frames)}
     except Exception as e:  # noqa
         return fail(f"{type(e).__name__}: {e}")
+
+
+def _retag(rest, video_id, tags, rows):
+    """Tags can be re-saved (new ids) while a long analysis runs; writing the stale ids then fails the
+    tag_id foreign key (PostgREST 409). Re-read the current tags and remap each row by court side."""
+    side_of = {t["id"]: t.get("court_side") for t in tags}
+    now = rest("GET", f"video_player_tags?video_id=eq.{video_id}&select=id,court_side") or []
+    current = {t.get("court_side"): t["id"] for t in now}
+    out = []
+    for r in rows:
+        new_id = current.get(side_of.get(r["tag_id"]))
+        if new_id:
+            out.append({**r, "tag_id": new_id})
+    return out
 
 
 def _notify(video_id, url, key):
