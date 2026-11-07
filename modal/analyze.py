@@ -88,6 +88,20 @@ def _post(url, payload, key):
     urllib.request.urlopen(req, timeout=140).read()
 
 
+def _record(rest, feature, video_id, run_id, user_id, started, cpu_cores, mem_gib, gpu=None, extra=None):
+    """Write one ai_usage row with the measured wall time (priced by the DB trigger). Never raises."""
+    import time
+    try:
+        units = {"wall_s": round(time.time() - started, 2), "cpu_cores": cpu_cores, "mem_gib": mem_gib}
+        if gpu:
+            units["gpu"] = gpu
+        units.update(extra or {})
+        rest("POST", "ai_usage", [{"feature": feature, "provider": "modal", "video_id": video_id,
+                                   "run_id": run_id, "user_id": user_id, "units": units}])
+    except Exception:
+        pass
+
+
 def _ctx():
     URL, KEY = os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     return URL, KEY, (lambda m, p, b=None, pr=None: _supa(m, p, KEY, URL, b, pr))
@@ -448,8 +462,10 @@ def _body(device):
 
 
 @app.function(image=image, timeout=900, cpu=2.0, memory=4096, secrets=[secret])
-def index_video(video_id: str):
+def index_video(video_id: str, user_id: str = None):
+    import time
     URL, KEY, rest = _ctx()
+    t0 = time.time()
     try:
         vid, tags, events, local = _load_video(rest, video_id)
         frames, kf, meta = _pose_pass(local, _body("cpu"), target_fps=3, max_frames=240, t_max=90, kf_until=90)
@@ -465,11 +481,22 @@ def index_video(video_id: str):
         except Exception:
             pass
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        _record(rest, "index", video_id, None, user_id, t0, 2.0, 4.0)
 
 
 @app.function(image=image, timeout=1200, cpu=2.0, memory=4096, secrets=[secret])
-def analyze(video_id: str, run_id: str = None):
+def analyze(video_id: str, run_id: str = None, user_id: str = None):
+    import time
     URL, KEY, rest = _ctx()
+    t0 = time.time()
+    try:
+        return _analyze(video_id, run_id, URL, KEY, rest)
+    finally:
+        _record(rest, "quick_report", video_id, run_id, user_id, t0, 2.0, 4.0)
+
+
+def _analyze(video_id, run_id, URL, KEY, rest):
 
     def fail(msg):
         try:
@@ -508,8 +535,17 @@ def analyze(video_id: str, run_id: str = None):
 
 
 @app.function(image=gpu_image, gpu="L4", timeout=1800, memory=8192, secrets=[secret])
-def analyze_deep(video_id: str, run_id: str = None):
+def analyze_deep(video_id: str, run_id: str = None, user_id: str = None):
+    import time
     URL, KEY, rest = _ctx()
+    t0 = time.time()
+    try:
+        return _analyze_deep(video_id, run_id, user_id, URL, KEY, rest)
+    finally:
+        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 0.125, 8.0, gpu="L4")
+
+
+def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
 
     def fail(msg):
         try:
@@ -545,7 +581,8 @@ def analyze_deep(video_id: str, run_id: str = None):
             rest("POST", "analysis_shots", shot_rows)
         # Commentary step also handles the "no strokes" case and finalises the run.
         _post(f"{URL}/functions/v1/generate-commentary",
-              {"video_id": video_id, "run_id": run_id, "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, KEY)
+              {"video_id": video_id, "run_id": run_id, "user_id": user_id,
+               "secret": os.environ.get("ANALYZE_SHARED_SECRET", "")}, KEY)
         return {"ok": True, "shots": len(shot_rows), "device": device, "frames": len(frames)}
     except Exception as e:  # noqa
         return fail(f"{type(e).__name__}: {e}")
@@ -570,11 +607,11 @@ def web(data: dict):
     if not video_id:
         return Response(status_code=400, content="missing video_id")
     mode = data.get("mode") or ("deep" if data.get("deep") else "simple")
-    run_id = data.get("run_id")
+    run_id, user_id = data.get("run_id"), data.get("user_id")
     if mode == "index":
-        index_video.spawn(video_id)
+        index_video.spawn(video_id, user_id)
     elif mode == "deep":
-        analyze_deep.spawn(video_id, run_id)
+        analyze_deep.spawn(video_id, run_id, user_id)
     else:
-        analyze.spawn(video_id, run_id)
+        analyze.spawn(video_id, run_id, user_id)
     return {"status": "queued", "video_id": video_id, "mode": mode, "run_id": run_id}

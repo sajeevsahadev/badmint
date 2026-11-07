@@ -8,6 +8,7 @@ import { useInstall } from '../composables/useInstall'
 import { useGeo } from '../composables/useGeo'
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
+import CoachVisionCard from '../components/CoachVisionCard.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { applySeo, setJsonLd } from '../lib/seo'
 
@@ -249,6 +250,9 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- ── Coach Vision (AI match analysis) — early access only ── -->
+      <CoachVisionCard v-if="user" />
 
       <!-- ── My Teams (logged-in) ── -->
       <template v-if="user && clubs.length">

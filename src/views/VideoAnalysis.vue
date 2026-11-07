@@ -21,7 +21,8 @@ const route  = useRoute()
 const router = useRouter()
 const { isManager } = useClub()
 const { user } = useAuth()
-const { hasEarlyAccess, loadEntitlements } = useEntitlements()
+const { canQuickReport, canDeepCoaching, isAppAdmin, loadEntitlements } = useEntitlements()
+const tier = ref(route.query.tier === 'deep' ? 'deep' : 'quick')   // Quick Report | Deep Coaching
 const videoId = route.params.id
 const videoEl = ref(null)   // playback element, for deep-commentary timestamp seeking
 
@@ -265,10 +266,29 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           </div>
         </div>
 
+        <!-- Coach Vision tiers. Each is gated by its own entitlement so subscriptions slot in later. -->
+        <div class="mb-4 flex gap-1 rounded-2xl bg-slate-100 p-1">
+          <button @click="tier = 'quick'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
+            :class="tier === 'quick' ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">📊 Quick Report</button>
+          <button @click="tier = 'deep'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
+            :class="tier === 'deep' ? 'bg-white text-violet-700 shadow' : 'text-slate-500'">
+            🎙️ Deep Coaching <span class="ml-1 rounded bg-violet-100 px-1 text-[9px] font-bold text-violet-700">PREMIUM</span>
+          </button>
+        </div>
+
+        <!-- Locked tier (shown once subscriptions are live and the user's plan doesn't include it) -->
+        <div v-if="(tier === 'quick' && !canQuickReport) || (tier === 'deep' && !canDeepCoaching)"
+          class="card p-6 mb-4 text-center">
+          <div class="text-2xl">🔒</div>
+          <div class="mt-1 text-sm font-semibold text-slate-800">{{ tier === 'deep' ? 'Deep Coaching' : 'Quick Report' }} isn't included in your plan</div>
+          <p class="mt-1 text-xs text-slate-500">It's rolling out to early-access members first.</p>
+        </div>
+
+        <template v-if="tier === 'quick' && canQuickReport">
         <!-- Analysing — stable, non-blocking progress (safe to leave the page) -->
         <div v-if="status === 'analyzing'" class="card card-neon p-5 mb-4 text-center fade-up">
           <div class="text-base font-bold text-slate-800">
-            Analysing your match{{ latestRun ? ` — Version ${latestRun.version}` : '' }}…
+            Analysing your match{{ isAppAdmin && latestRun ? ` — Version ${latestRun.version}` : '' }}…
           </div>
           <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
             <div class="ai-bar h-full rounded-full bg-cyan-500"></div>
@@ -302,10 +322,12 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         <!-- Reports for the selected version -->
         <div v-if="doneRuns.length && subjects.length">
           <p v-if="latestRun && latestRun.status === 'failed'" class="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            Version {{ latestRun.version }} didn’t finish ({{ latestRun.error || 'error' }}). Showing your last completed version.
+            <template v-if="isAppAdmin">Version {{ latestRun.version }} didn’t finish ({{ latestRun.error || 'error' }}). Showing your last completed version.</template>
+            <template v-else>The latest re-analysis didn’t finish — showing your previous report.</template>
           </p>
 
-          <div v-if="doneRuns.length > 1" class="mb-3">
+          <!-- Version history is an admin tool; members always see the latest report. -->
+          <div v-if="isAppAdmin && doneRuns.length > 1" class="mb-3">
             <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Analysis versions</div>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="r in doneRuns" :key="r.id" @click="showVersion(r.id)"
@@ -315,7 +337,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
               </button>
             </div>
           </div>
-          <p v-else-if="shownRun" class="mb-3 text-[11px] text-slate-400">{{ versionLabel(shownRun, latestRun && latestRun.version) }}</p>
+          <p v-else-if="isAppAdmin && shownRun" class="mb-3 text-[11px] text-slate-400">{{ versionLabel(shownRun, latestRun && latestRun.version) }}</p>
 
           <div v-if="subjects.length > 1" class="mb-3 flex flex-wrap gap-2">
             <button v-for="t in subjects" :key="t.id" @click="activeSubject = t.id"
@@ -340,14 +362,16 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
 
           <button v-if="canManage && status !== 'analyzing'" @click="runAnalysis" :disabled="working"
             class="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-50">
-            {{ working ? 'Starting…' : `↻ Re-analyse — saves as Version ${(latestRun ? latestRun.version : 0) + 1} (older versions are kept)` }}
+            {{ working ? 'Starting…' : (isAppAdmin
+              ? `↻ Re-analyse — saves as Version ${(latestRun ? latestRun.version : 0) + 1} (older versions are kept)`
+              : '↻ Re-analyse') }}
           </button>
         </div>
+        </template>
 
-        <!-- Deep Analysis (premium): shot-by-shot coach commentary -->
-        <div v-if="hasEarlyAccess" class="mt-4">
-          <DeepCommentary :video-id="videoId" :can-manage="canManage" :subjects="subjectsForDeep" @seek="seekTo" />
-        </div>
+        <!-- Deep Coaching (premium): stroke-by-stroke commentary + spoken audio -->
+        <DeepCommentary v-if="tier === 'deep' && canDeepCoaching" :video-id="videoId" :can-manage="canManage" :is-admin="isAppAdmin"
+          :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo" />
       </template>
     </template>
   </div>

@@ -33,6 +33,49 @@ function switchTab(t) {
   if (t === 'security' && !sessions.value.length) loadSessions()
   if (t === 'blog' && !blogPosts.value.length) loadBlog()
   if (t === 'subs') loadSubs()
+  if (t === 'ai') loadAi()
+}
+
+// ── Coach Vision AI usage & cost (who uses it, where, and what it costs us) ──
+const ai       = ref(null)
+const aiDays   = ref(30)
+const aiBusy   = ref(false)
+const aiPrice  = ref(25)          // AED / month — what-if subscription price for the margin estimate
+const aiRateEdit = ref({})
+const AI_FEATURES = {
+  index: '🧍 Player photos', quick_report: '📊 Quick Report', deep_coaching: '🎙️ Deep (GPU)',
+  commentary: '✍️ Commentary text', commentary_audio: '🔊 Commentary voice', chat: '💬 Coach chat',
+}
+async function loadAi() {
+  aiBusy.value = true
+  if (!users.value.length) await loadUsers()
+  const { data, error } = await supabase.rpc('admin_ai_overview', { p_days: aiDays.value })
+  if (error) err.value = error.message
+  else { ai.value = data; aiRateEdit.value = Object.fromEntries((data?.rates ?? []).map(r => [r.key, r.usd])) }
+  aiBusy.value = false
+}
+async function saveAiRate(key) {
+  const { error } = await supabase.rpc('admin_set_ai_rate', { p_key: key, p_usd: Number(aiRateEdit.value[key]) })
+  if (error) { err.value = error.message; return }
+  ok.value = 'Rate saved — applies to new usage'
+  await loadAi()
+}
+const aed = (usd) => (Number(usd || 0) * Number(ai.value?.usd_to_aed || 3.6725))
+const fmtUsd = (v) => `$${Number(v || 0).toFixed(Number(v || 0) < 1 ? 4 : 2)}`
+const fmtAed = (v) => `${aed(v).toFixed(2)} AED`
+const eaMembers = computed(() => users.value.filter(u => u.roles?.some(r => r.role === 'early_access')))
+const aiMonthly = computed(() => {     // per active AI user, scaled to 30 days
+  const t = ai.value?.totals; if (!t || !t.users) return null
+  const perUserUsd = Number(t.cost_usd) / t.users * (30 / Math.max(1, ai.value.days))
+  const perUserAed = perUserUsd * Number(ai.value.usd_to_aed || 3.6725)
+  return { perUserUsd, perUserAed, margin: aiPrice.value - perUserAed,
+           marginPct: aiPrice.value > 0 ? (aiPrice.value - perUserAed) / aiPrice.value * 100 : 0 }
+})
+function aiUnits(r) {
+  const u = r.units || {}
+  if (r.provider === 'modal') return `${u.wall_s ?? '?'}s ${u.gpu ? 'GPU ' + u.gpu : 'CPU'}`
+  const tok = (u.input_tokens || 0) + (u.output_tokens || 0) + (u.thinking_tokens || 0)
+  return `${tok.toLocaleString()} tokens${u.lines != null ? ` · ${u.lines} lines` : ''}${u.voiced ? ` · ${u.voiced} voiced` : ''}`
 }
 
 // ── Subscriptions (Phase 2: provisioning; live card payments are a later phase) ──
@@ -139,6 +182,7 @@ const TABS = [
   { v: 'tournaments', l: '🏆 Tournaments' },
   { v: 'roles',       l: '🎖️ Roles' },
   { v: 'subs',        l: '💳 Subs' },
+  { v: 'ai',          l: '🤖 AI usage' },
   { v: 'announcements', l: '📢 Announcements' },
   { v: 'security',    l: '🔐 Security' },
   { v: 'chats',       l: '💬 Chats' },
@@ -1013,6 +1057,149 @@ const statItems = computed(() => !stats.value ? [] : [
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ── AI USAGE ─────────────────────────────────────────────────── -->
+      <div v-if="tab === 'ai'" class="space-y-4 fade-up">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-500">Period</span>
+          <button v-for="d in [7, 30, 90, 365]" :key="d" @click="aiDays = d; loadAi()"
+            class="rounded-full border px-3 py-1 text-xs font-semibold"
+            :class="aiDays === d ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-500 border-slate-200'">
+            {{ d === 365 ? '1 year' : d + ' days' }}
+          </button>
+          <button @click="loadAi" class="btn-ghost ml-auto px-3 py-1 text-xs">{{ aiBusy ? '…' : '↻' }}</button>
+        </div>
+
+        <div v-if="!ai && aiBusy" class="h-24 shimmer rounded-2xl" />
+
+        <template v-if="ai">
+          <!-- Headline numbers -->
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div class="card p-3">
+              <div class="text-[10px] font-bold uppercase text-slate-400">AI cost</div>
+              <div class="font-display text-lg font-bold text-slate-800">{{ fmtUsd(ai.totals.cost_usd) }}</div>
+              <div class="text-[11px] text-slate-500">{{ fmtAed(ai.totals.cost_usd) }}</div>
+            </div>
+            <div class="card p-3">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Members using AI</div>
+              <div class="font-display text-lg font-bold text-slate-800">{{ ai.totals.users }}</div>
+              <div class="text-[11px] text-slate-500">{{ eaMembers.length }} have early access</div>
+            </div>
+            <div class="card p-3">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Clubs</div>
+              <div class="font-display text-lg font-bold text-slate-800">{{ ai.totals.clubs }}</div>
+              <div class="text-[11px] text-slate-500">{{ ai.totals.videos }} videos</div>
+            </div>
+            <div class="card p-3">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Analyses</div>
+              <div class="font-display text-lg font-bold text-slate-800">{{ ai.runs.quick + ai.runs.deep }}</div>
+              <div class="text-[11px] text-slate-500">{{ ai.runs.quick }} quick · {{ ai.runs.deep }} deep · {{ ai.runs.failed }} failed</div>
+            </div>
+          </div>
+
+          <!-- Margin -->
+          <div class="card card-amber p-4">
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">💰 Margin estimate</div>
+            <div v-if="!aiMonthly" class="text-sm text-slate-400">No AI usage in this period yet.</div>
+            <div v-else class="space-y-2 text-sm text-slate-700">
+              <div>Average AI cost per active member: <b>{{ aiMonthly.perUserAed.toFixed(2) }} AED / month</b>
+                <span class="text-slate-400">({{ fmtUsd(aiMonthly.perUserUsd) }})</span></div>
+              <label class="flex items-center gap-2">If the plan costs
+                <input v-model.number="aiPrice" type="number" min="0" class="input w-20 py-1 text-sm" /> AED / month
+              </label>
+              <div>Margin per member: <b :class="aiMonthly.margin >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                {{ aiMonthly.margin.toFixed(2) }} AED ({{ aiMonthly.marginPct.toFixed(0) }}%)</b></div>
+              <p class="text-[11px] text-slate-400">Compute + AI only — excludes video storage, payment fees and VAT.</p>
+            </div>
+          </div>
+
+          <!-- By feature -->
+          <div class="card p-4">
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Cost by feature</div>
+            <div v-if="!ai.by_feature.length" class="text-sm text-slate-400">Nothing yet.</div>
+            <div v-for="f in ai.by_feature" :key="f.feature" class="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm last:border-0">
+              <span class="text-slate-700">{{ AI_FEATURES[f.feature] || f.feature }}</span>
+              <span class="text-slate-500">{{ f.events }} × · <b class="text-slate-800">{{ fmtUsd(f.cost_usd) }}</b></span>
+            </div>
+          </div>
+
+          <!-- By club -->
+          <div class="card p-4">
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Clubs using Coach Vision</div>
+            <div v-if="!ai.by_club.length" class="text-sm text-slate-400">No clubs yet.</div>
+            <div v-for="c in ai.by_club" :key="c.club_id || 'none'" class="border-b border-slate-100 py-2 last:border-0">
+              <div class="flex items-center justify-between">
+                <span class="truncate text-sm font-semibold text-slate-800">{{ c.club }}</span>
+                <b class="text-sm text-slate-800">{{ fmtUsd(c.cost_usd) }}</b>
+              </div>
+              <div class="text-xs text-slate-400">
+                {{ c.members_using }} / {{ c.members_total }} members · {{ c.videos }} videos ·
+                {{ c.quick }} quick · {{ c.deep }} deep · {{ c.chats }} chats
+              </div>
+            </div>
+          </div>
+
+          <!-- By member -->
+          <div class="card p-4">
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Members</div>
+            <div v-if="!ai.by_user.length" class="text-sm text-slate-400">No members yet.</div>
+            <div v-for="u in ai.by_user" :key="u.user_id || 'sys'" class="border-b border-slate-100 py-2 last:border-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate text-sm font-semibold text-slate-800">{{ u.user_id ? u.name : 'System / internal' }}</span>
+                <b class="shrink-0 text-sm text-slate-800">{{ fmtUsd(u.cost_usd) }}</b>
+              </div>
+              <div class="text-xs text-slate-400">
+                <span v-if="u.early_access" class="mr-1 rounded bg-violet-100 px-1.5 text-violet-700">early access</span>
+                <span v-if="u.plan" class="mr-1 rounded bg-cyan-100 px-1.5 text-cyan-700">{{ u.plan }}</span>
+                {{ u.clubs || '—' }} · {{ u.videos }} videos · {{ u.quick }} quick · {{ u.deep }} deep · {{ u.chats }} chats · {{ u.audio }} voice
+                <span v-if="u.last_used"> · last {{ new Date(u.last_used).toLocaleDateString() }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Early access & subscriptions -->
+          <div class="card p-4">
+            <div class="mb-2 flex items-center text-xs font-bold uppercase tracking-wide text-slate-500">
+              Early-access members ({{ eaMembers.length }})
+              <button class="ml-auto text-[11px] font-semibold normal-case text-rose-600" @click="switchTab('subs')">Subscriptions &amp; requests →</button>
+            </div>
+            <div v-if="!eaMembers.length" class="text-sm text-slate-400">None.</div>
+            <div v-for="u in eaMembers" :key="u.user_id" class="truncate border-b border-slate-100 py-1.5 text-sm text-slate-700 last:border-0">
+              {{ u.nickname || u.full_name || u.email }} <span class="text-xs text-slate-400">{{ u.email }}</span>
+            </div>
+          </div>
+
+          <!-- Activity story -->
+          <div class="card p-4">
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Recent AI activity</div>
+            <div v-if="!ai.recent.length" class="text-sm text-slate-400">Nothing yet.</div>
+            <div v-for="(r, i) in ai.recent" :key="i" class="border-b border-slate-100 py-1.5 last:border-0">
+              <div class="flex items-center justify-between gap-2 text-sm">
+                <span class="truncate"><b class="text-slate-800">{{ r.who }}</b>
+                  <span class="text-slate-500"> · {{ AI_FEATURES[r.feature] || r.feature }}</span></span>
+                <span class="shrink-0 text-xs font-semibold text-slate-700">{{ fmtUsd(r.cost_usd) }}</span>
+              </div>
+              <div class="truncate text-[11px] text-slate-400">
+                {{ new Date(r.at).toLocaleString() }} · {{ r.club || '—' }}{{ r.video ? ' · ' + r.video : '' }} · {{ aiUnits(r) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Rate card -->
+          <div class="card p-4">
+            <div class="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Rate card (USD)</div>
+            <p class="mb-2 text-[11px] text-slate-400">Update when Modal or Gemini change prices. Applies to new usage only.</p>
+            <div v-for="r in ai.rates" :key="r.key" class="flex items-center gap-2 border-b border-slate-100 py-1.5 last:border-0">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-xs font-semibold text-slate-700">{{ r.key }}</div>
+                <div class="truncate text-[10px] text-slate-400">{{ r.unit }}{{ r.note ? ' · ' + r.note : '' }}</div>
+              </div>
+              <input v-model="aiRateEdit[r.key]" type="number" step="any" class="input w-28 py-1 text-xs" />
+              <button class="btn-ghost px-2 py-1 text-xs" :disabled="Number(aiRateEdit[r.key]) === Number(r.usd)" @click="saveAiRate(r.key)">Save</button>
+            </div>
+          </div>
+        </template>
       </div>
 
       <div v-if="tab === 'announcements'" class="space-y-4 fade-up">

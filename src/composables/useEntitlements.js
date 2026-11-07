@@ -32,5 +32,12 @@ export function useEntitlements() {
   // Alias kept deliberately so Phase 2 can widen it (early access OR active subscription).
   const canUseAi = hasEarlyAccess
 
-  return { roles, loaded, hasEarlyAccess, isAppAdmin, canUseAi, loadEntitlements, resetEntitlements }
+  // Coach Vision tiers. Today both come from early access. When subscriptions go live, set these
+  // from the active plan (e.g. quick = player_pro|club, deep = deep add-on) — the UI already gates on
+  // them, so no screen needs to change.
+  const canQuickReport  = hasEarlyAccess
+  const canDeepCoaching = hasEarlyAccess
+
+  return { roles, loaded, hasEarlyAccess, isAppAdmin, canUseAi, canQuickReport, canDeepCoaching,
+           loadEntitlements, resetEntitlements }
 }

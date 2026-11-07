@@ -116,6 +116,14 @@ Deno.serve(async (req) => {
 
     // Long matches have hundreds of strokes: send them in batches of 20 (in parallel) so no single reply
     // hits the output-token limit (the model's thinking also counts against it).
+    const usage = { input_tokens: 0, output_tokens: 0, thinking_tokens: 0, calls: 0 }
+    const record = async (lines: number) => {
+      try {
+        await supa.from('ai_usage').insert({ feature: 'commentary', provider: 'gemini', video_id, run_id,
+          user_id: body.user_id || null, units: { ...usage, lines, model: MODEL } })
+      } catch { /* metering must never break the product */ }
+    }
+
     async function commentBatch(batch: any[]): Promise<{ rows: any[], finish: string }> {
       let text = '[]', finish = ''
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -128,6 +136,11 @@ Deno.serve(async (req) => {
             }),
           })
           const out = await resp.json()
+          const um = out?.usageMetadata || {}
+          usage.calls++
+          usage.input_tokens += um.promptTokenCount || 0
+          usage.output_tokens += um.candidatesTokenCount || 0
+          usage.thinking_tokens += um.thoughtsTokenCount || 0
           finish = out?.candidates?.[0]?.finishReason ?? (out?.error?.message ? 'ERR:' + out.error.message : 'none')
           text = out?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '[]'
           if (!finish.startsWith('ERR') && !finish.startsWith('EXC')) break
@@ -160,6 +173,7 @@ Deno.serve(async (req) => {
     const finish = results.map(r => r.finish).join(',')
 
     // Strokes existed but no commentary came back → a clear, retryable failure (never an empty "done").
+    await record(rows.length)
     if (!rows.length) {
       const busy = /ERR|EXC/.test(finish)
       await supa.rpc('fail_deep', { p_video_id: video_id, p_run_id: run_id,

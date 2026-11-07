@@ -60,8 +60,8 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
 <template>
   <div class="mx-auto max-w-2xl px-4 pb-28 pt-4">
-    <PageHeader icon="✨" title="AI Match Analysis"
-      subtitle="Turn match footage into a per-player coaching report — footwork, shots, positioning.">
+    <PageHeader icon="🎥" title="Coach Vision"
+      subtitle="Your AI match coach — turn match footage into per-player coaching, stroke by stroke.">
     </PageHeader>
 
     <!-- Loading -->
@@ -89,7 +89,7 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
         <div v-if="!videos.length" class="py-3 text-sm text-slate-400">
           No videos yet. Record or upload a match and it will appear here, ready for analysis.
         </div>
-        <button v-for="v in videos" :key="v.id" @click="router.push(`/ai/video/${v.id}`)"
+        <button v-for="v in videos" :key="v.id" @click="router.push(`/coach/video/${v.id}`)"
           class="flex w-full items-center justify-between gap-2 border-b border-slate-100 py-2.5 text-left last:border-0 hover:bg-slate-50">
           <div class="min-w-0">
             <div class="truncate text-sm font-semibold text-slate-800">{{ v.title }}</div>
@@ -101,19 +101,35 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
         </button>
       </div>
 
-      <div class="card card-violet p-4 lift fade-up d4">
-        <div class="text-sm font-bold text-slate-800 mb-1">What's coming in analysis</div>
-        <ul class="text-sm text-slate-600 space-y-1 list-disc pl-5">
-          <li>Footwork &amp; court-coverage report per player</li>
-          <li>Shot mix, placement and positioning</li>
-          <li>Personalised training plan &amp; progress tracking</li>
-          <li>An AI coach you can ask about your game</li>
-        </ul>
-        <p class="mt-2 text-xs text-slate-400">
-          Recording is live now; the AI reports roll out during early access. Your clips are kept privately and
-          analysed as soon as the engine is switched on.
-        </p>
+      <!-- The two tiers (both included during early access; future subscriptions plug in here) -->
+      <div class="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500 fade-up d4">What you get for each match</div>
+      <div class="grid gap-3 sm:grid-cols-2 fade-up d4">
+        <div class="card p-4 lift">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">📊</span>
+            <div class="font-display font-bold text-slate-800">Quick Report</div>
+            <span class="ml-auto rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">INCLUDED</span>
+          </div>
+          <ul class="mt-2 space-y-1 text-xs text-slate-600 list-disc pl-4">
+            <li>Movement, landing &amp; lunge-load per player</li>
+            <li>Coach · Physio · Your-numbers view</li>
+            <li>Ask the AI coach about your game</li>
+          </ul>
+        </div>
+        <div class="card card-violet p-4 lift">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">🎙️</span>
+            <div class="font-display font-bold text-slate-800">Deep Coaching</div>
+            <span class="ml-auto rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">PREMIUM</span>
+          </div>
+          <ul class="mt-2 space-y-1 text-xs text-slate-600 list-disc pl-4">
+            <li>Stroke-by-stroke commentary, like a coach beside you</li>
+            <li>Tap a moment to jump the video there</li>
+            <li>Spoken commentary (AI voice)</li>
+          </ul>
+        </div>
       </div>
+      <p class="mt-2 text-[11px] text-slate-400">Both tiers are included free while you're in early access. Your videos stay private to your club.</p>
     </div>
 
     <!-- NOT EARLY ACCESS: coming-soon teaser -->

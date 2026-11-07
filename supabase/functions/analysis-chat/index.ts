@@ -116,6 +116,12 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ contents, generationConfig: { temperature: 0.4, maxOutputTokens: 400 } }) },
     )
     const out = await resp.json()
+    try {   // meter the call (never blocks the reply)
+      const um = out?.usageMetadata || {}
+      await supa.from('ai_usage').insert({ feature: 'chat', provider: 'gemini', video_id, user_id: userId,
+        club_id: vid.club_id, units: { input_tokens: um.promptTokenCount || 0, output_tokens: um.candidatesTokenCount || 0,
+                                        thinking_tokens: um.thoughtsTokenCount || 0, calls: 1, model: MODEL } })
+    } catch { /* ignore */ }
     const reply = out?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
       || "I couldn't generate a reply just now — please try again."
 

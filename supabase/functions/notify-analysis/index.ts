@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       title: 'Match analysis ready 🎥',
       body: `${vid.title || 'Your match'} — your coaching report is ready to view.`,
-      url: `/ai/video/${video_id}`,
+      url: `/coach/video/${video_id}`,
       tag: `analysis-${video_id}`,
     })
     const results = await Promise.allSettled(

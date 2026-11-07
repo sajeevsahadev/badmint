@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       await supa.from('match_videos').update({ index_status: 'indexing' }).eq('id', video_id)
     } else {
       const { data: rid, error: re } = await supa.rpc('start_analysis_run',
-        { p_video_id: video_id, p_kind: mode, p_is_mock: false, p_engine: ENGINE })
+        { p_video_id: video_id, p_kind: mode, p_is_mock: false, p_engine: ENGINE, p_user_id: userId })
       if (re) return json({ error: 'could not start run', detail: re.message }, 500)
       run_id = rid as string
     }
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const resp = await fetch(MODAL_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-analyze-secret': SECRET },
-      body: JSON.stringify({ video_id, run_id, mode, secret: SECRET }),
+      body: JSON.stringify({ video_id, run_id, mode, user_id: userId, secret: SECRET }),
     })
     if (!resp.ok) {
       const t = await resp.text()

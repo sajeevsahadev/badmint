@@ -2,7 +2,7 @@
 // Deep Analysis — ball-by-ball coach commentary (premium). A stroke-by-stroke timeline with one coaching
 // line per stroke; tapping a timestamp seeks the video. Every run is a saved VERSION — re-analysing adds
 // Version N+1 and keeps the earlier ones. Falls back to a labelled sample if the engine isn't reachable.
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { supabase } from '../lib/supabase'
 import { versionLabel } from '../lib/videoAnalysis'
 
@@ -10,6 +10,8 @@ const props = defineProps({
   videoId:  { type: String, required: true },
   canManage:{ type: Boolean, default: false },
   subjects: { type: Array, default: () => [] },   // [{ id, name, photo }]
+  isAdmin:  { type: Boolean, default: false },    // version history is admin-only
+  videoEl:  { type: Object, default: null },      // the <video> element, for spoken play-along
 })
 const emit = defineEmits(['seek'])
 
@@ -86,6 +88,91 @@ async function runDeep() {
 }
 
 function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type }
+
+// ── Spoken commentary ───────────────────────────────────────────────────────────────────────────
+// Each line is voiced once by the AI (cached in storage); the browser's own voice is the fallback.
+const audioUrl  = ref({})          // line id → playback URL
+const speaking  = ref(null)        // line id currently being spoken
+const narrate   = ref(false)       // "play with commentary" mode
+const audioNote = ref('')
+let player = null, played = new Set(), fetching = new Set()
+
+async function fetchAudio(ids) {
+  const want = ids.filter(id => !audioUrl.value[id] && !fetching.has(id)).slice(0, 40)
+  if (!want.length || !data.value?.run_id) return
+  want.forEach(id => fetching.add(id))
+  try {
+    const { data: r, error } = await supabase.functions.invoke('commentary-audio',
+      { body: { video_id: props.videoId, run_id: data.value.run_id, line_ids: want } })
+    if (error || r?.error) audioNote.value = 'AI voice unavailable right now — using your device voice.'
+    const next = { ...audioUrl.value }
+    for (const c of r?.clips || []) next[c.id] = c.url
+    audioUrl.value = next
+  } catch { audioNote.value = 'AI voice unavailable right now — using your device voice.' }
+  finally { want.forEach(id => fetching.delete(id)) }
+}
+
+function stopSpeech() {
+  if (player) { player.pause(); player = null }
+  try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
+  speaking.value = null
+}
+
+async function speak(l, { wait = true } = {}) {
+  stopSpeech()
+  speaking.value = l.id
+  if (!audioUrl.value[l.id] && wait) await fetchAudio([l.id])
+  const url = audioUrl.value[l.id]
+  if (url) {
+    player = new Audio(url)
+    player.onended = () => { if (speaking.value === l.id) speaking.value = null }
+    try { await player.play(); return } catch { /* fall through to device voice */ }
+  }
+  try {
+    const u = new SpeechSynthesisUtterance(l.text)
+    u.rate = 1.05
+    u.onend = () => { if (speaking.value === l.id) speaking.value = null }
+    window.speechSynthesis.speak(u)
+  } catch { speaking.value = null }
+}
+
+function playLine(l) { emit('seek', l.t_s); speak(l) }
+
+function onTime() {
+  const v = props.videoEl
+  if (!v || !narrate.value) return
+  const t = v.currentTime
+  // Pre-voice the next stretch so lines are ready before their moment.
+  const ahead = lines.value.filter(l => l.t_s >= t && l.t_s < t + 45).map(l => l.id)
+  if (ahead.some(id => !audioUrl.value[id])) fetchAudio(ahead)
+  const due = lines.value.find(l => !played.has(l.id) && l.t_s <= t && t - l.t_s < 0.8)
+  if (due) { played.add(due.id); speak(due, { wait: false }) }
+}
+function onSeeked() {
+  const t = props.videoEl?.currentTime ?? 0
+  played = new Set(lines.value.filter(l => l.t_s < t - 0.1).map(l => l.id))
+}
+
+async function toggleNarrate() {
+  narrate.value = !narrate.value
+  const v = props.videoEl
+  if (!narrate.value) { stopSpeech(); return }
+  audioNote.value = ''
+  if (!v) return
+  onSeeked()
+  await fetchAudio(lines.value.filter(l => l.t_s >= v.currentTime).slice(0, 20).map(l => l.id))
+  try { await v.play() } catch { /* user can press play */ }
+}
+
+watch(() => props.videoEl, (v, old) => {
+  old?.removeEventListener('timeupdate', onTime); old?.removeEventListener('seeked', onSeeked)
+  v?.addEventListener('timeupdate', onTime); v?.addEventListener('seeked', onSeeked)
+}, { immediate: true })
+watch(() => data.value?.run_id, () => { audioUrl.value = {}; played = new Set(); stopSpeech() })
+onBeforeUnmount(() => {
+  stopSpeech()
+  props.videoEl?.removeEventListener('timeupdate', onTime); props.videoEl?.removeEventListener('seeked', onSeeked)
+})
 </script>
 
 <template>
@@ -103,7 +190,7 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
       <!-- A new version is being analysed (earlier versions stay visible below) -->
       <div v-if="deepStatus === 'analyzing'" class="mb-3 rounded-xl border border-violet-200 bg-violet-50 p-4 text-center">
         <div class="text-sm font-bold text-slate-800">
-          Breaking down every stroke{{ latestRun ? ` — Version ${latestRun.version}` : '' }}…
+          Breaking down every stroke{{ isAdmin && latestRun ? ` — Version ${latestRun.version}` : '' }}…
         </div>
         <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-white">
           <div class="ai-bar h-full rounded-full bg-violet-500"></div>
@@ -114,7 +201,8 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
 
       <!-- Latest run failed -->
       <div v-if="deepStatus === 'failed' && latestRun" class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-center">
-        <p class="text-sm text-red-600">Version {{ latestRun.version }} didn’t finish: {{ latestRun.error || video?.deep_error || 'error' }}</p>
+        <p v-if="isAdmin" class="text-sm text-red-600">Version {{ latestRun.version }} didn’t finish: {{ latestRun.error || video?.deep_error || 'error' }}</p>
+        <p v-if="!isAdmin" class="text-sm text-red-600">The latest coaching run didn’t finish. {{ latestRun.error || '' }}</p>
         <button v-if="canManage" :disabled="working" @click="runDeep" class="btn-ghost mt-2 px-4 py-2 text-xs">↻ Try again</button>
       </div>
 
@@ -130,8 +218,8 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
 
       <!-- A completed version: the timeline -->
       <div v-if="doneRuns.length">
-        <div v-if="doneRuns.length > 1" class="mb-3">
-          <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Analysis versions</div>
+        <div v-if="isAdmin && doneRuns.length > 1" class="mb-3">
+          <div class="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Analysis versions · admin</div>
           <div class="flex flex-wrap gap-1.5">
             <button v-for="r in doneRuns" :key="r.id" @click="showVersion(r.id)"
               class="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
@@ -140,7 +228,19 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
             </button>
           </div>
         </div>
-        <p v-else-if="shownRun" class="mb-3 text-[11px] text-slate-400">{{ versionLabel(shownRun, latestRun && latestRun.version) }}</p>
+        <p v-if="isAdmin && doneRuns.length === 1 && shownRun" class="mb-3 text-[11px] text-slate-400">{{ versionLabel(shownRun, latestRun && latestRun.version) }}</p>
+
+        <!-- Spoken commentary -->
+        <div v-if="lines.length" class="mb-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+          <button @click="toggleNarrate" class="press w-full rounded-lg py-2 text-sm font-bold"
+            :class="narrate ? 'btn-violet' : 'btn-ghost'">
+            {{ narrate ? '⏸ Stop commentary' : '🔊 Play with commentary' }}
+          </button>
+          <p class="mt-1.5 text-center text-[11px] text-slate-500">
+            {{ narrate ? 'The coach speaks each line as the video reaches that stroke.' : 'Watch the video with the coach talking you through every stroke.' }}
+          </p>
+          <p v-if="audioNote" class="mt-1 text-center text-[11px] text-amber-600">{{ audioNote }}</p>
+        </div>
 
         <div v-if="subjects.length > 1" class="mb-3 flex flex-wrap gap-1.5">
           <button @click="activePlayer = 'all'" class="rounded-full px-3 py-1 text-xs font-semibold"
@@ -169,7 +269,11 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
                 class="h-7 w-7 shrink-0 rounded-full border border-white object-cover object-top shadow-sm" />
               <span v-if="byTag[l.tag_id]" class="truncate text-[11px] font-semibold text-cyan-700">{{ byTag[l.tag_id].name }}</span>
               <span v-if="shotType(l)" class="shrink-0 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-500">{{ typeLabel(shotType(l)) }}</span>
-              <span class="ml-auto h-2 w-2 shrink-0 rounded-full" :class="sevDot(l.severity)"></span>
+              <button @click="speaking === l.id ? stopSpeech() : playLine(l)" :aria-label="speaking === l.id ? 'Stop' : 'Hear this line'"
+                class="ml-auto shrink-0 rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                {{ speaking === l.id ? '■' : '🔊' }}
+              </button>
+              <span class="h-2 w-2 shrink-0 rounded-full" :class="sevDot(l.severity)"></span>
             </div>
             <p class="mt-1.5 text-sm text-slate-700">{{ l.text }}</p>
           </div>
@@ -177,11 +281,11 @@ function shotType(l) { return l.shot_id && shotById.value[l.shot_id]?.shot_type 
 
         <button v-if="canManage && deepStatus !== 'analyzing'" @click="runDeep" :disabled="working"
           class="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-50">
-          {{ working ? 'Starting…' : `↻ Re-analyse — saves as Version ${(latestRun ? latestRun.version : 0) + 1} (older versions are kept)` }}
+          {{ working ? 'Starting…' : isAdmin ? `↻ Re-analyse — saves as Version ${(latestRun ? latestRun.version : 0) + 1} (older versions are kept)` : '↻ Re-analyse' }}
         </button>
         <p class="mt-2 text-center text-[11px] text-slate-400">
           Stroke timing &amp; height come from body-pose tracking. Exact shot names, shuttle placement and footwork need
-          shuttle tracking — coming next. Audio commentary is on the way.
+          shuttle tracking — coming next. The commentary voice is AI-generated.
         </p>
       </div>
     </template>

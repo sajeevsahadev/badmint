@@ -78,7 +78,7 @@ const money = (c, cur) => `${(c / 100).toFixed(0)} ${cur || 'AED'}`
           Online card billing is being set up. In the meantime, AI Match Analysis is rolling out through
           the <b>early-access programme</b>.
         </p>
-        <button class="btn-primary sheen press w-full py-2.5 text-sm mt-3" @click="router.push('/ai')">
+        <button class="btn-primary sheen press w-full py-2.5 text-sm mt-3" @click="router.push('/coach')">
           {{ hasEarlyAccess ? 'Open AI Match Analysis' : 'See AI Match Analysis' }}
         </button>
       </div>

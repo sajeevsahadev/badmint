@@ -4,6 +4,7 @@ import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
+import { useEntitlements } from '../composables/useEntitlements'
 import PageHeader from '../components/PageHeader.vue'
 import Avatar from '../components/Avatar.vue'
 
@@ -159,7 +160,10 @@ async function checkActiveLive() {
   activeLive.value = data ?? null
 }
 
+const { hasEarlyAccess, loadEntitlements } = useEntitlements()
+
 onMounted(async () => {
+  loadEntitlements()
   await Promise.all([load(), checkActiveLive()])
   const openId = route.query.open
   if (openId) {
@@ -351,9 +355,9 @@ async function saveEdit() {
         @click="toggleExpandAll">
         {{ allExpanded ? '⊟ Collapse All' : '⊞ Expand All' }}
       </button>
-      <button class="btn-ghost px-3 py-2 text-sm font-semibold"
-        @click="router.push('/ai')" title="AI Match Analysis">
-        ✨ AI Analysis
+      <button v-if="hasEarlyAccess" class="btn-ghost px-3 py-2 text-sm font-semibold"
+        @click="router.push('/coach')" title="Coach Vision — AI match analysis">
+        🎥 Coach Vision
       </button>
       <button v-if="isManager()" class="btn-primary px-4 py-2 text-sm"
         @click="router.push('/match')">

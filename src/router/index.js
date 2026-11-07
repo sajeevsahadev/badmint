@@ -14,8 +14,11 @@ const routes = [
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
   { path: '/record',    component: () => import('../views/RecordVideo.vue') },
-  { path: '/ai',        component: () => import('../views/AiCoach.vue') },
-  { path: '/ai/video/:id', component: () => import('../views/VideoAnalysis.vue') },
+  // Coach Vision — AI match analysis (early access). Old /ai links redirect.
+  { path: '/coach',     component: () => import('../views/AiCoach.vue') },
+  { path: '/coach/video/:id', component: () => import('../views/VideoAnalysis.vue') },
+  { path: '/ai',        redirect: '/coach' },
+  { path: '/ai/video/:id', redirect: to => `/coach/video/${to.params.id}` },
   { path: '/players',   component: () => import('../views/Players.vue') },
   { path: '/compare',   component: () => import('../views/Compare.vue') },
   { path: '/guide',     component: () => import('../views/RankingGuide.vue') },
@@ -97,10 +100,10 @@ router.beforeEach(async (to) => {
   }
 
   // Premium AI tools are early-access only; non-holders are sent to the teaser hub.
-  if ((to.path === '/record' || to.path.startsWith('/ai/video/')) && loggedIn) {
+  if ((to.path === '/record' || to.path.startsWith('/coach/video/')) && loggedIn) {
     const { hasEarlyAccess, loadEntitlements } = useEntitlements()
     await loadEntitlements()
-    if (!hasEarlyAccess.value) return '/ai'
+    if (!hasEarlyAccess.value) return '/coach'
   }
 })
 

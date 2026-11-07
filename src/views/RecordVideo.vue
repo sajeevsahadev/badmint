@@ -73,7 +73,7 @@ async function remove(v) {
 }
 function onSaved(videoId) {
   ready.value = false; selected.value = new Set(); title.value = ''
-  if (videoId) router.push(`/ai/video/${videoId}`)   // straight to tagging + analysis
+  if (videoId) router.push(`/coach/video/${videoId}`)   // straight to tagging + analysis
   else loadMyVideos()
 }
 </script>
@@ -167,7 +167,7 @@ function onSaved(videoId) {
               </div>
             </div>
             <div class="flex shrink-0 gap-2">
-              <button @click="router.push(`/ai/video/${v.id}`)" class="btn-primary px-3 py-1 text-xs">✨ Analyse</button>
+              <button @click="router.push(`/coach/video/${v.id}`)" class="btn-primary px-3 py-1 text-xs">✨ Analyse</button>
               <button @click="play(v)" class="btn-ghost px-3 py-1 text-xs">▶</button>
               <button v-if="isManager()" @click="remove(v)" class="btn-danger px-3 py-1 text-xs">✕</button>
             </div>

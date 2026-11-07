@@ -51,6 +51,7 @@ const showIOSHint    = ref(false)
 const showMenu       = ref(false)
 const updating       = ref(false)
 const isAdmin        = ref(false)
+const hasCoachVision = ref(false)   // Coach Vision (AI match analysis) is early-access only for now
 const showOnboarding = ref(false)
 const showWizard     = ref(false)
 const profileGateOpen = ref(false)   // mandatory phone/name gate (Feature A)
@@ -209,6 +210,7 @@ async function init() {
   if (route.query.guide === '1') showOnboarding.value = true
   supabase.rpc('get_my_roles').then(({ data }) => {
     isAdmin.value = (data ?? []).some(r => r.role === 'app_admin')
+    hasCoachVision.value = (data ?? []).some(r => r.role === 'app_admin' || r.role === 'early_access')
   }).catch(() => {})
   supabase.from('user_profiles').select('theme_pref, phone, avatar_url').eq('user_id', user.value.id).maybeSingle()
     .then(({ data }) => {
@@ -274,7 +276,7 @@ const nav = computed(() => [
 const clubFreeRoutes = [
   '/manage', '/join', '/explore', '/profile', '/schedule', '/clubs', '/splits', '/admin', '/share',
   '/settings/email', '/settings/notifications', '/settings/security', '/settings/appearance',
-  '/settings/subscription', '/ai',
+  '/settings/subscription', '/ai', '/coach',
   '/create-club',
 ]
 const needsClub = computed(() =>
@@ -549,6 +551,18 @@ const needsClub = computed(() =>
 
             <!-- Nav sections -->
             <div class="flex-1 overflow-y-auto py-3">
+
+              <!-- Coach Vision (AI match analysis) — early access only -->
+              <RouterLink v-if="hasCoachVision" to="/coach" @click="closeMenu"
+                class="mx-3 mb-2 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-800
+                       bg-gradient-to-r from-cyan-50 to-violet-50 border border-cyan-100 hover:border-cyan-300 transition">
+                <span class="text-lg w-6 text-center shrink-0">🎥</span>
+                <span class="min-w-0">
+                  <span class="block">Coach Vision</span>
+                  <span class="block text-[11px] font-normal text-slate-500">AI match analysis</span>
+                </span>
+                <span class="ml-auto text-[9px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-bold">EARLY ACCESS</span>
+              </RouterLink>
 
               <!-- Home — always first -->
               <div v-for="section in menuSections" :key="section.label" class="mb-1">

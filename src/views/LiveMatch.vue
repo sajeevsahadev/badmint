@@ -4,10 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import MatchVideoRecorder from '../components/MatchVideoRecorder.vue'
+import { useEntitlements } from '../composables/useEntitlements'
 
 const route  = useRoute()
 const router = useRouter()
 const { currentClub, isManager } = useClub()
+const { hasEarlyAccess, loadEntitlements } = useEntitlements()   // Coach Vision recording is early access only
+loadEntitlements()
 
 // ── Video recording (inherits this live match's context — no re-tagging) ──
 const showRecorder = ref(false)
@@ -567,7 +570,7 @@ onUnmounted(() => {
         </button>
         <span v-if="undoError" class="text-rose-500 text-[10px] mt-0.5">{{ undoError }}</span>
       </div>
-      <button v-if="match?.status === 'active'" @click="showRecorder = true"
+      <button v-if="match?.status === 'active' && hasEarlyAccess" @click="showRecorder = true"
               class="btn-ghost text-sm flex items-center gap-1" title="Record this match for AI coaching">
         🎥 <span class="font-semibold">Record</span>
       </button>
