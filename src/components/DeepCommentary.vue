@@ -13,7 +13,8 @@ const props = defineProps({
   isAdmin:  { type: Boolean, default: false },    // version history is admin-only
   videoEl:  { type: Object, default: null },      // the <video> element, for spoken play-along
 })
-const emit = defineEmits(['seek'])
+const emit = defineEmits(['seek', 'run', 'done'])
+const showLines = ref(false)   // the full stroke-by-stroke list is kept but folded away under the summary
 
 const loading = ref(true)
 const data    = ref(null)
@@ -52,7 +53,7 @@ onBeforeUnmount(stop)
 async function load(silent = false) {
   if (!silent) loading.value = true
   const { data: d } = await supabase.rpc('get_deep_analysis', { p_video_id: props.videoId, p_run_id: selectedRunId.value })
-  if (d) data.value = d
+  if (d) { data.value = d; emit('run', d.run_id || null) }
   if (!silent) loading.value = false
 }
 async function showVersion(id) { selectedRunId.value = id; await load(true) }
@@ -65,6 +66,7 @@ function startPolling() {
     n++; await load(true)
     if (deepStatus.value === 'done' || deepStatus.value === 'failed' || n > 225) {
       stop(); selectedRunId.value = null; await load(true)
+      if (deepStatus.value === 'done') emit('done')
     }
   }, 4000)
 }
@@ -242,7 +244,13 @@ onBeforeUnmount(() => {
           <p v-if="audioNote" class="mt-1 text-center text-[11px] text-amber-600">{{ audioNote }}</p>
         </div>
 
-        <div v-if="subjects.length > 1" class="mb-3 flex flex-wrap gap-1.5">
+        <button v-if="commentary.length" @click="showLines = !showLines"
+          class="mb-3 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700">
+          <span>📝 Every stroke, explained · {{ commentary.length }} notes</span>
+          <span class="text-slate-400">{{ showLines ? 'Hide ▴' : 'Show ▾' }}</span>
+        </button>
+
+        <div v-if="showLines && subjects.length > 1" class="mb-3 flex flex-wrap gap-1.5">
           <button @click="activePlayer = 'all'" class="rounded-full px-3 py-1 text-xs font-semibold"
             :class="activePlayer === 'all' ? 'btn-primary' : 'btn-ghost'">All</button>
           <button v-for="s in subjects" :key="s.id" @click="activePlayer = s.id"
@@ -254,11 +262,11 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div v-if="!lines.length" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-5 text-center text-sm text-slate-500">
+        <div v-if="!lines.length && (showLines || !commentary.length)" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-5 text-center text-sm text-slate-500">
           <template v-if="activePlayer !== 'all'">No clear strokes detected for <b>{{ activeName }}</b> in this version.</template>
           <template v-else>No clear strokes detected in this clip — players may be warming up, or the camera can't see the swings clearly.</template>
         </div>
-        <div v-else class="space-y-2">
+        <div v-if="lines.length && showLines" class="space-y-2">
           <div v-for="l in lines" :key="l.id" class="rounded-xl border p-3" :class="sevClass(l.severity)">
             <div class="flex items-center gap-2">
               <button @click="emit('seek', l.t_s)"

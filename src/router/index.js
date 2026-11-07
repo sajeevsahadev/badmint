@@ -14,7 +14,7 @@ const routes = [
   { path: '/matches',   component: () => import('../views/Matches.vue') },
   { path: '/match',     component: () => import('../views/AddMatch.vue') },
   { path: '/record',    component: () => import('../views/RecordVideo.vue') },
-  // Coach Vision — AI match analysis (early access). Old /ai links redirect.
+  // AI Match Analysis — AI match analysis (early access). Old /ai links redirect.
   { path: '/coach',     component: () => import('../views/AiCoach.vue') },
   { path: '/coach/video/:id', component: () => import('../views/VideoAnalysis.vue') },
   { path: '/ai',        redirect: '/coach' },

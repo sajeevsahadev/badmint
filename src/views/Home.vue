@@ -251,7 +251,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- ── Coach Vision (AI match analysis) — early access only ── -->
+      <!-- ── AI Match Analysis — early access only ── -->
       <CoachVisionCard v-if="user" />
 
       <!-- ── My Teams (logged-in) ── -->

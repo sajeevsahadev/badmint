@@ -9,7 +9,7 @@ import { useEntitlements } from '../composables/useEntitlements'
 const route  = useRoute()
 const router = useRouter()
 const { currentClub, isManager } = useClub()
-const { hasEarlyAccess, loadEntitlements } = useEntitlements()   // Coach Vision recording is early access only
+const { hasEarlyAccess, loadEntitlements } = useEntitlements()   // AI Match Analysis recording is early access only
 loadEntitlements()
 
 // ── Video recording (inherits this live match's context — no re-tagging) ──

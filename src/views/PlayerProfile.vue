@@ -6,6 +6,8 @@ import { buildProfileMap } from '../lib/playerNames'
 import { useAuth } from '../composables/useAuth'
 import Avatar from '../components/Avatar.vue'
 import PerfChart from '../components/PerfChart.vue'
+import AiProgress from '../components/AiProgress.vue'
+import { useEntitlements } from '../composables/useEntitlements'
 import { sharePlayerCard, whatsappShareUrl } from '../utils/share-card'
 import { tierFor, nextTier } from '../utils/tiers'
 import { computeStreaks, computePointsDiff, computePartnerships, computeHeadToHead } from '../utils/insights'
@@ -16,6 +18,8 @@ const router = useRouter()
 const { user } = useAuth()
 
 const playerId = route.params.id
+const { canDeepCoaching, loadEntitlements } = useEntitlements()
+loadEntitlements()
 const adminView  = ref(false)
 
 const player      = ref(null)
@@ -556,6 +560,15 @@ const hasMoreDates  = computed(() => visibleDateCount.value < groupedMatches.val
           {{ eloSeries[eloSeries.length-1].elo }}
         </span>
       </div>
+    </div>
+
+    <!-- AI Match Analysis progress (premium only) -->
+    <div v-if="canDeepCoaching" class="card mb-4 p-4">
+      <div class="mb-2 flex items-center gap-2">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-violet-600">AI Match Analysis</span>
+        <span class="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold uppercase text-slate-900">Premium</span>
+      </div>
+      <AiProgress :player-id="playerId" compact title="Game progress" />
     </div>
 
     <!-- Form & streaks + points differential -->

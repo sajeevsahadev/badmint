@@ -385,6 +385,61 @@ def _strokes(items):
     return res
 
 
+BASE_R, REC_WIN, LATE_S, LUNGE_DEG = 0.45, 2.0, 1.2, 135.0   # body-heights, s, s, knee angle
+
+
+def _knee_deg(p):
+    import numpy as np
+    k, s = p["k"], p["s"]
+    best = None
+    for hip, knee, ank in ((11, 13, 15), (12, 14, 16)):
+        if min(s[hip], s[knee], s[ank]) > 0.3:
+            ba, bc = k[hip] - k[knee], k[ank] - k[knee]
+            c = float(np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6))
+            a = math.degrees(math.acos(max(-1, min(1, c))))
+            best = a if best is None else min(best, a)
+    return best
+
+
+def _footwork(items, strokes, off):
+    """Annotate each stroke with measured footwork facts (camera-compensated, in body-heights):
+    how far from the player's usual base they played it, whether / how fast they got back to base
+    before their next stroke, and how deep they bent the knee. Returns (strokes, motion summary)."""
+    import numpy as np
+    if not items:
+        return strokes, {}
+    bh = float(np.median([p["bh"] for _, p in items])) or 1.0
+    ts = np.array([t for t, _ in items])
+    xs = np.array([(p["fx"] - off.get(round(t, 3), (0, 0))[0]) / bh for t, p in items])
+    ys = np.array([(p["fy"] - off.get(round(t, 3), (0, 0))[1]) / bh for t, p in items])
+    step = np.hypot(np.diff(xs), np.diff(ys)) if len(xs) > 1 else np.array([])
+    step = step[step < 0.6]                       # drop identity jumps / camera glitches
+    times = [t for t, _ in strokes]
+    out = []
+    for n, (t, info) in enumerate(strokes):
+        near = np.abs(ts - t) <= 15
+        base = (float(np.median(xs[near])), float(np.median(ys[near])))
+        dist = np.hypot(xs - base[0], ys - base[1])
+        i0 = int(np.argmin(np.abs(ts - t)))
+        d0 = float(dist[i0])
+        t_next = times[n + 1] if n + 1 < len(times) else t + 2.5
+        win = np.where((ts >= t + 0.25) & (ts <= min(t + REC_WIN, t_next)))[0]
+        if d0 < BASE_R:
+            rec, rec_s = True, 0.0
+        else:
+            back = [i for i in win if dist[i] < BASE_R]
+            rec, rec_s = (True, round(float(ts[back[0]] - t), 2)) if back else (False, None)
+        knees = [a for tt, p in items if abs(tt - t) <= 0.15 for a in [_knee_deg(p)] if a is not None]
+        knee = round(min(knees), 1) if knees else None
+        tech = dict(info["tech"])
+        tech.update({"from_base": round(d0, 2), "off_base": d0 >= BASE_R, "recovered": rec,
+                     "recovery_s": rec_s, "late_recovery": bool(rec and rec_s is not None and rec_s > LATE_S),
+                     "knee_deg": knee, "lunge": bool(knee is not None and knee < LUNGE_DEG)})
+        out.append((t, {**info, "tech": tech}))
+    motion = {"distance_bh": round(float(step.sum()), 1), "tracked_s": round(float(ts[-1] - ts[0]), 1)}
+    return out, motion
+
+
 def _rally_filter(by_slot, events):
     flat = [(t, _side_at(slot, events, t).split("_")[0]) for slot, v in by_slot.items() for t, _ in v]
     keep = {}
@@ -566,12 +621,15 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
             return fail("no players detected")
         _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events))
         strokes = _rally_filter({s: _strokes(items) for s, items in slots.items()}, events)
+        off = _camera_offsets(slots)
         tag_by_side = {t.get("court_side"): t["id"] for t in tags}
-        shot_rows = []
+        shot_rows, motion_rows = [], []
         for slot, lst in strokes.items():
             tag_id = tag_by_side.get(slot)
             if not tag_id:
                 continue
+            lst, motion = _footwork(slots.get(slot) or [], lst, off)
+            motion_rows.append({"video_id": video_id, "run_id": run_id, "tag_id": tag_id, "motion": motion})
             for i, (t, info) in enumerate(lst):
                 shot_rows.append({"video_id": video_id, "run_id": run_id, "tag_id": tag_id, "idx": i,
                                   "t_s": round(t, 2), "shot_type": info["type"], "confidence": info["conf"],
@@ -579,6 +637,8 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
                                   "is_mock": False})
         if shot_rows:
             rest("POST", "analysis_shots", shot_rows)
+        if motion_rows and run_id:
+            rest("POST", "analysis_player_summary", motion_rows)
         # Commentary step also handles the "no strokes" case and finalises the run.
         _post(f"{URL}/functions/v1/generate-commentary",
               {"video_id": video_id, "run_id": run_id, "user_id": user_id,

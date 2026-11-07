@@ -36,7 +36,7 @@ function switchTab(t) {
   if (t === 'ai') loadAi()
 }
 
-// ── Coach Vision AI usage & cost (who uses it, where, and what it costs us) ──
+// ── AI Match Analysis usage & cost (who uses it, where, and what it costs us) ──
 const ai       = ref(null)
 const aiDays   = ref(30)
 const aiBusy   = ref(false)
@@ -1126,7 +1126,7 @@ const statItems = computed(() => !stats.value ? [] : [
 
           <!-- By club -->
           <div class="card p-4">
-            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Clubs using Coach Vision</div>
+            <div class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Clubs using AI Match Analysis</div>
             <div v-if="!ai.by_club.length" class="text-sm text-slate-400">No clubs yet.</div>
             <div v-for="c in ai.by_club" :key="c.club_id || 'none'" class="border-b border-slate-100 py-2 last:border-0">
               <div class="flex items-center justify-between">

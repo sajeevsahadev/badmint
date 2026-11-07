@@ -1,4 +1,4 @@
-// Spoken commentary for Coach Vision Deep Coaching. For the requested commentary lines of one analysis
+// Spoken commentary for AI Match Analysis Deep Coaching. For the requested commentary lines of one analysis
 // version, generate an AI-voice clip (Gemini TTS) per line, store it in R2 as WAV (cached — each line is
 // voiced once), and return short-lived playback URLs. Usage (tokens) is metered into ai_usage.
 //
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       if (!u?.user) return json({ error: 'unauthorized' }, 401)
       userId = u.user.id
     }
-    if (!video_id || !run_id || !Array.isArray(line_ids)) return json({ error: 'bad request' }, 400)
+    if (!video_id || !run_id) return json({ error: 'bad request' }, 400)
 
     const { data: vid } = await supa.from('match_videos').select('club_id, uploaded_by, storage_path').eq('id', video_id).maybeSingle()
     if (!vid) return json({ error: 'not found' }, 404)
@@ -63,20 +63,47 @@ Deno.serve(async (req) => {
     if (!ok) return json({ error: 'forbidden' }, 403)
 
     const club = String(vid.storage_path || '').split('/')[0] || vid.club_id
+    const usage = { input_tokens: 0, output_tokens: 0, calls: 0, chars: 0, voiced: 0 }
+    let lastErr = ''
+    const meter = async (kind: string) => {
+      if (!usage.calls) return
+      try {
+        await supa.from('ai_usage').insert({ feature: 'commentary_audio', provider: 'gemini', video_id, run_id,
+          user_id: userId, club_id: vid.club_id, units: { ...usage, kind, model: TTS_MODELS[0], voice: VOICE } })
+      } catch { /* ignore */ }
+    }
+
+    // ── The Head Coach Summary voice note (one clip per player per version) ──
+    if (body.summary_id) {
+      const { data: s } = await supa.from('analysis_player_summary').select('id, coach, audio_path')
+        .eq('id', body.summary_id).eq('video_id', video_id).maybeSingle()
+      const script = s?.coach?.script
+      if (!s || !script) return json({ error: 'no summary' }, 404)
+      if (!s.audio_path) {
+        const line = { id: s.id, text: script, audio_path: null as string | null }
+        await voice(line, `${club}/audio/${video_id}/${run_id}/coach-${s.id}.wav`,
+          'Read this as a warm, encouraging head badminton coach giving one-to-one feedback after a match, ' +
+          'calm and confident, natural pauses between points', 'analysis_player_summary')
+        await meter('coach_summary')
+        if (!line.audio_path) return json({ error: lastErr || 'voice unavailable' })
+        s.audio_path = line.audio_path
+      }
+      return json({ url: await signed(s.audio_path, 'GET') })
+    }
+
+    if (!Array.isArray(line_ids)) return json({ error: 'bad request' }, 400)
     const { data: lines } = await supa.from('analysis_commentary').select('id, text, audio_path')
       .eq('video_id', video_id).eq('run_id', run_id).in('id', line_ids.slice(0, 40))
 
-    const usage = { input_tokens: 0, output_tokens: 0, calls: 0, chars: 0, voiced: 0 }
-    let lastErr = ''
-
-    async function voice(line: any) {
+    async function voice(line: any, keyOverride?: string, style = 'Say this like an upbeat, friendly badminton commentator',
+                         table = 'analysis_commentary') {
       if (line.audio_path) return
       for (const model of TTS_MODELS) {
         try {
           const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI}`, {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: `Say this like an upbeat, friendly badminton commentator: ${line.text}` }] }],
+              contents: [{ parts: [{ text: `${style}: ${line.text}` }] }],
               generationConfig: { responseModalities: ['AUDIO'],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE } } } },
             }),
@@ -88,11 +115,11 @@ Deno.serve(async (req) => {
           const part = out?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data)
           if (!part) { lastErr = out?.error?.message || out?.candidates?.[0]?.finishReason || 'no audio'; continue }
           const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || '')?.[1] || 24000)
-          const key = `${club}/audio/${video_id}/${run_id}/${line.id}.wav`
+          const key = keyOverride || `${club}/audio/${video_id}/${run_id}/${line.id}.wav`
           const put = await fetch(await signed(key, 'PUT'), { method: 'PUT', headers: { 'content-type': 'audio/wav' },
             body: wav(b64ToBytes(part.inlineData.data), rate) })
           if (!put.ok) { lastErr = `R2 ${put.status}`; return }
-          await supa.from('analysis_commentary').update({ audio_path: key }).eq('id', line.id)
+          await supa.from(table).update({ audio_path: key }).eq('id', line.id)
           line.audio_path = key
           usage.chars += String(line.text).length
           usage.voiced++
@@ -104,12 +131,7 @@ Deno.serve(async (req) => {
     const todo = (lines ?? []).filter((l: any) => !l.audio_path)
     for (let i = 0; i < todo.length; i += 6) await Promise.all(todo.slice(i, i + 6).map(voice))
 
-    if (usage.calls) {
-      try {
-        await supa.from('ai_usage').insert({ feature: 'commentary_audio', provider: 'gemini', video_id, run_id,
-          user_id: userId, club_id: vid.club_id, units: { ...usage, model: TTS_MODELS[0], voice: VOICE } })
-      } catch { /* ignore */ }
-    }
+    await meter('lines')
 
     const clips = []
     for (const l of lines ?? []) if (l.audio_path) clips.push({ id: l.id, url: await signed(l.audio_path, 'GET') })

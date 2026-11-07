@@ -10,6 +10,10 @@ import { uploadAvatarBlob, migrateOwnAvatarIfNeeded } from '../lib/avatarStorage
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
 import pkg from '../../package.json'
+import AiProgress from '../components/AiProgress.vue'
+import { useEntitlements } from '../composables/useEntitlements'
+const { canDeepCoaching, loadEntitlements } = useEntitlements()
+loadEntitlements()
 
 const router = useRouter()
 const { user, signOut } = useAuth()
@@ -315,6 +319,15 @@ async function exportMyData() {
       <button class="btn-primary w-full mt-4" :disabled="saving" @click="save">
         {{ saving ? 'Saving…' : 'Save Profile' }}
       </button>
+    </div>
+
+    <!-- AI Match Analysis — my progress (premium only) -->
+    <div v-if="canDeepCoaching" class="card mb-4 p-4 fade-up">
+      <div class="mb-2 flex items-center gap-2">
+        <span class="text-[10px] font-bold uppercase tracking-widest text-violet-600">AI Match Analysis</span>
+        <span class="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold uppercase text-slate-900">Premium</span>
+      </div>
+      <AiProgress title="My game progress" />
     </div>
 
     <!-- Settings -->

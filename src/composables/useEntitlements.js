@@ -32,7 +32,7 @@ export function useEntitlements() {
   // Alias kept deliberately so Phase 2 can widen it (early access OR active subscription).
   const canUseAi = hasEarlyAccess
 
-  // Coach Vision tiers. Today both come from early access. When subscriptions go live, set these
+  // AI Match Analysis tiers. Today both come from early access. When subscriptions go live, set these
   // from the active plan (e.g. quick = player_pro|club, deep = deep add-on) — the UI already gates on
   // them, so no screen needs to change.
   const canQuickReport  = hasEarlyAccess

@@ -60,7 +60,7 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
 <template>
   <div class="mx-auto max-w-2xl px-4 pb-28 pt-4">
-    <PageHeader icon="🎥" title="Coach Vision"
+    <PageHeader icon="🎥" title="AI Match Analysis"
       subtitle="Your AI match coach — turn match footage into per-player coaching, stroke by stroke.">
     </PageHeader>
 
@@ -123,9 +123,10 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
             <span class="ml-auto rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">PREMIUM</span>
           </div>
           <ul class="mt-2 space-y-1 text-xs text-slate-600 list-disc pl-4">
-            <li>Stroke-by-stroke commentary, like a coach beside you</li>
-            <li>Tap a moment to jump the video there</li>
-            <li>Spoken commentary (AI voice)</li>
+            <li><b>Head Coach Report</b> — your top 3 focus areas, strengths, drills and a goal for next match</li>
+            <li>Match scorecard: recovery to base, high elbow, lunges — last match vs this match</li>
+            <li>Progress graphs for every KPI across all your matches</li>
+            <li>Your coach's voice note + spoken stroke-by-stroke commentary</li>
           </ul>
         </div>
       </div>

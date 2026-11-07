@@ -16,6 +16,7 @@ import PlayerTagger from '../components/PlayerTagger.vue'
 import AnalysisReport from '../components/AnalysisReport.vue'
 import AnalysisChat from '../components/AnalysisChat.vue'
 import DeepCommentary from '../components/DeepCommentary.vue'
+import CoachSummary from '../components/CoachSummary.vue'
 
 const route  = useRoute()
 const router = useRouter()
@@ -25,6 +26,8 @@ const { canQuickReport, canDeepCoaching, isAppAdmin, loadEntitlements } = useEnt
 const tier = ref(route.query.tier === 'deep' ? 'deep' : 'quick')   // Quick Report | Deep Coaching
 const videoId = route.params.id
 const videoEl = ref(null)   // playback element, for deep-commentary timestamp seeking
+const coachRef = ref(null)
+const deepRunId = ref(null) // deep version currently shown (admins can switch versions)
 
 const loading = ref(true)     // first load only (never re-shown by polling)
 const data    = ref(null)
@@ -266,7 +269,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           </div>
         </div>
 
-        <!-- Coach Vision tiers. Each is gated by its own entitlement so subscriptions slot in later. -->
+        <!-- AI Match Analysis tiers. Each is gated by its own entitlement so subscriptions slot in later. -->
         <div class="mb-4 flex gap-1 rounded-2xl bg-slate-100 p-1">
           <button @click="tier = 'quick'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
             :class="tier === 'quick' ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">📊 Quick Report</button>
@@ -370,8 +373,12 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         </template>
 
         <!-- Deep Coaching (premium): stroke-by-stroke commentary + spoken audio -->
+        <!-- Head Coach Report first: KPIs, verdict, voice, progress. Then the full stroke-by-stroke detail. -->
+        <CoachSummary v-if="tier === 'deep' && canDeepCoaching" ref="coachRef" class="mb-3"
+          :video-id="videoId" :run-id="deepRunId" :subjects="subjectsForDeep" />
         <DeepCommentary v-if="tier === 'deep' && canDeepCoaching" :video-id="videoId" :can-manage="canManage" :is-admin="isAppAdmin"
-          :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo" />
+          :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo"
+          @run="id => deepRunId = id" @done="coachRef?.load()" />
       </template>
     </template>
   </div>
