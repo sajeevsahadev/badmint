@@ -184,7 +184,8 @@ onMounted(() => {
         style="background:radial-gradient(circle,rgba(168,85,247,.15),transparent);transform:translate(-30%,30%)"/>
 
       <!-- Hero text + search -->
-      <div class="relative px-4 pt-6 pb-7 mx-auto max-w-2xl">
+      <div class="relative px-4 pt-6 pb-7 mx-auto max-w-2xl"
+        :class="!user && 'md:max-w-5xl md:pt-12 md:pb-14'">
         <div class="flex items-center gap-2.5 mb-0.5">
           <span class="text-3xl" style="filter:drop-shadow(0 0 18px rgba(255,255,255,.35))">🏸</span>
           <div>
@@ -196,8 +197,22 @@ onMounted(() => {
           {{ country ? flagEmoji(countryCode) + ' ' + country : '🌍 Worldwide' }} · Elo Rankings · Free Forever
         </p>
 
+        <!-- Logged-out: headline + one-tap sign-in right in the hero -->
+        <div v-if="!user" class="mt-4 mb-6 md:mt-8 md:mb-10">
+          <h2 class="font-display text-[26px] leading-tight md:text-5xl md:leading-[1.1] font-extrabold text-white">
+            Run your badminton club<br class="hidden sm:block"> in one free app.
+          </h2>
+          <p class="text-white/75 text-sm md:text-lg mt-2 md:mt-4 max-w-2xl">
+            Rankings, match history, split payments and AI match analysis — for any court, anywhere.
+          </p>
+          <div class="mt-5 md:mt-7 flex flex-col sm:flex-row sm:items-center gap-3">
+            <GoogleSignInButton label="Sign in with Google — Free" class="w-full sm:w-auto" />
+            <span class="text-white/60 text-xs text-center sm:text-left">No password · takes 10 seconds</span>
+          </div>
+        </div>
+
         <!-- Search — glass style for colored hero -->
-        <div class="relative">
+        <div class="relative" :class="!user && 'md:max-w-xl'">
           <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none select-none">🔍</span>
           <input v-model="searchQ"
             class="w-full rounded-xl py-3 pl-11 pr-4 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-white/30"
@@ -222,7 +237,7 @@ onMounted(() => {
     </div>
 
     <!-- ── Page content ── -->
-    <div class="px-4 mx-auto max-w-2xl pb-10 pt-5">
+    <div class="px-4 mx-auto max-w-2xl pb-10 pt-5" :class="!user && 'md:max-w-5xl md:pt-10'">
 
       <!-- ── Get the App — Android on Google Play; iOS App Store coming soon ── -->
       <div v-if="!isInstalled" class="mb-5 fade-up">
@@ -297,28 +312,18 @@ onMounted(() => {
       <!-- ══════════════ LOGGED-OUT LANDING ══════════════ -->
       <template v-if="!user">
 
-        <!-- 1. Join CTA -->
-        <div class="card-neon p-5 mb-8 fade-up">
-          <div class="text-center">
-            <div class="text-3xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🏸</div>
-            <p class="font-bold gradient-text text-lg mb-1">Join your badminton team</p>
-            <p class="text-slate-400 text-sm mb-4">Free Elo rankings, match history, and club stats for every court — anywhere in the world.</p>
-            <GoogleSignInButton label="Sign in with Google — Free" />
-          </div>
-        </div>
-
-        <!-- 2. The Story -->
-        <div class="mb-8">
-          <div class="text-center mb-6 fade-up">
-            <h2 class="font-display text-xl font-extrabold text-slate-100">
+        <!-- The Story (sign-in CTA now lives in the hero) -->
+        <div class="mb-8 mt-3 md:mt-6">
+          <div class="text-center mb-6 md:mb-8 fade-up">
+            <h2 class="font-display text-xl md:text-3xl font-extrabold text-slate-100">
               Every great club has the same problems.
             </h2>
             <p class="text-sm gradient-text font-bold mt-1">Badminton 360 solves all of them.</p>
           </div>
 
-          <div class="relative">
-            <!-- Vertical story line -->
-            <div class="absolute left-[22px] top-6 bottom-6 w-px"
+          <div class="relative md:grid md:grid-cols-2 md:gap-x-5 md:gap-y-1">
+            <!-- Vertical story line (mobile only) -->
+            <div class="absolute left-[22px] top-6 bottom-6 w-px md:hidden"
               style="background:linear-gradient(180deg,rgba(0,229,255,.4),rgba(168,85,247,.4),rgba(251,191,36,.4))" aria-hidden="true"/>
 
             <button v-for="(s, i) in story" :key="i"
@@ -351,8 +356,8 @@ onMounted(() => {
           </div>
 
           <!-- Story finale CTA -->
-          <div class="card-violet p-5 text-center mt-6 fade-up">
-            <p class="font-display font-extrabold text-slate-100 text-base mb-1">
+          <div class="card-violet p-5 md:p-8 text-center mt-6 fade-up">
+            <p class="font-display font-extrabold text-slate-100 text-base md:text-2xl mb-1">
               The whole game. The whole club. One app. 360°.
             </p>
             <p class="text-xs text-slate-400 mb-4">No downloads, no fees, no spreadsheets. Just badminton.</p>
@@ -363,7 +368,7 @@ onMounted(() => {
           <div class="mt-8 fade-up">
             <h2 class="font-display font-extrabold text-slate-800 text-lg text-center mb-1">Did you know? 🏸</h2>
             <p class="text-xs text-slate-400 text-center mb-4">A few things that make badminton the fastest racquet sport on earth.</p>
-            <div class="grid sm:grid-cols-2 gap-3">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div class="card p-4">
                 <div class="text-2xl mb-1">💨</div>
                 <p class="text-sm font-bold text-slate-700">The fastest hit in sport</p>
@@ -393,7 +398,7 @@ onMounted(() => {
               <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">From the Blog</h2>
               <RouterLink to="/blog" class="text-xs text-neon hover:opacity-75 transition">Read all →</RouterLink>
             </div>
-            <div v-if="latestPosts.length" class="space-y-2">
+            <div v-if="latestPosts.length" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 md:gap-3">
               <RouterLink v-for="p in latestPosts" :key="p.slug" :to="'/blog/' + p.slug"
                 class="card overflow-hidden flex items-stretch hover:-translate-y-0.5 hover:shadow-lg transition-all group no-underline">
                 <img v-if="p.cover_url" :src="p.cover_url" :alt="p.title" loading="lazy"
