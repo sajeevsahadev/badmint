@@ -101,6 +101,8 @@ Deno.serve(async (req) => {
       `that are not in the data; if asked about something not measured, say you don't have that detail yet. ` +
       `Be concise (2-5 sentences), encouraging and specific, and suggest a drill when relevant. ` +
       `For injury/physio questions, give general movement guidance and remind them it is not medical advice. ` +
+      `Use simple everyday English a 12-year-old understands — no medical or technical words ` +
+      `(say "the front of your knee" not "patellar tendon"); if a technical word is unavoidable, explain it in brackets. ` +
       (grounding.is_sample_data ? `Note: this analysis is SAMPLE data for testing; say so if the user relies on exact numbers. ` : ``) +
       `Player's analysis JSON:\n${JSON.stringify(grounding)}`
 

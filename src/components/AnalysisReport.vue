@@ -89,7 +89,7 @@ const metricRows = computed(() => ([
     <!-- PHYSIO -->
     <div v-else-if="lens === 'physio'">
       <div class="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
-        {{ physio?.disclaimer || 'General movement-safety screen — not a medical diagnosis.' }}
+        This is an automatic check of how you move, not a doctor's advice. If something hurts, see a physio.
       </div>
       <div v-if="!physio?.findings?.length" class="py-6 text-center text-sm text-emerald-600">
         ✅ No elevated movement-injury patterns detected in this video.
@@ -101,7 +101,7 @@ const metricRows = computed(() => ([
             <span class="text-sm font-semibold text-slate-800">{{ f.title }}</span>
           </div>
           <p class="mt-1 text-xs text-slate-600">{{ f.message }}</p>
-          <p v-if="f.drill" class="mt-1 text-xs text-slate-700"><b>Prevention:</b> {{ f.drill }}</p>
+          <p v-if="f.drill" class="mt-1 text-xs text-slate-700"><b>What to do:</b> {{ f.drill }}</p>
         </div>
       </div>
     </div>
