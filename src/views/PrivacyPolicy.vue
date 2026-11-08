@@ -11,7 +11,7 @@ const { user } = useAuth()
     <button class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-cyan-700 transition mb-6" @click="router.back()">‹ Back</button>
 
     <h1 class="font-display text-2xl font-extrabold gradient-text mb-1">Privacy Policy</h1>
-    <p class="text-xs text-slate-400 mb-8">Last updated June 2026 · Badminton 360</p>
+    <p class="text-xs text-slate-400 mb-8">Last updated November 2026 · Badminton 360</p>
 
     <div class="space-y-6 text-sm text-slate-600 leading-relaxed">
 
@@ -24,7 +24,20 @@ const { user } = useAuth()
           <li>Split Pay / Wallet records among your club's members</li>
           <li>Basic device info (browser, rough location via IP) and in-app activity, used for security and to keep the leaderboard accurate</li>
           <li>If you enable biometric app-lock: a device credential reference only — your fingerprint or face data never leaves your device and is never sent to us</li>
+          <li>Only if <b>you</b> turn on <em>Recognise me in match videos</em> (Settings → Security): a face signature
+            (numbers made from your face in tagged match videos, not a photo) so the app can suggest your name next time</li>
         </ul>
+      </section>
+
+      <section>
+        <h2 class="font-display text-base font-bold text-slate-800 mb-2">Face recognition (optional)</h2>
+        <p>
+          It is <strong>off by default</strong> and works only with your explicit consent. Face signatures are biometric
+          data. We keep at most 10, only you can see how many we hold, and they are used only to suggest tags in your
+          clubs' match videos — a person always confirms the tag. In a video, we only work out face signatures if
+          someone in that club has turned the feature on, and we delete the signatures of anyone who hasn't as soon as
+          the video is tagged. Turning it off, or erasing your account, deletes all of your face signatures immediately.
+        </p>
       </section>
 
       <section>

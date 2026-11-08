@@ -2,7 +2,8 @@
 // Tap-to-name player mapping. The vision pipeline produces person "tracks"; here a human assigns
 // each track to a roster player (or a placeholder like "Opponent A"). If no tracks exist yet
 // (pre-pipeline, or a fresh upload), we synthesise one slot per expected court position so the
-// user can still name who is where. This is the only identity step — we never use face recognition.
+// user can still name who is where. Players who OPTED IN to face recognition (Settings → Security)
+// may be pre-filled as a suggestion; a human still confirms every tag by saving.
 import { ref, onMounted, computed, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
@@ -57,9 +58,31 @@ onMounted(async () => {
     .select('id, display_name, user_id')
     .eq('club_id', props.clubId).eq('is_active', true).order('display_name')
   roster.value = await withNicknames(data ?? [])
+  suggest()
 })
 // Photos can arrive while the tagger is open (the people-detection pass finishes in the background).
-watch(() => props.tracks.map(t => `${t.id}:${t.court_side}:${t.thumb_path}`).join('|'), buildSlots)
+watch(() => props.tracks.map(t => `${t.id}:${t.court_side}:${t.thumb_path}`).join('|'), () => { buildSlots(); suggest() })
+
+// Opt-in face recognition: fill EMPTY slots only (never overwrite a choice), and mark them so the
+// user can see it was a suggestion. Nothing is saved until they press Save.
+const suggested = ref({})   // court_side -> { pid, score, confident }
+async function suggest() {
+  const { data } = await supabase.rpc('suggest_video_tags', { p_video_id: props.videoId })
+  if (!data?.length) return
+  const map = { ...suggested.value }
+  for (const r of data) {
+    const s = slots.value.find(x => x.court_side === r.court_side)
+    if (!s || !roster.value.some(p => p.id === r.player_id)) continue
+    if (slots.value.some(x => x.assign === 'p:' + r.player_id && x !== s)) continue
+    if (!s.assign) s.assign = 'p:' + r.player_id
+    map[r.court_side] = { pid: r.player_id, score: r.score, confident: r.confident }
+  }
+  suggested.value = map
+}
+function suggestionFor(s) {
+  const g = suggested.value[s.court_side]
+  return g && s.assign === 'p:' + g.pid ? g : null
+}
 
 const fetched = ref({})
 function photoFor(s) {
@@ -106,7 +129,13 @@ async function save() {
             <span v-else>{{ s.label_hint }}</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ sideLabel(s.court_side) }}</div>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ sideLabel(s.court_side) }}</span>
+              <span v-if="suggestionFor(s)" class="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                :class="suggestionFor(s).confident ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'">
+                ✨ {{ suggestionFor(s).confident ? 'Recognised' : 'Maybe' }} · check
+              </span>
+            </div>
             <select v-model="s.assign"
               class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none">
               <option value="">— Select —</option>
@@ -126,6 +155,9 @@ async function save() {
       </div>
     </div>
 
+    <p v-if="Object.keys(suggested).length" class="mt-3 text-xs text-slate-500">
+      ✨ Some players were recognised by face (only players who turned this on). Please check them before saving.
+    </p>
     <p v-if="err" class="mt-3 text-sm text-red-600">{{ err }}</p>
     <div class="mt-4 flex gap-2">
       <button :disabled="!complete || saving" @click="save"

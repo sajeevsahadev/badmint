@@ -33,10 +33,17 @@ import modal
 _PKGS = ["opencv-python-headless==4.10.0.84", "numpy==1.26.4", "rtmlib==0.0.13", "supervision==0.23.0",
          "boto3==1.34.162", "supabase==2.7.4", "fastapi==0.115.0", "tqdm==4.66.5"]
 
+_ZOO = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models"
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("libgl1", "libglib2.0-0", "ffmpeg")
+    .apt_install("libgl1", "libglib2.0-0", "ffmpeg", "wget")
     .pip_install(*_PKGS, "onnxruntime==1.18.1")
+    # Opt-in face recognition (OpenCV zoo, Apache-2.0): YuNet detector + SFace 128-d embedding.
+    .run_commands(
+        "mkdir -p /models",
+        f"wget -q -O /models/yunet.onnx {_ZOO}/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+        f"wget -q -O /models/sface.onnx {_ZOO}/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+    )
 )
 # Deep analysis samples up to 15 fps -> GPU. onnxruntime-gpu 1.18 is built for CUDA 11.8 + cuDNN 8.
 gpu_image = (
@@ -400,6 +407,98 @@ def _save_people(rest, video_id, storage_path, slots, crops):
         rest("PATCH", f"video_player_tags?video_id=eq.{video_id}&court_side=eq.{slot}", patch)
 
 
+# ---------------------------------------------------------------- opt-in face recognition
+def _club_has_face_consent(rest, video_id):
+    """Faces are only ever computed when at least one member of this video's club has opted in."""
+    v = rest("GET", f"match_videos?id=eq.{video_id}&select=club_id") or []
+    if not v:
+        return False
+    pl = rest("GET", f"players?club_id=eq.{v[0]['club_id']}&user_id=not.is.null&select=user_id") or []
+    ids = sorted({p["user_id"] for p in pl if p.get("user_id")})
+    if not ids:
+        return False
+    ok = rest("GET", f"user_profiles?user_id=in.({','.join(ids)})&face_id_consent=eq.true&select=user_id&limit=1") or []
+    return bool(ok)
+
+
+def _slot_faces(path, slots, meta, events, frames, per_slot=14, keep=6, min_score=0.85, min_px=20, stats=None):
+    # Measured 2026-11-08 on 480p club footage: faces are 8-18 px and different people score 0.43-0.61
+    # alike, so small faces are rejected outright. Needs ~1080p+ video for faces to clear min_px.
+    """{slot: (unit 128-d embedding, quality, n)} from full-resolution frames, before the first swap.
+    Only isolated sightings (no overlapping person) are used; faces must be clear (score >= 0.85,
+    >= 18 px in the original frame). Slots without at least 2 clear faces get nothing — no guess."""
+    import cv2
+    import numpy as np
+    det = cv2.FaceDetectorYN.create("/models/yunet.onnx", "", (320, 320), min_score, 0.3, 50)
+    rec = cv2.FaceRecognizerSF.create("/models/sface.onnx", "")
+    first_swap = min((float(e.get("at_s", 0)) for e in events), default=1e9)
+    everyone_at = {round(t, 3): ppl for t, ppl in (frames or [])}
+    cap = cv2.VideoCapture(path)
+    out = {}
+    try:
+        for slot, items in slots.items():
+            cand = [(t, p) for t, p in items if t < first_swap and p["conf"] > 0.45
+                    and not any(_overlap(p, q) for q in everyone_at.get(round(t, 3), []) if q is not p)]
+            if not cand:
+                continue
+            pick = [cand[int(i)] for i in np.linspace(0, len(cand) - 1, min(per_slot, len(cand)))]
+            got = []
+            for t, p in pick:
+                cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
+                ok, frame = cap.read()
+                if not ok:
+                    continue
+                x1, y1, x2, y2 = p["bbox"]
+                w, h = x2 - x1, y2 - y1
+                X1, X2 = int(max(0, x1 - w * 0.25)), int(min(frame.shape[1], x2 + w * 0.25))
+                Y1, Y2 = int(max(0, y1 - h * 0.12)), int(min(frame.shape[0], y1 + h * 0.38))
+                head = frame[Y1:Y2, X1:X2]
+                if head.size == 0:
+                    continue
+                up = max(1.0, 240.0 / max(1, head.shape[1]))
+                head = cv2.resize(head, None, fx=up, fy=up, interpolation=cv2.INTER_CUBIC) if up > 1 else head
+                det.setInputSize((head.shape[1], head.shape[0]))
+                _, faces = det.detect(head)
+                if faces is None or not len(faces):
+                    continue
+                f = max(faces, key=lambda r: r[14] * r[2] * r[3])
+                if stats is not None:
+                    stats.append((slot, round(float(f[14]), 2), round(float(f[2] / up), 1), round(float(h), 0)))
+                if f[2] / up < min_px:
+                    continue
+                emb = rec.feature(rec.alignCrop(head, f)).flatten().astype("float32")
+                n = float(np.linalg.norm(emb))
+                if n > 0:
+                    got.append((float(f[14]) * min(1.0, f[2] / up / 40.0), emb / n))
+            if len(got) < 2:
+                continue
+            got.sort(key=lambda g: -g[0])
+            best = got[:keep]
+            m = np.mean([g[1] for g in best], axis=0)
+            m = m / (np.linalg.norm(m) or 1.0)
+            out[slot] = ([round(float(v), 5) for v in m], round(float(np.mean([g[0] for g in best])), 3), len(best))
+    finally:
+        cap.release()
+    return out
+
+
+def _save_faces(rest, video_id, local, slots, meta, events, frames):
+    """Best effort: never fails the job. Writes per-slot signatures, then lets the DB enroll /
+    suggest (it only ever uses signatures of players who opted in)."""
+    try:
+        if not _club_has_face_consent(rest, video_id):
+            return 0
+        faces = _slot_faces(local, slots, meta, events, frames)
+        rest("DELETE", f"video_slot_faces?video_id=eq.{video_id}")
+        if faces:
+            rest("POST", "video_slot_faces", [{"video_id": video_id, "court_side": s, "embedding": e,
+                                               "quality": q, "n_faces": n} for s, (e, q, n) in faces.items()])
+            rest("POST", "rpc/enroll_video_faces", {"p_video_id": video_id})
+        return len(faces)
+    except Exception:
+        return 0
+
+
 # ---------------------------------------------------------------- motion + strokes
 def _rel(p):
     import numpy as np
@@ -616,9 +715,11 @@ def index_video(video_id: str, user_id: str = None):
         slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
         if not slots:
             raise RuntimeError("no players detected")
+        # Faces first: the tagger re-asks for suggestions when the photos (tracks) land.
+        nf = _save_faces(rest, video_id, local, slots, meta, events, frames)
         _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
         rest("PATCH", f"match_videos?id=eq.{video_id}", {"index_status": "done"})
-        return {"ok": True, "slots": list(slots)}
+        return {"ok": True, "slots": list(slots), "faces": nf}
     except Exception as e:  # noqa
         try:
             rest("PATCH", f"match_videos?id=eq.{video_id}", {"index_status": "failed"})

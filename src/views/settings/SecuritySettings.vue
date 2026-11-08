@@ -35,9 +35,30 @@ async function loadDevices() {
 }
 
 onMounted(async () => {
+  loadFaceId()
   platformAvailable.value = await isPlatformAvailable()
   await loadDevices()
 })
+
+// Opt-in face recognition for match-video tagging (biometric data — explicit consent, off by default).
+const faceId     = ref({ consent: false, samples: 0 })
+const faceBusy   = ref(false)
+const faceErr    = ref('')
+const faceAsk    = ref(false)   // showing the "are you sure" explanation before turning on
+async function loadFaceId() {
+  const { data } = await supabase.rpc('get_face_id_status')
+  if (data) faceId.value = data
+}
+async function setFaceId(on) {
+  faceErr.value = ''
+  if (on && !faceAsk.value) { faceAsk.value = true; return }
+  faceBusy.value = true
+  const { error } = await supabase.rpc('set_face_id_consent', { p_on: on })
+  if (error) faceErr.value = error.message
+  faceAsk.value = false
+  await loadFaceId()
+  faceBusy.value = false
+}
 
 async function onToggle(value) {
   err.value = ''
@@ -114,6 +135,34 @@ function fmtDate(d) {
         </p>
       </div>
     </template>
+
+    <div class="card p-4 mb-4">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-sm font-semibold text-slate-700">Recognise me in match videos</div>
+          <div class="text-xs text-slate-400 mt-0.5">Auto-tags you in AI Match Analysis · off by default</div>
+        </div>
+        <ToggleSwitch :model-value="faceId.consent || faceAsk" :disabled="faceBusy" @update:model-value="setFaceId" />
+      </div>
+      <div v-if="faceAsk" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-slate-600">
+        <p class="font-semibold text-slate-800">Before you turn this on</p>
+        <ul class="mt-1 list-disc space-y-1 pl-4">
+          <li>When you're tagged in a match video, we save a <b>face signature</b> (a list of numbers made from your face — not a photo).</li>
+          <li>Next time, the app uses it to suggest your name automatically. Someone still checks it before saving.</li>
+          <li>This is biometric data. Only you can see how many we hold, and nobody else can download it.</li>
+          <li>Turn it off any time — everything we saved is deleted straight away.</li>
+        </ul>
+        <div class="mt-3 flex gap-2">
+          <button class="btn-primary flex-1 py-2 text-xs" :disabled="faceBusy" @click="setFaceId(true)">I agree — turn on</button>
+          <button class="btn-ghost px-3 py-2 text-xs" @click="faceAsk = false">Cancel</button>
+        </div>
+      </div>
+      <p v-else-if="faceId.consent" class="mt-2 text-[11px] text-slate-400">
+        On since {{ fmtDate(faceId.since) }} · {{ faceId.samples }} face signature{{ faceId.samples === 1 ? '' : 's' }} saved.
+        Turning it off deletes them all.
+      </p>
+      <p v-if="faceErr" class="text-xs text-rose-500 mt-2">⚠ {{ faceErr }}</p>
+    </div>
 
     <div class="card p-4">
       <div class="label mb-3">Trusted Devices</div>
