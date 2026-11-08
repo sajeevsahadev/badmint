@@ -9,6 +9,7 @@ import { useGeo } from '../composables/useGeo'
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
 import CoachVisionCard from '../components/CoachVisionCard.vue'
+import GoogleSignInButton from '../components/GoogleSignInButton.vue'
 import { usePlayerAvatars } from '../composables/usePlayerAvatars'
 import { applySeo, setJsonLd } from '../lib/seo'
 
@@ -124,7 +125,9 @@ function switchMyClub(clubId) {
   if (c) { selectClub(c); router.push('/club/' + clubId) }
 }
 
-function goLogin() { router.push('/login') }
+// Story cards start Google sign-in directly — no extra /login page in between.
+const { signInWithGoogle } = useAuth()
+function goLogin() { signInWithGoogle() }
 
 // Latest published blog posts — shown to logged-out visitors (SEO + engagement)
 const latestPosts = ref([])
@@ -300,7 +303,7 @@ onMounted(() => {
             <div class="text-3xl mb-2" style="filter:drop-shadow(0 0 16px rgba(0,229,255,.5))">🏸</div>
             <p class="font-bold gradient-text text-lg mb-1">Join your badminton team</p>
             <p class="text-slate-400 text-sm mb-4">Free Elo rankings, match history, and club stats for every court — anywhere in the world.</p>
-            <RouterLink to="/login" class="btn-primary px-8">Sign in with Google — Free</RouterLink>
+            <GoogleSignInButton label="Sign in with Google — Free" />
           </div>
         </div>
 
@@ -353,7 +356,7 @@ onMounted(() => {
               The whole game. The whole club. One app. 360°.
             </p>
             <p class="text-xs text-slate-400 mb-4">No downloads, no fees, no spreadsheets. Just badminton.</p>
-            <RouterLink to="/login" class="btn-primary px-8">Get Started — It's Free</RouterLink>
+            <GoogleSignInButton label="Get Started with Google — Free" />
           </div>
 
           <!-- ── Badminton facts (engaging + keyword-rich) ── -->

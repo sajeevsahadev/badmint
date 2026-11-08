@@ -215,8 +215,15 @@ async function init() {
   supabase.from('user_profiles').select('theme_pref, phone, avatar_url').eq('user_id', user.value.id).maybeSingle()
     .then(({ data }) => {
       if (data?.theme_pref) syncFromProfile(data.theme_pref)
-      // Phone is mandatory for everyone — prompt anyone who hasn't set one.
-      profileGateOpen.value = !data?.phone || !data.phone.trim()
+      // Phone is optional for now (fewer sign-up steps). A brand-new user gets a profile row
+      // created silently from their Google name, so nothing blocks them on first login.
+      if (!data) {
+        const full = (user.value.user_metadata?.full_name || '').trim()
+        supabase.rpc('upsert_profile', {
+          p_nickname: full.split(/\s+/)[0] || 'Player', p_full_name: full || null, p_phone: null,
+          p_bio: null, p_emirate: null, p_country: null, p_gender: null,
+        }).then(() => {}, () => {})
+      }
       // Silently move a legacy base64 avatar to Storage on next app open.
       if (data?.avatar_url?.startsWith('data:')) {
         migrateOwnAvatarIfNeeded(user.value.id, data.avatar_url).catch(() => {})

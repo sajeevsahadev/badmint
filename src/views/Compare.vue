@@ -21,7 +21,7 @@ async function load() {
   if (!currentClub.value) return
   const cid = currentClub.value.club_id
   const [{ data: pl }, { data: lb }, { data: bp }] = await Promise.all([
-    supabase.from('players').select('id, display_name, user_id').eq('club_id', cid).order('display_name'),
+    supabase.from('players').select('id, display_name, user_id').eq('club_id', cid).eq('is_opponent', false).order('display_name'),
     supabase.from('v_leaderboard').select('id, club_rank, elo, composite, win_pct, days_played, games, wins').eq('club_id', cid),
     supabase.from('v_best_pairs').select('*').eq('club_id', cid).order('win_pct', { ascending: false }).limit(5)
   ])

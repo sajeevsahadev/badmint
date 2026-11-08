@@ -58,8 +58,27 @@ onMounted(async () => {
     .select('id, display_name, user_id')
     .eq('club_id', props.clubId).eq('is_active', true).order('display_name')
   roster.value = await withNicknames(data ?? [])
+  await loadOpponents()
   suggest()
 })
+
+// Saved opponents (tournament players outside the club) — reusable across videos so their
+// reports build up over time. Created by name via create_opponent (dedupes by name).
+const opponents = ref([])
+async function loadOpponents() {
+  const { data } = await supabase.rpc('get_club_opponents', { p_club_id: props.clubId })
+  opponents.value = data ?? []
+}
+async function addOpponent(s) {
+  const name = (s.newOpp || '').trim()
+  if (!name) return
+  err.value = ''
+  const { data, error } = await supabase.rpc('create_opponent', { p_club_id: props.clubId, p_name: name })
+  if (error) { err.value = error.message; return }
+  await loadOpponents()
+  s.assign = 'p:' + data
+  s.newOpp = ''
+}
 // Photos can arrive while the tagger is open (the people-detection pass finishes in the background).
 watch(() => props.tracks.map(t => `${t.id}:${t.court_side}:${t.thumb_path}`).join('|'), () => { buildSlots(); suggest() })
 
@@ -117,8 +136,9 @@ async function save() {
   <div class="card p-4">
     <div class="mb-1 text-sm font-bold text-slate-800">Who's who in this video?</div>
     <p class="mb-3 text-xs text-slate-500">
-      Name each person by where they stand <b>at the start of the video</b>. We analyse everyone, so name
-      opponents too (reports are generated for anyone marked “analyse”). You can fix this later.
+      Name each person by where they stand <b>at the start of the video</b>. For players outside your club
+      (e.g. tournament opponents), pick <b>➕ New opponent</b> once — their name is saved, so next time you
+      just pick them and their reports build up to show their game plan.
     </p>
 
     <div class="space-y-3">
@@ -142,8 +162,19 @@ async function save() {
               <optgroup label="Club players">
                 <option v-for="p in roster" :key="p.id" :value="'p:' + p.id">{{ p.display_name }}</option>
               </optgroup>
-              <option value="label">Opponent / guest (type a name)</option>
+              <optgroup v-if="opponents.length" label="Saved opponents">
+                <option v-for="o in opponents" :key="o.id" :value="'p:' + o.id">{{ o.display_name }}</option>
+              </optgroup>
+              <option value="new">➕ New opponent (save name for later)</option>
+              <option value="label">Unknown person (just this video)</option>
             </select>
+            <div v-if="s.assign === 'new'" class="mt-2 flex gap-2">
+              <input v-model="s.newOpp" type="text" maxlength="60" placeholder="Opponent's name, e.g. Rahul (Dubai Smashers)"
+                @keyup.enter="addOpponent(s)"
+                class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none" />
+              <button type="button" @click="addOpponent(s)" :disabled="!(s.newOpp || '').trim()"
+                class="btn-primary px-3 py-1.5 text-xs disabled:opacity-40">Save</button>
+            </div>
             <input v-if="s.assign === 'label'" v-model="s.label" type="text" placeholder="e.g. Opponent A"
               class="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none" />
           </div>

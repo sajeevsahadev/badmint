@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { useInstall } from '../composables/useInstall'
+import GoogleSignInButton from '../components/GoogleSignInButton.vue'
 
 const { signInWithGoogle, signInWithApple } = useAuth()
 const { canInstall, isIOS, promptInstall } = useInstall()
@@ -65,13 +66,7 @@ const APPLE_LOGIN_READY = false
       </button>
 
       <!-- Google sign-in -->
-      <button class="btn-primary w-full py-3.5 text-base gap-3 pulse-glow mb-4"
-        @click="signInWithGoogle">
-        <svg width="20" height="20" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M21.35 11.1h-9.18v2.92h5.27c-.23 1.4-1.64 4.1-5.27 4.1-3.17 0-5.76-2.62-5.76-5.86s2.59-5.86 5.76-5.86c1.81 0 3.02.77 3.71 1.43l2.53-2.44C16.9 3.6 14.76 2.7 12.17 2.7 6.98 2.7 2.8 6.88 2.8 12.07s4.18 9.37 9.37 9.37c5.41 0 9-3.8 9-9.16 0-.62-.07-1.08-.16-1.55z"/>
-        </svg>
-        Continue with Google — Free
-      </button>
+      <GoogleSignInButton label="Continue with Google — Free" class="w-full mb-4" />
 
       <!-- Sign in with Apple (required on iOS; works once enabled in Supabase) -->
       <button v-if="APPLE_LOGIN_READY"
