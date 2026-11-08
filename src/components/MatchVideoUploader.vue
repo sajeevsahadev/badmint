@@ -98,9 +98,9 @@ function uploadAnother() { reset(); done.value = false }
     <div v-if="!done">
       <label v-if="!file"
         class="card flex cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-300 py-10 text-center"
-        :class="!consent ? 'pointer-events-none opacity-40' : ''">
-        <span class="text-3xl">⬆️</span>
-        <span class="text-sm font-semibold text-slate-700">Choose a video to upload</span>
+        :class="!consent ? 'pointer-events-none opacity-60' : 'border-violet-300 bg-violet-50/40'">
+        <span class="text-3xl">{{ consent ? '📁' : '🔒' }}</span>
+        <span class="text-sm font-semibold text-slate-700">{{ consent ? 'Tap to choose a video' : 'Tick the consent box above to choose a video' }}</span>
         <span class="text-xs text-slate-400">MP4, MOV or WebM · up to 3 GB · full court in frame</span>
         <input type="file" accept="video/*" class="hidden" :disabled="!consent" @change="pick" />
       </label>

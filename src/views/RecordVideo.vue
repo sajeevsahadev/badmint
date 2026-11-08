@@ -2,11 +2,10 @@
 // Standalone/ad-hoc match recording (also reachable mid-flow). Setup here (type + players +
 // title); the actual capture + upload is the shared MatchVideoRecorder component — the same one
 // embedded in the live-match page.
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
-import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl, deleteMatchVideo } from '../lib/videoStorage'
 import MatchVideoRecorder from '../components/MatchVideoRecorder.vue'
 import MatchVideoUploader from '../components/MatchVideoUploader.vue'
@@ -18,33 +17,11 @@ const { currentClub, isManager } = useClub()
 
 const mode     = ref(route.query.upload ? 'upload' : 'record')
 const gameType = ref('doubles')
-const players  = ref([])
-const selected = ref(new Set())
 const title    = ref('')
-const requiredCount = computed(() => (gameType.value === 'singles' ? 2 : 4))
-const ready    = ref(false)          // setup confirmed → show recorder
+const ready    = ref(false)          // mode chosen → show recorder / uploader
 const myVideos = ref([])
 
-onMounted(async () => { await loadPlayers(); await loadMyVideos() })
-
-async function loadPlayers() {
-  if (!currentClub.value) return
-  const { data } = await supabase.from('players')
-    .select('id, display_name, elo, user_id')
-    .eq('club_id', currentClub.value.club_id)
-    .eq('is_active', true)
-    .order('display_name')
-  players.value = await withNicknames(data ?? [])
-}
-
-function toggle(id) {
-  const s = new Set(selected.value)
-  if (s.has(id)) s.delete(id)
-  else if (s.size < requiredCount.value) s.add(id)
-  selected.value = s
-}
-
-const canStart = computed(() => selected.value.size === requiredCount.value && !!currentClub.value)
+onMounted(loadMyVideos)
 
 function fmt(s) { const m = Math.floor(s / 60), x = s % 60; return `${m}:${String(x).padStart(2, '0')}` }
 function mb(b) { return b ? (b / 1048576).toFixed(1) + ' MB' : '—' }
@@ -72,7 +49,7 @@ async function remove(v) {
   await loadMyVideos()
 }
 function onSaved(videoId) {
-  ready.value = false; selected.value = new Set(); title.value = ''
+  ready.value = false; title.value = ''
   if (videoId) router.push(`/coach/video/${videoId}`)   // straight to tagging + analysis
   else loadMyVideos()
 }
@@ -80,8 +57,8 @@ function onSaved(videoId) {
 
 <template>
   <div class="mx-auto max-w-2xl px-4 pb-28 pt-4">
-    <PageHeader icon="🎥" title="Record Match"
-      subtitle="Film a match to get AI coaching (analysis coming soon). Prop your phone up in landscape so the whole court is in frame.">
+    <PageHeader icon="🎥" title="Add Match Video"
+      subtitle="Upload or record a match for AI Match Analysis. Keep the whole court in frame.">
       <template #help>
         <p class="text-sm text-slate-600">
           Tip: record straight from the live-score page instead — tap 🎥 while a match is running and
@@ -96,63 +73,47 @@ function onSaved(videoId) {
 
     <!-- Setup -->
     <div v-if="currentClub && !ready">
+      <!-- Step 1: match details (players are identified/tagged on the next screen, from the video itself) -->
       <div class="card p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">How are you adding the video?</div>
-        <div class="flex gap-2">
-          <button @click="mode = 'record'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="mode === 'record' ? 'btn-primary' : 'btn-ghost'">🎥 Record now</button>
-          <button @click="mode = 'upload'" class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="mode === 'upload' ? 'btn-violet' : 'btn-ghost'">⬆️ Upload a file</button>
+        <div class="mb-2 flex items-center gap-2">
+          <span class="step-dot">1</span>
+          <span class="text-sm font-bold text-slate-800">Match details</span>
         </div>
-        <p class="mt-2 text-xs text-slate-400">
-          Upload is ideal for footage from a fixed court camera.
-        </p>
+        <div class="flex gap-1 rounded-xl bg-slate-100 p-1">
+          <button @click="gameType = 'singles'" class="flex-1 rounded-lg py-2 text-sm font-semibold transition"
+            :class="gameType === 'singles' ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">🏸 Singles</button>
+          <button @click="gameType = 'doubles'" class="flex-1 rounded-lg py-2 text-sm font-semibold transition"
+            :class="gameType === 'doubles' ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">👥 Doubles</button>
+        </div>
+        <input v-model="title" type="text" placeholder="Title (optional) — e.g. Saturday 6am, Court 2"
+          class="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none" />
       </div>
 
-      <div class="card p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Match type</div>
-        <div class="flex gap-2">
-          <button @click="gameType = 'singles'; selected = new Set()"
-            class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="gameType === 'singles' ? 'btn-primary' : 'btn-ghost'">🏸 Singles</button>
-          <button @click="gameType = 'doubles'; selected = new Set()"
-            class="flex-1 rounded-xl py-2 text-sm font-semibold transition"
-            :class="gameType === 'doubles' ? 'btn-primary' : 'btn-ghost'">👥 Doubles</button>
-        </div>
+      <!-- Step 2: one clear action — each card goes straight to the camera or the file picker -->
+      <div class="mb-2 flex items-center gap-2 px-1">
+        <span class="step-dot">2</span>
+        <span class="text-sm font-bold text-slate-800">Add your video</span>
       </div>
-
-      <div class="card p-4 mb-4">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Who's playing?</div>
-          <div class="text-xs font-semibold"
-            :class="selected.size === requiredCount ? 'text-emerald-600' : 'text-slate-400'">
-            {{ selected.size }} / {{ requiredCount }} selected
-          </div>
-        </div>
-        <div v-if="!players.length" class="text-sm text-slate-400 py-3">No active players in this club.</div>
-        <div class="grid grid-cols-2 gap-2">
-          <button v-for="p in players" :key="p.id" @click="toggle(p.id)"
-            class="flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition"
-            :class="selected.has(p.id)
-              ? 'border-cyan-500 bg-cyan-50 font-semibold text-cyan-800'
-              : 'border-slate-200 text-slate-600 hover:border-slate-300'">
-            <span class="truncate">{{ p.display_name }}</span>
-          </button>
-        </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <button @click="mode = 'upload'; ready = true" class="add-card add-card-upload">
+          <span class="add-icon bg-violet-100 text-violet-600">📁</span>
+          <span class="min-w-0">
+            <span class="block text-base font-bold text-slate-800">Upload a video file</span>
+            <span class="block text-xs text-slate-500">Pick a match video already on your phone or from a court camera</span>
+          </span>
+          <span class="ml-auto text-xl text-violet-400">›</span>
+        </button>
+        <button @click="mode = 'record'; ready = true" class="add-card add-card-record">
+          <span class="add-icon bg-cyan-100 text-cyan-600">🎥</span>
+          <span class="min-w-0">
+            <span class="block text-base font-bold text-slate-800">Record a match now</span>
+            <span class="block text-xs text-slate-500">Use this phone's camera — prop it up in landscape</span>
+          </span>
+          <span class="ml-auto text-xl text-cyan-400">›</span>
+        </button>
       </div>
-
-      <div class="card p-4 mb-4">
-        <label class="text-xs font-bold uppercase tracking-wide text-slate-500">Title (optional)</label>
-        <input v-model="title" type="text" placeholder="e.g. Saturday 6am — Court 2"
-          class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none" />
-      </div>
-
-      <button :disabled="!canStart" @click="ready = true"
-        class="btn-primary w-full py-3 text-base disabled:opacity-40 disabled:cursor-not-allowed">
-        Continue →
-      </button>
-      <p v-if="!canStart" class="mt-2 text-center text-xs text-slate-400">
-        Pick {{ requiredCount }} players to continue.
+      <p class="mt-3 text-center text-xs text-slate-400">
+        Next you'll tag who's who on court — then the AI analyses the match.
       </p>
 
       <div v-if="myVideos.length" class="mt-8">
@@ -182,22 +143,33 @@ function onSaved(videoId) {
     <div v-if="currentClub && ready">
       <div class="card p-3 mb-3 flex items-center justify-between">
         <div class="text-sm text-slate-600">
-          <b>{{ gameType === 'singles' ? 'Singles' : 'Doubles' }}</b> · {{ selected.size }} players
+          <b>{{ mode === 'upload' ? '📁 Upload' : '🎥 Record' }}</b> · {{ gameType === 'singles' ? 'Singles' : 'Doubles' }}
         </div>
         <button @click="ready = false" class="btn-ghost px-3 py-1 text-xs">← Back</button>
       </div>
       <MatchVideoRecorder v-if="mode === 'record'"
         :club-id="currentClub.club_id"
         :game-type="gameType"
-        :player-ids="[...selected]"
         :default-title="title"
         @saved="onSaved" />
       <MatchVideoUploader v-else
         :club-id="currentClub.club_id"
         :game-type="gameType"
-        :player-ids="[...selected]"
         :default-title="title"
         @saved="onSaved" />
     </div>
   </div>
 </template>
+
+<style scoped>
+.step-dot { display: inline-flex; height: 1.4rem; width: 1.4rem; align-items: center; justify-content: center;
+  border-radius: 9999px; background: #0f172a; color: #fff; font-size: 0.72rem; font-weight: 700; }
+.add-card { display: flex; align-items: center; gap: 0.85rem; width: 100%; text-align: left; padding: 1rem;
+  border-radius: 1.1rem; background: #fff; border: 1.5px solid #e2e8f0; box-shadow: 0 1px 2px rgba(15,23,42,.05);
+  transition: transform .15s, box-shadow .15s, border-color .15s; }
+.add-card:active { transform: scale(0.98); }
+.add-card-upload:hover { border-color: #a78bfa; box-shadow: 0 6px 18px -8px rgba(139,92,246,.45); }
+.add-card-record:hover { border-color: #22b8d8; box-shadow: 0 6px 18px -8px rgba(0,153,184,.45); }
+.add-icon { display: inline-flex; flex-shrink: 0; height: 2.75rem; width: 2.75rem; align-items: center;
+  justify-content: center; border-radius: 0.9rem; font-size: 1.35rem; }
+</style>
