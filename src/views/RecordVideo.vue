@@ -16,6 +16,8 @@ const router = useRouter()
 const { currentClub, isManager } = useClub()
 
 const mode     = ref(route.query.upload ? 'upload' : 'record')
+// Came from the AI page's Record / Upload button → that choice is already made; show only it.
+const fixedMode = !!(route.query.upload || route.query.mode === 'record')
 const gameType = ref('doubles')
 const title    = ref('')
 const ready    = ref(false)          // mode chosen → show recorder / uploader
@@ -92,10 +94,10 @@ function onSaved(videoId) {
       <!-- Step 2: one clear action — each card goes straight to the camera or the file picker -->
       <div class="mb-2 flex items-center gap-2 px-1">
         <span class="step-dot">2</span>
-        <span class="text-sm font-bold text-slate-800">Add your video</span>
+        <span class="text-sm font-bold text-slate-800">{{ !fixedMode ? 'Add your video' : mode === 'upload' ? 'Choose your video' : 'Start recording' }}</span>
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <button @click="mode = 'upload'; ready = true" class="add-card add-card-upload">
+      <div class="grid gap-3" :class="!fixedMode && 'sm:grid-cols-2'">
+        <button v-if="!fixedMode || mode === 'upload'" @click="mode = 'upload'; ready = true" class="add-card add-card-upload">
           <span class="add-icon bg-violet-100 text-violet-600">📁</span>
           <span class="min-w-0">
             <span class="block text-base font-bold text-slate-800">Upload a video file</span>
@@ -103,7 +105,7 @@ function onSaved(videoId) {
           </span>
           <span class="ml-auto text-xl text-violet-400">›</span>
         </button>
-        <button @click="mode = 'record'; ready = true" class="add-card add-card-record">
+        <button v-if="!fixedMode || mode === 'record'" @click="mode = 'record'; ready = true" class="add-card add-card-record">
           <span class="add-icon bg-cyan-100 text-cyan-600">🎥</span>
           <span class="min-w-0">
             <span class="block text-base font-bold text-slate-800">Record a match now</span>

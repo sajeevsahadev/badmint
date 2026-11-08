@@ -69,14 +69,17 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
     <!-- EARLY ACCESS: the feature hub -->
     <div v-if="loaded && hasEarlyAccess">
-      <AiHeroGraphic class="mb-4 fade-up" />
+      <AiHeroGraphic class="mb-3 fade-up" />
+      <p class="mb-4 px-1 text-center text-[15px] font-semibold leading-snug text-slate-700 fade-up">
+        Get a coach's eye on every shot — see exactly what to fix and <span class="gradient-text font-extrabold">take your game to the next level.</span>
+      </p>
       <div class="card card-neon mb-4 p-4 flex items-center gap-3 fade-up d1">
         <span class="badge-pending">✨ Early Access</span>
         <span class="text-sm text-slate-600">You're on the early-access list — thanks for testing!</span>
       </div>
 
       <div class="mb-4 grid grid-cols-2 gap-3 fade-up d2">
-        <button @click="router.push('/record')" class="btn-primary sheen press py-3 text-sm">
+        <button @click="router.push('/record?mode=record')" class="btn-primary sheen press py-3 text-sm">
           🎥 Record a match
         </button>
         <button @click="router.push('/record?upload=1')" class="btn-violet sheen press py-3 text-sm">
@@ -135,7 +138,10 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
 
     <!-- NOT EARLY ACCESS: coming-soon teaser -->
     <div v-if="loaded && !hasEarlyAccess">
-      <AiHeroGraphic class="mb-4 fade-up" />
+      <AiHeroGraphic class="mb-3 fade-up" />
+      <p class="mb-4 px-1 text-center text-[15px] font-semibold leading-snug text-slate-700 fade-up">
+        Get a coach's eye on every shot — see exactly what to fix and <span class="gradient-text font-extrabold">take your game to the next level.</span>
+      </p>
       <div class="card card-neon p-6 text-center fade-up d1">
         <div class="text-4xl mb-2 float-soft">✨</div>
         <div class="gradient-text text-2xl font-display font-bold">Turn match footage into coaching</div>
