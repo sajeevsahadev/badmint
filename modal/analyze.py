@@ -167,7 +167,18 @@ def _people(kpts, scores):
     return out
 
 
-def _pose_pass(path, model, target_fps, max_frames, t_max=None, kf_every=1.0, kf_until=120.0):
+def _probe(path):
+    import cv2
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    W = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
+    H = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
+    cap.release()
+    return fps, total, W, H
+
+
+def _pose_pass(path, model, target_fps, max_frames, t_max=None, kf_every=1.0, kf_until=120.0, t_min=None, step=None):
     """Run pose on sampled frames. Also keeps 1-per-second JPEG keyframes (for photo crops)."""
     import cv2
     cap = cv2.VideoCapture(path)
@@ -175,11 +186,16 @@ def _pose_pass(path, model, target_fps, max_frames, t_max=None, kf_every=1.0, kf
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     W = cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280
     H = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720
-    step = max(1, int(round(fps / target_fps)))
-    if total and max_frames:
-        limit = min(total, int((t_max or 1e9) * fps))
-        step = max(step, math.ceil(limit / max_frames))
+    if step is None:
+        step = max(1, int(round(fps / target_fps)))
+        if total and max_frames:
+            limit = min(total, int((t_max or 1e9) * fps))
+            step = max(step, math.ceil(limit / max_frames))
     frames, keyframes, idx, next_kf = [], {}, -1, 0.0
+    if t_min:                                          # a slice of the video (parallel workers)
+        cap.set(cv2.CAP_PROP_POS_MSEC, t_min * 1000.0)
+        idx = int(round(cap.get(cv2.CAP_PROP_POS_FRAMES))) - 1
+        next_kf = t_min
     scale = min(1.0, 1280.0 / max(W, H))
     while True:
         if not cap.grab():
@@ -919,8 +935,9 @@ def _activity(slots, step=0.5):
     return out
 
 
-def _shuttle(path, meta, t_max=None, slots=None):
-    det_raw = _shuttle_track(path, meta["fps"], meta["W"], meta["H"], t_max=t_max)
+def _shuttle(path, meta, t_max=None, slots=None, det_raw=None):
+    if det_raw is None:
+        det_raw = _shuttle_track(path, meta["fps"], meta["W"], meta["H"], t_max=t_max)
     det = _shuttle_clean(det_raw, meta["H"])
     rests = _rests(det, meta["H"])
     raw = _flights(det, meta["H"])
@@ -1144,24 +1161,147 @@ def _analyze(video_id, run_id, URL, KEY, rest):
         return fail(f"{type(e).__name__}: {e}")
 
 
-@app.function(image=gpu_image, gpu="L4", cpu=4, timeout=1800, memory=8192, secrets=[secret])
-def analyze_deep(video_id: str, run_id: str = None, user_id: str = None):
+# Parallel GPU workers for body tracking are OFF (POSE_WORKERS = 1). Tried 2026-11-14 with 3 workers:
+# Modal kept the extra workers queued ~13 min and then ran them one after another, and the last slice
+# came back short. Until that is understood, body tracking and shuttle tracking run side by side in
+# this one container instead.
+POSE_SLICE_S, POSE_WORKERS = 150.0, 1
+
+
+@app.function(image=gpu_image, gpu="L4", cpu=4, timeout=1200, memory=8192, secrets=[secret])
+def pose_chunk(video_id: str, t_min: float, t_max: float, step: int, want_kf: bool, run_id: str = None, user_id: str = None):
+    """Body tracking for one slice of the video (runs next to the other slices)."""
     import time
+    import onnxruntime as ort
     URL, KEY, rest = _ctx()
     t0 = time.time()
     try:
-        return _analyze_deep(video_id, run_id, user_id, URL, KEY, rest)
+        device = "cuda" if "CUDAExecutionProvider" in ort.get_available_providers() else "cpu"
+        _, _, _, local = _load_video(rest, video_id)
+        frames, kf, meta = _pose_pass(local, _body(device), 15, 0, t_max=t_max, t_min=t_min, step=step,
+                                      kf_until=120.0 if want_kf else -1.0)
+        return {"frames": [f for f in frames if f[0] < t_max - 1e-6], "kf": kf, "meta": meta, "device": device}
     finally:
-        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 4.0, 8.0, gpu="L4")
+        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 4.0, 8.0, gpu="L4", extra={"part": "pose_slice"})
 
 
-def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
+def _pose_and_shuttle(video_id, local, device, run_id, user_id):
+    """Body tracking (split across parallel workers for longer videos) while this container tracks the
+    shuttle. Returns (frames, keyframes, meta, shuttle detections or None, timings)."""
+    import time
+    fps, total, W, H = _probe(local)
+    dur = total / fps if total else 0.0
+    step = max(1, int(round(fps / 15)))
+    if total:
+        step = max(step, math.ceil(total / 4000))
+    n = min(POSE_WORKERS, int(dur // POSE_SLICE_S))
+    tm = {"workers": max(n, 1)}
+    det_raw, frames, kf, meta = None, None, None, None
+    calls = []
+    if n >= 2:
+        try:
+            edges = [dur * i / n for i in range(n)] + [dur + 1.0]
+            calls = [pose_chunk.spawn(video_id, edges[i], edges[i + 1], step, i == 0, run_id, user_id) for i in range(n)]
+        except Exception as e:  # noqa
+            print(f"could not start pose workers: {type(e).__name__}: {e}")
+            calls = []
+    import threading
+    box = {}
+    model = None
+    if not calls:
+        # Load the body model and run it once BEFORE the shuttle thread starts. Both use the GPU through
+        # different libraries (onnxruntime / torch); letting them load their GPU libraries at the same
+        # moment aborted the container (libcudnn_cnn_infer / libnvrtc, exit 134, 2026-11-14).
+        import numpy as np
+        model = _body(device)
+        try:
+            model(np.zeros((max(H, 64), max(W, 64), 3), dtype=np.uint8))
+        except Exception as e:  # noqa
+            print(f"pose warm-up: {type(e).__name__}: {e}")
+
+    def shuttle_job():
+        t1 = time.time()
+        try:
+            box["det"] = _shuttle_track(local, fps, W, H)
+        except Exception as e:  # noqa
+            print(f"shuttle tracking failed: {type(e).__name__}: {e}")
+        tm["shuttle_s"] = round(time.time() - t1, 1)
+
+    th = threading.Thread(target=shuttle_job, daemon=True)
+    th.start()                                        # shuttle runs while the bodies are tracked
+    t0 = time.time()
+    if calls:
+        try:
+            parts = [c.get(timeout=1100) for c in calls]
+            seen, frames = set(), []
+            for part in parts:
+                for t, people in part["frames"]:
+                    k = round(t, 3)
+                    if k not in seen:
+                        seen.add(k)
+                        frames.append((t, people))
+            frames.sort(key=lambda f: f[0])
+            kf = parts[0]["kf"]
+            meta = dict(parts[0]["meta"], duration=dur or (frames[-1][0] if frames else 0.0))
+        except Exception as e:  # noqa
+            print(f"pose workers failed, running here instead: {type(e).__name__}: {e}")
+            frames = None
+    if frames is None:
+        tm["workers"] = 1
+        frames, kf, meta = _pose_pass(local, model or _body(device), target_fps=15, max_frames=4000)
+    tm["pose_s"] = round(time.time() - t0, 1)
+    th.join(timeout=1500)
+    det_raw = box.get("det")
+    return frames, kf, meta, det_raw, tm
+
+
+@app.function(image=gpu_image, gpu="L4", cpu=4, timeout=1800, memory=8192, secrets=[secret])
+def analyze_deep(video_id: str, run_id: str = None, user_id: str = None, quick_run_id: str = None):
+    import time
+    URL, KEY, rest = _ctx()
+    t0 = time.time()
+    tm = {}
+    try:
+        return _analyze_deep(video_id, run_id, user_id, URL, KEY, rest, quick_run_id, tm)
+    finally:
+        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 4.0, 8.0, gpu="L4", extra=tm)
+
+
+def _quick_from_slots(rest, video_id, quick_run_id, tags, slots, meta, URL, KEY):
+    """The Quick Report from the SAME body tracking as Deep Coaching (no second pass over the video).
+    Thinned to ~5 samples/s so the ratings match the stand-alone quick engine."""
+    off = _camera_offsets(slots)
+    rows = []
+    for tag in tags:
+        items = (slots.get(tag.get("court_side") or "") or [])[::3]
+        if len(items) < 5:
+            continue
+        m = _metrics(items, off)
+        rows.append({"video_id": video_id, "tag_id": tag["id"], "run_id": quick_run_id,
+                     "metrics": m["metrics"], "confidence": m["confidence"], "is_mock": False})
+    rows = _retag(rest, video_id, tags, rows) if rows else []
+    if not rows:
+        raise RuntimeError("could not match detected players to the tagged positions")
+    rest("POST", "player_metrics?on_conflict=run_id,tag_id", rows, "resolution=merge-duplicates")
+    rest("PATCH", f"match_videos?id=eq.{video_id}", {"duration_s": int(meta["duration"])})
+    rest("POST", "rpc/finalize_analysis", {"p_video_id": video_id, "p_run_id": quick_run_id})
+    _notify(video_id, URL, KEY)
+
+
+def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest, quick_run_id=None, tm=None):
+    quick = {"open": bool(quick_run_id)}
+    tm = tm if tm is not None else {}
 
     def fail(msg):
         try:
             rest("POST", "rpc/fail_deep", {"p_video_id": video_id, "p_error": str(msg)[:480], "p_run_id": run_id})
         except Exception:
             pass
+        if quick["open"]:
+            try:
+                rest("POST", "rpc/fail_analysis", {"p_video_id": video_id, "p_error": str(msg)[:480], "p_run_id": quick_run_id})
+            except Exception:
+                pass
         return {"ok": False, "error": str(msg)}
 
     try:
@@ -1170,19 +1310,30 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         vid, tags, events, local = _load_video(rest, video_id)
         if not tags:
             return fail("no player tags")
-        frames, kf, meta = _pose_pass(local, _body(device), target_fps=15, max_frames=4000)
+        frames, kf, meta, det_raw, t_parts = _pose_and_shuttle(video_id, local, device, run_id, user_id)
+        tm.update(t_parts)
         slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
         if not slots:
             return fail("no players detected")
+        if quick["open"]:
+            try:
+                _quick_from_slots(rest, video_id, quick_run_id, tags, slots, meta, URL, KEY)
+            except Exception as e:  # noqa
+                try:
+                    rest("POST", "rpc/fail_analysis", {"p_video_id": video_id, "p_error": f"{type(e).__name__}: {e}"[:480], "p_run_id": quick_run_id})
+                except Exception:
+                    pass
+            quick["open"] = False
         _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
         cand = {s: _strokes(items) for s, items in slots.items()}
         # Shuttle is the judge of what is a real stroke. If it can't be tracked well enough in this
         # video, fall back to the pose-only rule and label the run so the app shows no mistake clips.
         sh, engine = None, ENGINE
         try:
-            sh = _shuttle(local, meta, slots=slots)
+            if det_raw is not None:
+                sh = _shuttle(local, meta, slots=slots, det_raw=det_raw)
         except Exception as e:  # noqa
-            print(f"shuttle tracking failed: {type(e).__name__}: {e}")
+            print(f"shuttle rules failed: {type(e).__name__}: {e}")
         # Strokes a person marked "not a real shot" on an earlier report of this video stay out.
         try:
             fb = rest("GET", f"shot_feedback?video_id=eq.{video_id}&verdict=eq.not_a_shot&select=court_side,t_s") or []
@@ -1274,8 +1425,8 @@ def web(data: dict):
     run_id, user_id = data.get("run_id"), data.get("user_id")
     if mode == "index":
         index_video.spawn(video_id, user_id)
-    elif mode == "deep":
-        analyze_deep.spawn(video_id, run_id, user_id)
+    elif mode in ("deep", "both"):
+        analyze_deep.spawn(video_id, run_id, user_id, data.get("quick_run_id") if mode == "both" else None)
     else:
         analyze.spawn(video_id, run_id, user_id)
     return {"status": "queued", "video_id": video_id, "mode": mode, "run_id": run_id}

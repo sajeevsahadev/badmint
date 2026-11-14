@@ -189,7 +189,9 @@ async function runAnalysis() {
   working.value = true; err.value = ''
   try {
     try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission() } catch { /* ignore */ }
-    const { data: d, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: videoId, mode: 'simple' } })
+    // One pass over the video fills BOTH reports for people who have Deep Coaching.
+    const mode = canDeepCoaching.value ? 'both' : 'simple'
+    const { data: d, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: videoId, mode } })
     if (error || d?.error) {
       const { error: se } = await supabase.rpc('seed_mock_analysis', { p_video_id: videoId })
       if (se) throw se
@@ -204,6 +206,8 @@ async function runAnalysis() {
     err.value = e?.message || 'Analysis failed.'
   } finally { working.value = false }
 }
+
+async function onBothStarted() { await load(true); if (status.value === 'analyzing') startPolling() }
 
 function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); return `${m}:${String(x).padStart(2, '0')}` }
 </script>
@@ -329,8 +333,9 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           <p class="mt-2 text-xs text-slate-500">
             Running pose &amp; movement analysis · {{ fmtClock(elapsed) }} elapsed
           </p>
-          <p class="mt-1 text-[11px] text-slate-400">
-            This runs in the background — you can leave this page and come back; we'll notify you when the report is ready.
+          <p class="mt-2 rounded-xl bg-cyan-50 px-3 py-2 text-xs text-slate-600">
+            This usually takes <b>3–6 minutes</b>, depending on the video's length and quality. It runs quietly in the
+            background — you can close this page and come back later to see your reports.
           </p>
         </div>
 
@@ -341,7 +346,11 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           </div>
           <p v-if="status === 'failed'" class="mt-1 text-xs text-red-600">{{ video.error || 'Something went wrong. Please try again.' }}</p>
           <p v-else class="mt-1 text-xs text-slate-500">
-            Get a per-player report across coach, physio and your own view. Takes a minute or two to process.
+            Get a per-player report across coach, physio and your own view{{ canDeepCoaching ? ' — the Quick Report and Deep Coaching are made together in one go' : '' }}.
+          </p>
+          <p v-if="status !== 'failed'" class="mt-2 rounded-xl bg-cyan-50 px-3 py-2 text-xs text-slate-600">
+            ⏱ This may take <b>3–6 minutes</b>, depending on your video's quality and length. It runs quietly in the
+            background — you can leave and come back to see the reports.
           </p>
           <template v-if="canManage">
             <button :disabled="working" @click="runAnalysis" class="btn-primary sheen press mt-3 w-full py-2.5 disabled:opacity-50">
@@ -408,7 +417,8 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
           :video-id="videoId" :run-id="deepRunId" :subjects="subjectsForDeep" :play-url="playUrl" />
         <DeepCommentary v-if="tier === 'deep' && canDeepCoaching" :video-id="videoId" :can-manage="canManage" :is-admin="isAppAdmin"
           :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo"
-          @run="id => deepRunId = id" @done="coachRef?.load()" />
+          :with-quick="canQuickReport && !doneRuns.length && status !== 'analyzing'"
+          @run="id => deepRunId = id" @done="coachRef?.load()" @started="onBothStarted" />
         </div>
         </section>
       </template>

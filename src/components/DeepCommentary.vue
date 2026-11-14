@@ -12,8 +12,9 @@ const props = defineProps({
   subjects: { type: Array, default: () => [] },   // [{ id, name, photo }]
   isAdmin:  { type: Boolean, default: false },    // version history is admin-only
   videoEl:  { type: Object, default: null },      // the <video> element, for spoken play-along
+  withQuick:{ type: Boolean, default: false },    // no Quick Report yet -> make both in the same pass
 })
-const emit = defineEmits(['seek', 'run', 'done'])
+const emit = defineEmits(['seek', 'run', 'done', 'started'])
 const showLines = ref(false)   // the full stroke-by-stroke list is kept but folded away under the summary
 
 const loading = ref(true)
@@ -78,13 +79,13 @@ function stop() {
 async function runDeep() {
   working.value = true; err.value = ''
   try {
-    const { data: r, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: props.videoId, mode: 'deep' } })
+    const { data: r, error } = await supabase.functions.invoke('analyze-video', { body: { video_id: props.videoId, mode: props.withQuick ? 'both' : 'deep' } })
     if (error || r?.error) {
       const { error: se } = await supabase.rpc('seed_mock_deep', { p_video_id: props.videoId })
       if (se) throw se
       selectedRunId.value = null
       await load(true)
-    } else { await load(true); if (deepStatus.value === 'analyzing') startPolling() }
+    } else { await load(true); if (deepStatus.value === 'analyzing') startPolling(); if (r?.quick_run_id) emit('started') }
   } catch (e) { err.value = e?.message || 'Deep analysis failed.' }
   finally { working.value = false }
 }
@@ -198,7 +199,10 @@ onBeforeUnmount(() => {
           <div class="ai-bar h-full rounded-full bg-violet-500"></div>
         </div>
         <p class="mt-2 text-xs text-slate-500">Detecting strokes &amp; writing commentary · {{ fmt(elapsed) }}</p>
-        <p class="mt-1 text-[11px] text-slate-400">Runs in the background — we'll notify you when it's ready.</p>
+        <p class="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-slate-600">
+          This usually takes <b>3–6 minutes</b>, depending on the video's length and quality. It runs quietly in the
+          background — you can close this page and come back later.
+        </p>
       </div>
 
       <!-- Latest run failed -->

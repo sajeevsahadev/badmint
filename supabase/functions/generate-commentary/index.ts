@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
     await record(rows.length)
     if (!rows.length) {
       const busy = /ERR|EXC/.test(finish)
+      console.error('commentary: no lines', run_id, finish.slice(0, 600))
       await supa.rpc('fail_deep', { p_video_id: video_id, p_run_id: run_id,
         p_error: busy ? 'AI commentary is busy right now — please try again in a few minutes.'
                       : 'Could not write commentary for this video — please re-analyse.' })
