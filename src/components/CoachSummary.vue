@@ -6,12 +6,26 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { supabase } from '../lib/supabase'
 import { HEADLINE_KEYS, LOCKED_KPIS, kpiDef, fmtKpi, kpiDelta, hasValue } from '../lib/coachKpis'
 import AiProgress from './AiProgress.vue'
+import FocusCoach from './FocusCoach.vue'
+import CoachFigure from './CoachFigure.vue'
+import { matchDrill, staminaCheck } from '../lib/coachMoves'
 
 const props = defineProps({
   videoId:  { type: String, required: true },
   runId:    { type: String, default: null },       // version shown in the commentary below (admin picker)
   subjects: { type: Array, default: () => [] },    // [{ id: tag_id, name, photo }]
+  playUrl:  { type: String, default: '' },         // match video, for the "watch my mistake" clips
 })
+
+// Simple (default) shows the verdict, the fixes and the drills. Detailed adds every number.
+const VIEW_KEY = 'b360_coach_view'
+const detailed = ref(false)
+try { detailed.value = localStorage.getItem(VIEW_KEY) === 'detailed' } catch { /* ignore */ }
+function setView(d) { detailed.value = d; try { localStorage.setItem(VIEW_KEY, d ? 'detailed' : 'simple') } catch { /* ignore */ } }
+
+const shots = ref([])          // measured strokes of this run (clips + stamina)
+const focusIdx = ref(0)
+const openDrill = ref(0)
 
 const loading = ref(true)
 const players = ref([])
@@ -34,12 +48,32 @@ async function load() {
   const { data } = await supabase.rpc('get_deep_summary', { p_video_id: props.videoId, p_run_id: props.runId })
   players.value = data?.locked ? [] : (data?.players ?? [])
   shownRun.value = data?.run_id || null
+  focusIdx.value = 0
   if (!players.value.find(x => x.tag_id === activeTag.value)) activeTag.value = players.value[0]?.tag_id || null
   loading.value = false
+  loadShots()
+}
+async function loadShots() {
+  if (!shownRun.value) { shots.value = []; return }
+  const { data } = await supabase.rpc('get_deep_analysis', { p_video_id: props.videoId, p_run_id: shownRun.value })
+  shots.value = (data?.shots ?? []).filter(s => !s.is_mock)
 }
 onMounted(load)
 watch(() => props.runId, () => { stopAudio(); load() })
-watch(activeTag, stopAudio)
+watch(activeTag, () => { stopAudio(); focusIdx.value = 0; openDrill.value = 0 })
+
+const stamina = computed(() => p.value ? staminaCheck(shots.value, p.value.tag_id) : null)
+const drills = computed(() => (coach.value?.drills || []).map(d => ({ ...d, move: matchDrill(d) })))
+
+// "Done this week" ticks — a per-device reminder only (not synced), keyed by player + drill + ISO week.
+const week = (() => { const d = new Date(); const j = new Date(d.getFullYear(), 0, 1); return `${d.getFullYear()}w${Math.ceil(((d - j) / 864e5 + j.getDay() + 1) / 7)}` })()
+const doneTick = ref(0)
+const drillKey = (d) => `b360_drill_${p.value?.player_id || p.value?.tag_id}_${week}_${String(d.name).toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`
+function isDone(d) { doneTick.value; try { return localStorage.getItem(drillKey(d)) === '1' } catch { return false } }
+function toggleDone(d) {
+  try { isDone(d) ? localStorage.removeItem(drillKey(d)) : localStorage.setItem(drillKey(d), '1') } catch { /* ignore */ }
+  doneTick.value++
+}
 onBeforeUnmount(stopAudio)
 defineExpose({ load })
 
@@ -133,8 +167,16 @@ async function hearCoach() {
       The numbers are ready; the coach's written verdict didn't come through for this version. Re-analyse to try again.
     </div>
 
-    <!-- ── SCOREBOARD: last time → this time ───────────────────────────────── -->
-    <div v-if="p.kpis.strokes" class="card p-4">
+    <!-- ── Simple / Detailed: same report, two depths ──────────────────────── -->
+    <div class="flex items-center gap-1 rounded-2xl bg-slate-100 p-1" role="tablist" aria-label="How much detail">
+      <button role="tab" :aria-selected="!detailed" @click="setView(false)" class="flex-1 rounded-xl py-2 text-xs font-bold transition"
+        :class="!detailed ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">✨ Simple</button>
+      <button role="tab" :aria-selected="detailed" @click="setView(true)" class="flex-1 rounded-xl py-2 text-xs font-bold transition"
+        :class="detailed ? 'bg-white text-slate-800 shadow' : 'text-slate-500'">📊 Detailed · all numbers</button>
+    </div>
+
+    <!-- ── SCOREBOARD: last time → this time (Detailed) ────────────────────── -->
+    <div v-if="detailed && p.kpis.strokes" class="card p-4">
       <div class="mb-3 flex items-end justify-between">
         <div class="font-display text-base font-bold text-slate-800">Match scorecard</div>
         <div class="text-[10px] text-slate-400">
@@ -160,7 +202,13 @@ async function hearCoach() {
 
     <template v-if="coach">
       <!-- ── STRENGTHS ─────────────────────────────────────────────────────── -->
-      <div v-if="coach.strengths?.length" class="card p-4">
+      <div v-if="coach.strengths?.length && !detailed" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+        <div class="text-[10px] font-bold uppercase tracking-wide text-emerald-700">💪 Already working</div>
+        <div class="mt-1 flex flex-wrap gap-1.5">
+          <span v-for="(s, i) in coach.strengths" :key="i" class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">✔ {{ s.title }}</span>
+        </div>
+      </div>
+      <div v-if="coach.strengths?.length && detailed" class="card p-4">
         <div class="mb-2 font-display text-base font-bold text-slate-800">💪 What's working</div>
         <div class="space-y-2">
           <div v-for="(s, i) in coach.strengths" :key="i" class="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
@@ -174,19 +222,23 @@ async function hearCoach() {
       <!-- ── FOCUS ─────────────────────────────────────────────────────────── -->
       <div v-if="coach.focus?.length" class="card p-4">
         <div class="mb-1 font-display text-base font-bold text-slate-800">🎯 Your top {{ coach.focus.length }} focus areas</div>
-        <p class="mb-3 text-[11px] text-slate-500">In order of what will change your game most.</p>
-        <div class="space-y-2">
-          <div v-for="(f, i) in coach.focus" :key="i" class="rounded-2xl border p-3"
-            :class="i === 0 ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'">
-            <div class="flex items-center gap-2">
-              <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                :class="i === 0 ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'">{{ i + 1 }}</span>
-              <div class="text-sm font-bold text-slate-800">{{ f.title }}</div>
-              <span v-if="i === 0" class="ml-auto text-[10px] font-bold uppercase text-amber-700">Priority</span>
-            </div>
-            <p class="mt-1.5 text-xs text-slate-500">{{ f.why }}</p>
-            <p class="mt-1 text-sm text-slate-700"><b>How:</b> {{ f.how }}</p>
-          </div>
+        <p class="mb-3 text-[11px] text-slate-500">One at a time. See the mistake, see the right way, then watch yourself.</p>
+        <!-- step pills -->
+        <div class="mb-2 flex gap-1.5">
+          <button v-for="(f, i) in coach.focus" :key="i" @click="focusIdx = i"
+            class="flex-1 truncate rounded-xl px-2 py-1.5 text-[11px] font-bold transition"
+            :class="focusIdx === i ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'">
+            {{ i + 1 }} · {{ f.title }}
+          </button>
+        </div>
+        <FocusCoach v-if="coach.focus[focusIdx]" :key="p.tag_id + ':' + focusIdx"
+          :focus="coach.focus[focusIdx]" :index="focusIdx" :shots="shots" :tag-id="p.tag_id"
+          :play-url="playUrl" :name="first(p.name)" :photo="photoOf(p.tag_id) || ''"
+          :kpis="p.kpis" :prev-kpis="prev" :prev-at="p.previous?.at || ''" />
+        <div v-if="coach.focus.length > 1" class="mt-2 flex gap-2">
+          <button @click="focusIdx = Math.max(0, focusIdx - 1)" :disabled="focusIdx === 0" class="btn-ghost flex-1 py-2 text-xs disabled:opacity-40">‹ Previous</button>
+          <button @click="focusIdx = Math.min(coach.focus.length - 1, focusIdx + 1)" :disabled="focusIdx === coach.focus.length - 1"
+            class="btn-primary flex-1 py-2 text-xs disabled:opacity-40">Next fix ›</button>
         </div>
       </div>
 
@@ -194,14 +246,65 @@ async function hearCoach() {
       <div v-if="coach.drills?.length" class="card p-4">
         <div class="mb-2 font-display text-base font-bold text-slate-800">🏸 Drills for this week</div>
         <div class="space-y-2">
-          <div v-for="(d, i) in coach.drills" :key="i" class="rounded-2xl border border-violet-200 bg-violet-50 p-3">
-            <div class="flex items-start justify-between gap-2">
-              <div class="text-sm font-bold text-slate-800">{{ d.name }}</div>
+          <div v-for="(d, i) in drills" :key="i" class="overflow-hidden rounded-2xl border"
+            :class="isDone(d) ? 'border-emerald-300 bg-emerald-50' : 'border-violet-200 bg-violet-50'">
+            <button @click="openDrill = openDrill === i ? -1 : i" class="flex w-full items-center gap-2 p-3 text-left">
+              <span class="text-base">{{ isDone(d) ? '✅' : '🏸' }}</span>
+              <span class="min-w-0 flex-1 text-sm font-bold text-slate-800">{{ d.name }}</span>
               <span v-if="d.dose" class="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-violet-700">{{ d.dose }}</span>
+              <span class="shrink-0 text-slate-400">{{ openDrill === i ? '▴' : '▾' }}</span>
+            </button>
+            <div v-if="openDrill === i" class="px-3 pb-3">
+              <div class="grid items-start gap-3 sm:grid-cols-2">
+                <CoachFigure v-if="d.move" :move="d.move" />
+                <div>
+                  <p class="text-xs leading-relaxed text-slate-600">{{ d.how }}</p>
+                  <button @click="toggleDone(d)" class="press mt-2 w-full rounded-xl py-2 text-xs font-bold"
+                    :class="isDone(d) ? 'bg-emerald-600 text-white' : 'bg-white text-violet-700 border border-violet-300'">
+                    {{ isDone(d) ? '✓ Done this week — tap to undo' : 'I did this drill this week' }}
+                  </button>
+                </div>
+              </div>
             </div>
-            <p class="mt-1 text-xs text-slate-600">{{ d.how }}</p>
           </div>
         </div>
+      </div>
+
+      <!-- ── STAMINA: first half vs second half of this player's strokes ───── -->
+      <div v-if="stamina" class="card p-4">
+        <div class="mb-1 font-display text-base font-bold text-slate-800">🫀 Stamina check</div>
+        <p class="text-xs text-slate-500">How often you got back to base — early in the match vs late.</p>
+        <div class="mt-3 space-y-2">
+          <div v-for="h in [{ l: 'First half', v: stamina.first }, { l: 'Second half', v: stamina.second }]" :key="h.l" class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-[11px] font-semibold text-slate-500">{{ h.l }}</span>
+            <div class="h-3 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div class="stam-bar h-full rounded-full" :class="h.l === 'Second half' && stamina.state === 'fade' ? 'bg-rose-500' : 'bg-cyan-500'" :style="{ width: h.v + '%' }"></div>
+            </div>
+            <span class="w-9 shrink-0 text-right text-xs font-bold text-slate-700">{{ h.v }}%</span>
+          </div>
+        </div>
+        <p class="mt-3 rounded-xl px-3 py-2 text-xs font-semibold"
+          :class="stamina.state === 'fade' ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'">
+          <template v-if="stamina.state === 'fade'">You faded: recovery dropped {{ stamina.drop }} points in the second half. That usually points to fitness more than technique.</template>
+          <template v-else-if="stamina.state === 'strong_finish'">Strong finish — your recovery was {{ Math.abs(stamina.drop) }} points better late in the match.</template>
+          <template v-else>Steady — your movement held up from start to finish.</template>
+        </p>
+        <div v-if="stamina.state === 'fade'" class="mt-3 grid grid-cols-2 gap-2">
+          <CoachFigure move="skipping" />
+          <CoachFigure move="shuttle_runs" />
+        </div>
+        <p v-if="stamina.state === 'fade'" class="mt-2 text-xs text-slate-600">
+          <b>Twice a week:</b> 6 rounds of 30 seconds fast skipping, 30 seconds rest — then 6 line-to-line sprints. Build up by one round each week.
+        </p>
+        <details class="mt-2">
+          <summary class="cursor-pointer text-[11px] font-semibold text-slate-400">Why intervals, and how this is measured</summary>
+          <p class="mt-1 text-[11px] leading-relaxed text-slate-500">
+            Badminton is stop-start: at elite level a rally lasts roughly 7 seconds with about twice that to rest, and heart rate stays
+            close to 90% of maximum (Phomsoupha &amp; Laffaye, <i>Sports Medicine</i>, 2015). Short hard intervals train that pattern better
+            than steady jogging. Measured here from {{ stamina.n }} strokes you played away from base, split into your first and second half.
+            This is general fitness guidance, not medical advice.
+          </p>
+        </details>
       </div>
 
       <div v-if="coach.next_goal" class="rounded-3xl border-2 border-cyan-300 bg-cyan-50 p-4 text-center">
@@ -211,12 +314,16 @@ async function hearCoach() {
     </template>
 
     <!-- ── PROGRESS over every analysed match ────────────────────────────────── -->
-    <div v-if="p.player_id" class="card p-4">
+    <div v-if="p.player_id && detailed" class="card p-4">
       <AiProgress :player-id="p.player_id" compact :title="`${first(p.name)}'s progress`" />
     </div>
-    <p v-else class="text-center text-[11px] text-slate-400">Link this player to a roster name to track progress across matches.</p>
+    <p v-else-if="!p.player_id && detailed" class="text-center text-[11px] text-slate-400">Link this player to a roster name to track progress across matches.</p>
 
-    <p class="px-2 text-center text-[10px] leading-relaxed text-slate-400">
+    <button v-if="!detailed" @click="setView(true)" class="btn-ghost w-full py-2.5 text-xs">
+      📊 Want every number? Open the Detailed view — scorecard, trends and how it's measured
+    </button>
+
+    <p v-if="detailed" class="px-2 text-center text-[10px] leading-relaxed text-slate-400">
       Measured with body-pose tracking: "base" is where you usually stand in that part of the match; recovery counts
       only strokes played away from it. The report and voice are AI-generated from these numbers.
     </p>
@@ -229,4 +336,5 @@ async function hearCoach() {
 .coach-spin { animation: cspin .8s linear infinite; }
 @keyframes cspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .coach-spin { animation: none; } }
+.stam-bar { transition: width .8s ease; }
 </style>

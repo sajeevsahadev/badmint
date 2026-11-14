@@ -10,10 +10,6 @@ import { uploadAvatarBlob, migrateOwnAvatarIfNeeded } from '../lib/avatarStorage
 import Avatar from '../components/Avatar.vue'
 import SocialLinks from '../components/SocialLinks.vue'
 import pkg from '../../package.json'
-import AiProgress from '../components/AiProgress.vue'
-import { useEntitlements } from '../composables/useEntitlements'
-const { canDeepCoaching, loadEntitlements } = useEntitlements()
-loadEntitlements()
 
 const router = useRouter()
 const { user, signOut } = useAuth()
@@ -321,15 +317,6 @@ async function exportMyData() {
       </button>
     </div>
 
-    <!-- AI Match Analysis — my progress (premium only) -->
-    <div v-if="canDeepCoaching" class="card mb-4 p-4 fade-up">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="text-[10px] font-bold uppercase tracking-widest text-violet-600">AI Match Analysis</span>
-        <span class="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold uppercase text-slate-900">Premium</span>
-      </div>
-      <AiProgress title="My game progress" />
-    </div>
-
     <!-- Settings -->
     <div class="card overflow-hidden mb-4 fade-up">
       <div class="px-4 py-3 border-b" style="border-color:rgba(15,23,42,.06)">
@@ -362,12 +349,7 @@ async function exportMyData() {
         <span class="text-sm font-medium text-slate-700 flex-1">Appearance</span>
         <span class="text-slate-300">›</span>
       </RouterLink>
-      <RouterLink to="/settings/subscription"
-        class="flex items-center gap-3 px-4 py-3.5 hover:bg-black/[0.02] transition border-t border-slate-100">
-        <span class="text-lg w-6 text-center shrink-0">💳</span>
-        <span class="text-sm font-medium text-slate-700 flex-1">Subscription</span>
-        <span class="text-slate-300">›</span>
-      </RouterLink>
+      <!-- Subscription row hidden while the app is free; /settings/subscription still exists for later. -->
     </div>
 
     <!-- Sign out -->

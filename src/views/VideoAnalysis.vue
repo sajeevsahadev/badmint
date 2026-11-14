@@ -235,29 +235,26 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
 
       <!-- Tagged summary + actions -->
       <template v-else>
-        <div class="card p-4 mb-4">
-          <div class="mb-3 flex items-center justify-between">
-            <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Players in this video</div>
-            <button v-if="canManage" @click="retag = true" class="text-xs font-semibold text-neon">Fix tags</button>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div v-for="t in tags" :key="t.id" class="flex items-center gap-2 rounded-xl border border-slate-200 p-2">
+        <!-- Players: one compact strip (names + photos), not a block of cards -->
+        <div class="card mb-3 flex items-center gap-2 px-3 py-2.5">
+          <div class="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-1.5">
+            <div v-for="t in tags" :key="t.id" class="flex items-center gap-1.5">
               <img v-if="photoOf(t)" :src="photoOf(t)" :alt="tagName(t)"
-                class="h-12 w-9 shrink-0 rounded-lg bg-slate-100 object-cover object-top" />
-              <div v-else class="flex h-12 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm">👤</div>
-              <div class="min-w-0">
-                <div class="truncate text-sm font-semibold text-slate-700">{{ tagName(t) }}</div>
-                <div v-if="t.is_subject" class="text-[11px] text-cyan-600">analysed</div>
-              </div>
+                class="h-8 w-8 shrink-0 rounded-full bg-slate-100 object-cover object-top" />
+              <span v-else class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs">👤</span>
+              <span class="max-w-[7.5rem] truncate text-xs font-semibold text-slate-700">{{ tagName(t) }}</span>
             </div>
           </div>
-          <p v-if="indexing" class="mt-2 text-[11px] text-slate-400">📸 Capturing player photos from the video…</p>
+          <button v-if="canManage" @click="retag = true" class="shrink-0 text-xs font-semibold text-neon">Fix names</button>
         </div>
+        <p v-if="indexing" class="-mt-1 mb-3 text-center text-[11px] text-slate-400">📸 Capturing player photos from the video…</p>
 
-        <!-- Court swaps -->
-        <div v-if="canManage" class="card p-4 mb-4">
-          <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Court changes (ends swapped)</div>
-          <p class="mt-1 text-xs text-slate-400">Add the time (seconds) players changed ends, if any. Positions flip from that point.</p>
+        <!-- Court swaps: rarely needed, so folded away -->
+        <details v-if="canManage" class="card mb-4 px-4 py-2.5" :open="events.length > 0">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-500">
+            ↔ Players changed ends during this video?<span v-if="events.length" class="text-cyan-600"> · {{ events.length }} added</span>
+          </summary>
+          <p class="mt-2 text-xs text-slate-400">Add the time (in seconds) they changed ends. Positions flip from that point.</p>
           <div v-for="e in events" :key="e.id" class="mt-2 flex items-center justify-between text-sm">
             <span class="text-slate-600">↔ Ends swapped at {{ fmtClock(e.at_s) }}</span>
             <button @click="removeSwap(e.id)" class="text-xs text-red-500">Remove</button>
@@ -267,7 +264,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
               class="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none" />
             <button @click="addSwap" class="btn-ghost px-3 py-1.5 text-xs">+ Add swap</button>
           </div>
-        </div>
+        </details>
 
         <!-- AI Match Analysis tiers. Each is gated by its own entitlement so subscriptions slot in later. -->
         <!-- Two separate products: pick one (cards), its content lives in its own framed panel below. -->
@@ -408,7 +405,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
         <!-- Deep Coaching (premium): stroke-by-stroke commentary + spoken audio -->
         <!-- Head Coach Report first: KPIs, verdict, voice, progress. Then the full stroke-by-stroke detail. -->
         <CoachSummary v-if="tier === 'deep' && canDeepCoaching" ref="coachRef" class="mb-3"
-          :video-id="videoId" :run-id="deepRunId" :subjects="subjectsForDeep" />
+          :video-id="videoId" :run-id="deepRunId" :subjects="subjectsForDeep" :play-url="playUrl" />
         <DeepCommentary v-if="tier === 'deep' && canDeepCoaching" :video-id="videoId" :can-manage="canManage" :is-admin="isAppAdmin"
           :subjects="subjectsForDeep" :video-el="videoEl" @seek="seekTo"
           @run="id => deepRunId = id" @done="coachRef?.load()" />
