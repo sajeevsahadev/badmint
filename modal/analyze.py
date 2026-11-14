@@ -64,7 +64,7 @@ app = modal.App("badminton-ai")
 secret = modal.Secret.from_name("badminton-ai")
 
 ENGINE = "pose-v2"
-SHUTTLE_ENGINE = "shuttle-v1"                   # pose strokes kept only when the shuttle confirms them
+SHUTTLE_ENGINE = "shuttle-v2"                   # pose strokes kept only when the shuttle confirms them
 SHOT_T, SHOT_A, SHOT_GAP = 3.5, 0.6, 0.8       # torso-lengths/sec, torso-lengths, seconds
 RALLY_LO, RALLY_HI = 0.3, 2.5                   # opponent stroke must fall in this window
 
@@ -796,32 +796,144 @@ def _flights(det, H, gap=0.25, jump=0.2, min_s=0.2, min_path=0.25, min_peak=0.6)
     return out
 
 
-def _rallies(flights, gap=RALLY_GAP, min_fly=0.6, pad=0.4):
-    """Merge flights into rallies -> [(start, end)]."""
-    out, cur, fly = [], None, 0.0
-    for f in flights:
-        if cur and f["t0"] - cur[1] <= gap:
-            cur[1] = f["t1"]
-            fly += f["t1"] - f["t0"]
+def _rests(det, H, win=0.6, r=0.025, need=5, span=0.3):
+    """Moments when the shuttle is lying still (on the floor, in the net, in a hand): at least `need`
+    detections inside a tiny circle over `span`+ seconds. Other stray detections in between are ignored.
+    Returns merged [(start, end)]."""
+    out, n = [], len(det)
+    rad = r * H
+    for i in range(n):
+        t, x, y = det[i]
+        close = []
+        for j in range(i, n):
+            if det[j][0] - t > win:
+                break
+            if math.hypot(det[j][1] - x, det[j][2] - y) <= rad:
+                close.append(det[j][0])
+        if len(close) >= need and close[-1] - close[0] >= span:
+            if out and close[0] - out[-1][1] <= 0.3:
+                out[-1][1] = max(out[-1][1], close[-1])
+            else:
+                out.append([close[0], close[-1]])
+    return [(a, b) for a, b in out]
+
+
+def _set_before(act, t0, look=3.0, still=0.45, step=0.5):
+    """Were the players standing set (everyone we can see nearly still for a second) just before t0?
+    That is what a serve looks like; a pick-up or pass-back has somebody walking."""
+    if not act:
+        return True                                   # no movement data -> don't block
+    need = max(2, len(act) - 1)
+    run = 0
+    for b in range(int((t0 - look) // step), int((t0 + 0.25) // step) + 1):
+        v = [d[b] for d in act.values() if b in d]
+        if len(v) >= need and max(v) <= still:
+            run += 1
+            if run >= 2:
+                return True
         else:
-            if cur and fly >= min_fly:
-                out.append((cur[0] - pad, cur[1] + pad))
-            cur, fly = [f["t0"], f["t1"]], f["t1"] - f["t0"]
-    if cur and fly >= min_fly:
-        out.append((cur[0] - pad, cur[1] + pad))
+            run = 0
+    return False
+
+
+def _rallies(flights, cuts=(), act=None, gap=RALLY_GAP, min_fly=0.6, pad=0.4, short_s=3.0, short_fly=1.2, log=None):
+    """Merge flights into rallies -> [(start, end)]. A rally ends when the shuttle comes to rest or is
+    unseen for `gap` s. A short burst of flight (a pass-back, a knock-up) only counts as a rally when the
+    players were standing set for a serve just before it."""
+    groups, cur = [], None
+    for f in flights:
+        dead = cur is not None and any(cur[-1]["t1"] - 0.05 <= a <= f["t0"] + 0.05 for a in cuts)
+        if cur is not None and f["t0"] - cur[-1]["t1"] <= gap and not dead:
+            cur.append(f)
+        else:
+            cur = [f]
+            groups.append(cur)
+    out = []
+    for g in groups:
+        t0, t1 = g[0]["t0"], g[-1]["t1"]
+        fly = sum(f["t1"] - f["t0"] for f in g)
+        why = None
+        if fly < min_fly:
+            why = "too little flight"
+        elif (t1 - t0 < short_s or fly < short_fly) and not _set_before(act, t0):
+            why = "short and nobody was set for a serve"
+        if log is not None:
+            log.append({"t0": round(t0, 1), "t1": round(t1, 1), "fly": round(fly, 1), "dropped": why})
+        if not why:
+            out.append((t0 - pad, t1 + pad))
     return out
 
 
-def _shuttle(path, meta, t_max=None):
+def _rest_kinds(rests, flights, after=0.7, tail=0.25):
+    """Sort the still moments by what they mean.
+    dead   : the shuttle stopped and nothing flew for a while after -> the rally is over (start time).
+    launch : it was held still and then flew off -> a serve / a new rally begins (flight start time).
+    A slow shuttle at the top of a high lift is neither: the flight simply carries on."""
+    dead, launch = [], []
+    for a, b in rests:
+        inside = next((f for f in flights if f["t0"] + 0.2 < a <= f["t1"]), None)
+        goes_on = (inside is not None and inside["t1"] - b > tail) or any(b < f["t0"] <= b + after for f in flights)
+        starts = next((f for f in flights if a <= f["t0"] + 0.1 and f["t0"] <= b + 0.3), None)
+        if starts is not None and inside is None:
+            launch.append(starts["t0"])
+        elif not goes_on:
+            dead.append(a)
+    return dead, launch
+
+
+def _trim_rest(flights, dead):
+    """Cut the tail off a flight once the shuttle has come to rest (it is tracked lying on the floor)."""
+    out = []
+    for f in flights:
+        cut = next((a for a in dead if f["t0"] + 0.2 < a < f["t1"]), None)
+        if cut is not None:
+            pts = [p for p in f["pts"] if p[0] <= cut]
+            if len(pts) >= 4:
+                out.append({"t0": pts[0][0], "t1": pts[-1][0], "pts": pts})
+        else:
+            out.append(f)
+    return out
+
+
+def _activity(slots, step=0.5):
+    """How fast each player's feet move (body-heights / s) in `step`-second bins -> {slot: {bin: speed}}."""
+    import numpy as np
+    out = {}
+    for slot, items in slots.items():
+        if len(items) < 3:
+            continue
+        bh = float(np.median([p["bh"] for _, p in items])) or 1.0
+        bins = {}
+        for (t0, p0), (t1, p1) in zip(items, items[1:]):
+            dt = t1 - t0
+            if dt <= 0 or dt > 0.5:
+                continue
+            d = math.hypot(p1["fx"] - p0["fx"], p1["fy"] - p0["fy"]) / bh
+            if d > 0.6:
+                continue
+            b = int(t0 // step)
+            a = bins.setdefault(b, [0.0, 0.0])
+            a[0] += d
+            a[1] += dt
+        out[slot] = {b: v[0] / v[1] for b, v in bins.items() if v[1] >= step * 0.5}
+    return out
+
+
+def _shuttle(path, meta, t_max=None, slots=None):
     det_raw = _shuttle_track(path, meta["fps"], meta["W"], meta["H"], t_max=t_max)
     det = _shuttle_clean(det_raw, meta["H"])
-    flights = _flights(det, meta["H"])
-    rallies = _rallies(flights)
+    rests = _rests(det, meta["H"])
+    raw = _flights(det, meta["H"])
+    dead, launch = _rest_kinds(rests, raw)
+    flights = _trim_rest(raw, dead)
+    rally_log = []
+    rallies = _rallies(flights, dead + launch, _activity(slots) if slots else None, log=rally_log)
     dur = min(meta["duration"], t_max) if t_max else meta["duration"]
     fly = sum(f["t1"] - f["t0"] for f in flights)
     # Enough real flight to trust the shuttle as the judge? Otherwise fall back to pose-only (no clips).
     ok = len(flights) >= 3 and fly >= 0.03 * max(dur, 1.0)
-    return {"ok": ok, "det_raw": len(det_raw), "det": len(det), "flights": flights, "rallies": rallies,
+    return {"ok": ok, "det_raw": len(det_raw), "det": len(det), "det_pts": det, "flights": flights, "rallies": rallies,
+            "rests": rests, "rally_log": rally_log,
             "fly_s": round(fly, 1), "duration": round(dur, 1)}
 
 
@@ -1068,9 +1180,18 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         # video, fall back to the pose-only rule and label the run so the app shows no mistake clips.
         sh, engine = None, ENGINE
         try:
-            sh = _shuttle(local, meta)
+            sh = _shuttle(local, meta, slots=slots)
         except Exception as e:  # noqa
             print(f"shuttle tracking failed: {type(e).__name__}: {e}")
+        # Strokes a person marked "not a real shot" on an earlier report of this video stay out.
+        try:
+            fb = rest("GET", f"shot_feedback?video_id=eq.{video_id}&verdict=eq.not_a_shot&select=court_side,t_s") or []
+        except Exception:
+            fb = []
+        if fb:
+            cand = {s: [(t, i) for t, i in lst
+                        if not any(f.get("court_side") == s and abs(float(f["t_s"]) - t) <= 0.7 for f in fb)]
+                    for s, lst in cand.items()}
         if sh and sh["ok"]:
             strokes, engine = _shuttle_filter(cand, slots, sh), SHUTTLE_ENGINE
         else:
@@ -1101,6 +1222,11 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         motion_rows = _retag(rest, video_id, tags, motion_rows)
         if shot_rows:
             rest("POST", "analysis_shots", shot_rows)
+        if run_id:
+            try:                                      # record which engine really produced this report
+                rest("PATCH", f"analysis_runs?id=eq.{run_id}", {"engine": engine})
+            except Exception:
+                pass
         if motion_rows and run_id:
             rest("POST", "analysis_player_summary", motion_rows)
         # Commentary step also handles the "no strokes" case and finalises the run.
@@ -1172,7 +1298,7 @@ def shuttle_diag(video_id: str, t_max: float = 150.0):
     slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
     cand = {s: _strokes(items) for s, items in slots.items()}
     t0 = time.time()
-    sh = _shuttle(local, meta, t_max=t_max)
+    sh = _shuttle(local, meta, t_max=t_max, slots=slots)
     t_sh = time.time() - t0
     diag = []
     kept = _shuttle_filter(cand, slots, sh, diag)
@@ -1218,7 +1344,16 @@ def shuttle_diag(video_id: str, t_max: float = 150.0):
             "det_raw": sh["det_raw"], "det_clean": sh["det"], "flights": len(sh["flights"]), "fly_s": sh["fly_s"],
             "rallies": [(round(a, 1), round(b, 1)) for a, b in sh["rallies"]],
             "cand": sum(len(v) for v in cand.values()), "old_rule_kept": sum(len(v) for v in old.values()),
-            "shuttle_kept": sum(len(v) for v in kept.values()), "final": summary, "diag": diag, "sheet": sheet}
+            "shuttle_kept": sum(len(v) for v in kept.values()), "final": summary, "diag": diag, "sheet": sheet,
+            "H": meta["H"], "W": meta["W"], "rally_log": sh["rally_log"],
+            "rests": [[round(a, 1), round(b, 1)] for a, b in sh["rests"]],
+            "raw_flights": [[round(f["t0"], 2), round(f["t1"], 2), round(f["pts"][0][1]), round(f["pts"][0][2]),
+                             round(f["pts"][-1][1]), round(f["pts"][-1][2]),
+                             round(min(p[2] for p in f["pts"]))] for f in sh["flights"]],
+            "det_pts": [[round(t, 2), round(x), round(y)] for t, x, y in sh.get("det_pts", [])],
+            "activity": {slot: {str(b): round(v, 2) for b, v in d.items()} for slot, d in _activity(slots).items()},
+            "feet": {slot: [[round(t, 1), round(p["fx"]), round(p["fy"]), round(p["bh"])] for t, p in items[::7]]
+                     for slot, items in slots.items()}}
 
 
 @app.local_entrypoint()

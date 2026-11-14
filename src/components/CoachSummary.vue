@@ -56,7 +56,27 @@ async function load() {
 async function loadShots() {
   if (!shownRun.value) { shots.value = []; return }
   const { data } = await supabase.rpc('get_deep_analysis', { p_video_id: props.videoId, p_run_id: shownRun.value })
-  shots.value = (data?.shots ?? []).filter(s => !s.is_mock)
+  // Strokes someone marked "not a real shot" are left out of clips and the stamina check.
+  const { data: fb } = await supabase.from('shot_feedback').select('shot_id').eq('video_id', props.videoId)
+  const gone = new Set((fb ?? []).map(f => f.shot_id))
+  shots.value = (data?.shots ?? []).filter(s => !s.is_mock && !gone.has(s.id))
+}
+const removed = ref(null)       // last stroke marked "not a real shot" (for Undo)
+const flagErr = ref('')
+async function flagShot(s) {
+  flagErr.value = ''
+  const { error } = await supabase.rpc('flag_shot', { p_shot_id: s.id })
+  if (error) { flagErr.value = error.message; return }
+  shots.value = shots.value.filter(x => x.id !== s.id)
+  removed.value = s
+}
+async function undoFlag() {
+  const s = removed.value
+  if (!s) return
+  const { error } = await supabase.rpc('unflag_shot', { p_shot_id: s.id })
+  if (error) { flagErr.value = error.message; return }
+  shots.value = [...shots.value, s].sort((a, b) => Number(a.t_s) - Number(b.t_s))
+  removed.value = null
 }
 onMounted(load)
 watch(() => props.runId, () => { stopAudio(); load() })
@@ -240,7 +260,12 @@ async function hearCoach() {
         <FocusCoach v-if="coach.focus[focusIdx]" :key="p.tag_id + ':' + focusIdx"
           :focus="coach.focus[focusIdx]" :index="focusIdx" :shots="shots" :tag-id="p.tag_id"
           :play-url="playUrl" :name="first(p.name)" :photo="photoOf(p.tag_id) || ''"
-          :kpis="p.kpis" :prev-kpis="prev" :prev-at="p.previous?.at || ''" />
+          :kpis="p.kpis" :prev-kpis="prev" :prev-at="p.previous?.at || ''" @flag="flagShot" />
+        <p v-if="removed" class="mt-2 flex items-center justify-between gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-700" role="status">
+          <span>Removed — thanks, this helps the AI learn. The scores update when the video is re-analysed.</span>
+          <button @click="undoFlag" class="shrink-0 font-bold text-cyan-700 underline">Undo</button>
+        </p>
+        <p v-if="flagErr" class="mt-2 text-xs text-rose-600">{{ flagErr }}</p>
         <div v-if="coach.focus.length > 1" class="mt-2 flex gap-2">
           <button @click="focusIdx = Math.max(0, focusIdx - 1)" :disabled="focusIdx === 0" class="btn-ghost flex-1 py-2 text-xs disabled:opacity-40">‹ Previous</button>
           <button @click="focusIdx = Math.min(coach.focus.length - 1, focusIdx + 1)" :disabled="focusIdx === coach.focus.length - 1"

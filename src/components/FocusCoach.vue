@@ -19,6 +19,7 @@ const props = defineProps({
   prevAt:   { type: String, default: '' },
 })
 
+const emit = defineEmits(['flag'])
 const issue  = computed(() => matchIssue(props.focus))
 const ex     = computed(() => examplesFor(props.shots, props.tagId, issue.value))
 const status = computed(() => repeatStatus(issue.value, props.kpis, props.prevKpis))
@@ -56,6 +57,14 @@ function onTime() {
 async function show(m) {
   mode.value = m; idx.value = 0; open.value = true; clipErr.value = false
   await nextTick(); cue()
+}
+// "Not a real shot": the parent removes it from this report and saves it as feedback.
+function flag() {
+  const s = cur.value
+  if (!s?.id) return
+  emit('flag', s)
+  if (list.value.length <= 1) open.value = false
+  else nextTick(cue)
 }
 function step(d) { idx.value = (idx.value + d + list.value.length) % list.value.length }
 watch([idx, slow], cue)
@@ -141,6 +150,10 @@ watch(() => [props.tagId, props.focus], () => { open.value = false; idx.value = 
             <button v-if="mode === 'rights' && ex.mistakes.length" @click="show('mistakes')" class="btn-ghost flex-1 py-1.5 text-[11px]">✗ Back to my mistakes</button>
             <button @click="open = false" class="btn-ghost flex-1 py-1.5 text-[11px]">Close</button>
           </div>
+          <button v-if="cur?.id" @click="flag"
+            class="w-full rounded-lg border border-slate-200 py-2 text-[11px] font-semibold text-slate-600 hover:border-rose-300 hover:text-rose-700">
+            Not a real shot? (picking up or passing the shuttle) — remove it
+          </button>
         </div>
       </div>
     </div>
