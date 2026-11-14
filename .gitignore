@@ -5,3 +5,5 @@ dist
 .DS_Store
 .claude/worktrees/
 supabase/.temp/
+
+__pycache__/
