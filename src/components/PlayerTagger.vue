@@ -8,7 +8,8 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
-import { expectedSides as sidesFor, slotsComplete, buildTags } from '../lib/videoAnalysis'
+import { expectedSides as sidesFor, slotComplete, anySlotComplete, buildTags } from '../lib/videoAnalysis'
+import PlayerPicker from './PlayerPicker.vue'
 
 const props = defineProps({
   videoId:      { type: String, required: true },
@@ -69,15 +70,23 @@ async function loadOpponents() {
   const { data } = await supabase.rpc('get_club_opponents', { p_club_id: props.clubId })
   opponents.value = data ?? []
 }
-async function addOpponent(s) {
-  const name = (s.newOpp || '').trim()
+const adding = ref(false)
+async function addOpponent(s, rawName) {
+  const name = (rawName || '').trim()
   if (!name) return
   err.value = ''
+  adding.value = true
   const { data, error } = await supabase.rpc('create_opponent', { p_club_id: props.clubId, p_name: name })
+  adding.value = false
   if (error) { err.value = error.message; return }
   await loadOpponents()
   s.assign = 'p:' + data
-  s.newOpp = ''
+}
+// Who is already picked in another position (so one person can't be chosen twice).
+function takenFor(s) {
+  const m = {}
+  for (const x of slots.value) if (x !== s && x.assign?.startsWith('p:')) m[x.assign.slice(2)] = sideLabel(x.court_side)
+  return m
 }
 // Photos can arrive while the tagger is open (the people-detection pass finishes in the background).
 watch(() => props.tracks.map(t => `${t.id}:${t.court_side}:${t.thumb_path}`).join('|'), () => { buildSlots(); suggest() })
@@ -114,7 +123,8 @@ function photoFor(s) {
   return fetched.value[s.thumb_path] || ''
 }
 
-const complete = computed(() => slotsComplete(slots.value))
+const complete = computed(() => anySlotComplete(slots.value))
+const namedCount = computed(() => slots.value.filter(slotComplete).length)
 
 async function save() {
   err.value = ''
@@ -136,13 +146,13 @@ async function save() {
   <div class="card p-4">
     <div class="mb-1 text-sm font-bold text-slate-800">Who's who in this video?</div>
     <p class="mb-3 text-xs text-slate-500">
-      Name each person by where they stand <b>at the start of the video</b>. For players outside your club
-      (e.g. tournament opponents), pick <b>➕ New opponent</b> once — their name is saved, so next time you
-      just pick them and their reports build up to show their game plan.
+      <b>Only one player is needed</b> — name just yourself if you like, and leave the rest empty (they get no report).
+      Name people by where they stand <b>at the start of the video</b>. For someone outside your club, type their
+      name and add them as an opponent — it is saved, so next time you just pick them.
     </p>
 
     <div class="space-y-3">
-      <div v-for="(s, i) in slots" :key="i" class="rounded-xl border border-slate-200 p-3">
+      <div v-for="(s, i) in slots" :key="i" class="rounded-xl border p-3 transition-colors" :class="slotComplete(s) ? 'border-cyan-200 bg-cyan-50/40' : 'border-slate-200'">
         <div class="flex items-center gap-3">
           <div class="flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-xs font-bold text-slate-400">
             <img v-if="photoFor(s)" :src="photoFor(s)" alt="Player photo" class="h-full w-full object-cover object-top" />
@@ -156,30 +166,15 @@ async function save() {
                 ✨ {{ suggestionFor(s).confident ? 'Recognised' : 'Maybe' }} · check
               </span>
             </div>
-            <select v-model="s.assign"
-              class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none">
-              <option value="">— Select —</option>
-              <optgroup label="Club players">
-                <option v-for="p in roster" :key="p.id" :value="'p:' + p.id">{{ p.display_name }}</option>
-              </optgroup>
-              <optgroup v-if="opponents.length" label="Saved opponents">
-                <option v-for="o in opponents" :key="o.id" :value="'p:' + o.id">{{ o.display_name }}</option>
-              </optgroup>
-              <option value="new">➕ New opponent (save name for later)</option>
-              <option value="label">Unknown person (just this video)</option>
-            </select>
-            <div v-if="s.assign === 'new'" class="mt-2 flex gap-2">
-              <input v-model="s.newOpp" type="text" maxlength="60" placeholder="Opponent's name, e.g. Rahul (Dubai Smashers)"
-                @keyup.enter="addOpponent(s)"
-                class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none" />
-              <button type="button" @click="addOpponent(s)" :disabled="!(s.newOpp || '').trim()"
-                class="btn-primary px-3 py-1.5 text-xs disabled:opacity-40">Save</button>
-            </div>
-            <input v-if="s.assign === 'label'" v-model="s.label" type="text" placeholder="e.g. Opponent A"
-              class="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:border-cyan-400 focus:outline-none" />
+            <PlayerPicker v-model="s.assign" :roster="roster" :opponents="opponents" :taken="takenFor(s)"
+              :title="'Who is ' + sideLabel(s.court_side).toLowerCase() + '?'" :busy="adding"
+              @create="addOpponent(s, $event)" />
+            <input v-if="s.assign === 'label'" v-model="s.label" type="text" maxlength="40" placeholder="Short label, e.g. Opponent A"
+              aria-label="Label for this person"
+              class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100" />
           </div>
         </div>
-        <label class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+        <label v-if="slotComplete(s)" class="mt-2 flex items-center gap-2 text-xs text-slate-600">
           <input type="checkbox" v-model="s.is_subject" class="h-4 w-4 accent-cyan-600" />
           Generate a full report for this player
         </label>
@@ -193,7 +188,7 @@ async function save() {
     <div class="mt-4 flex gap-2">
       <button :disabled="!complete || saving" @click="save"
         class="btn-primary flex-1 py-2.5 disabled:opacity-40">
-        {{ saving ? 'Saving…' : 'Save tags' }}
+        {{ saving ? 'Saving…' : namedCount ? `Save · ${namedCount} player${namedCount > 1 ? 's' : ''}` : 'Name at least one player' }}
       </button>
       <button @click="emit('cancel')" class="btn-ghost px-4 py-2.5 text-sm">Cancel</button>
     </div>

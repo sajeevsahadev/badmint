@@ -30,10 +30,14 @@ export function slotComplete(s) {
 export function slotsComplete(slots) {
   return (slots || []).length > 0 && slots.every(slotComplete)
 }
+// Only ONE named person is needed to analyse a video; the rest may stay empty (no report for them).
+export function anySlotComplete(slots) {
+  return (slots || []).some(slotComplete)
+}
 
-// Convert tagging slots into the payload set_video_tags() expects.
+// Convert tagging slots into the payload set_video_tags() expects. Empty slots are left out.
 export function buildTags(slots) {
-  return (slots || []).map(s => ({
+  return (slots || []).filter(slotComplete).map(s => ({
     track_id:   s.track_id || null,
     player_id:  s.assign && s.assign.startsWith('p:') ? s.assign.slice(2) : null,
     label:      s.assign === 'label' ? (s.label || '').trim() : null,

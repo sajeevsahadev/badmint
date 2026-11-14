@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  expectedSides, flipSide, courtSideAt, slotComplete, slotsComplete, buildTags, resolveTagName,
+  expectedSides, flipSide, courtSideAt, slotComplete, slotsComplete, anySlotComplete, buildTags, resolveTagName,
   versionLabel, tagThumbPath,
 } from '../lib/videoAnalysis'
 import { CONSENT_VERSION, CONSENT_POINTS, CONSENT_SUMMARY } from '../lib/consent'
@@ -63,6 +63,23 @@ describe('tagging slot completeness', () => {
     expect(slotsComplete([{ assign: 'p:1' }, { assign: '' }])).toBe(false)
     expect(slotsComplete([{ assign: 'p:1' }, { assign: 'label', label: 'X' }])).toBe(true)
     expect(slotsComplete([])).toBe(false)
+  })
+})
+
+describe('one named player is enough', () => {
+  it('needs at least one complete slot', () => {
+    expect(anySlotComplete([{ assign: 'p:1' }, { assign: '' }, { assign: '' }, { assign: '' }])).toBe(true)
+    expect(anySlotComplete([{ assign: '' }, { assign: 'label', label: ' ' }])).toBe(false)
+    expect(anySlotComplete([])).toBe(false)
+  })
+  it('empty slots are not sent as tags', () => {
+    const tags = buildTags([
+      { assign: '', court_side: 'near_left', is_subject: true },
+      { assign: 'p:me', court_side: 'near_right', is_subject: true },
+      { assign: 'label', label: '', court_side: 'far_left', is_subject: true },
+    ])
+    expect(tags).toHaveLength(1)
+    expect(tags[0]).toMatchObject({ player_id: 'me', court_side: 'near_right', is_subject: true })
   })
 })
 
