@@ -334,7 +334,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
             Running pose &amp; movement analysis · {{ fmtClock(elapsed) }} elapsed
           </p>
           <p class="mt-2 rounded-xl bg-cyan-50 px-3 py-2 text-xs text-slate-600">
-            This usually takes <b>3–6 minutes</b>, depending on the video's length and quality. It runs quietly in the
+            This usually takes <b>3–8 minutes</b>, depending on the video's length and quality (longer if the servers are busy). It runs quietly in the
             background — you can close this page and come back later to see your reports.
           </p>
         </div>
@@ -349,7 +349,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
             Get a per-player report across coach, physio and your own view{{ canDeepCoaching ? ' — the Quick Report and Deep Coaching are made together in one go' : '' }}.
           </p>
           <p v-if="status !== 'failed'" class="mt-2 rounded-xl bg-cyan-50 px-3 py-2 text-xs text-slate-600">
-            ⏱ This may take <b>3–6 minutes</b>, depending on your video's quality and length. It runs quietly in the
+            ⏱ This may take <b>3–8 minutes</b>, depending on your video's quality and length (longer if the servers are busy). It runs quietly in the
             background — you can leave and come back to see the reports.
           </p>
           <template v-if="canManage">

@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
         </div>
         <p class="mt-2 text-xs text-slate-500">Detecting strokes &amp; writing commentary · {{ fmt(elapsed) }}</p>
         <p class="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-slate-600">
-          This usually takes <b>3–6 minutes</b>, depending on the video's length and quality. It runs quietly in the
+          This usually takes <b>3–8 minutes</b>, depending on the video's length and quality (longer if the servers are busy). It runs quietly in the
           background — you can close this page and come back later.
         </p>
       </div>
