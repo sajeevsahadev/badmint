@@ -48,14 +48,23 @@ image = (
 # Deep analysis samples up to 15 fps -> GPU. onnxruntime-gpu 1.18 is built for CUDA 11.8 + cuDNN 8.
 gpu_image = (
     modal.Image.from_registry("nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04", add_python="3.11")
-    .apt_install("libgl1", "libglib2.0-0", "ffmpeg")
+    .apt_install("libgl1", "libglib2.0-0", "ffmpeg", "git", "unzip")
     .pip_install(*_PKGS, "onnxruntime-gpu==1.18.1")
+    # Shuttle tracking: TrackNetV3 (MIT licence, covers the pretrained checkpoints). Only the heat-map
+    # tracker is used: its InpaintNet "rectification" invented a stuck point on our footage.
+    .pip_install("torch==2.2.2", index_url="https://download.pytorch.org/whl/cu118")
+    .pip_install("gdown==5.2.0")
+    .run_commands(
+        "git clone --depth 1 https://github.com/qaz812345/TrackNetV3.git /tracknet",
+        "cd /tracknet && gdown 1CfzE87a0f6LhBp0kniSl1-89zaLCZ8cA -O ckpts.zip && unzip -o ckpts.zip && test -f ckpts/TrackNet_best.pt",
+    )
 )
 
 app = modal.App("badminton-ai")
 secret = modal.Secret.from_name("badminton-ai")
 
 ENGINE = "pose-v2"
+SHUTTLE_ENGINE = "shuttle-v1"                   # pose strokes kept only when the shuttle confirms them
 SHOT_T, SHOT_A, SHOT_GAP = 3.5, 0.6, 0.8       # torso-lengths/sec, torso-lengths, seconds
 RALLY_LO, RALLY_HI = 0.3, 2.5                   # opponent stroke must fall in this window
 
@@ -640,6 +649,247 @@ def _rally_filter(by_slot, events):
     return keep
 
 
+# ---------------------------------------------------------------- shuttle tracking (shuttle-v1)
+# A stroke only counts if the shuttle was really flying next to that player at that moment. This is what
+# removes "strokes" such as bending to pick the shuttle up, practice swings and walking between points.
+TN_W, TN_H = 512, 288
+SH_NEAR = 1.8        # shuttle must pass within this many body-heights of the player around the stroke
+SH_WIN = 0.6         # seconds either side of the stroke to look for the shuttle
+RALLY_GAP = 3.0      # flights closer than this belong to one rally
+
+
+def _ffmpeg_frames(path, key_only=False):
+    """Yield RGB frames already scaled to the tracker input size (ffmpeg decodes + scales, multi-threaded)."""
+    import subprocess
+    import numpy as np
+    cmd = ["ffmpeg", "-loglevel", "error"] + (["-skip_frame", "nokey"] if key_only else []) + \
+          ["-i", path, "-an", "-vsync", "0", "-vf", f"scale={TN_W}:{TN_H}:flags=area",
+           "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=TN_W * TN_H * 3 * 16)
+    n = TN_W * TN_H * 3
+    try:
+        while True:
+            buf = proc.stdout.read(n)
+            if len(buf) < n:
+                break
+            yield np.frombuffer(buf, np.uint8).reshape(TN_H, TN_W, 3)
+    finally:
+        proc.stdout.close()
+        proc.kill()
+
+
+def _shuttle_track(path, fps, W, H, t_max=None, batch=4):
+    """TrackNetV3 heat-map tracker over every frame -> [(t, x, y)] in original pixels (visible frames only)."""
+    import sys
+    import cv2
+    import numpy as np
+    import torch
+    sys.path.insert(0, "/tracknet")
+    from model import TrackNet
+    ck = torch.load("/tracknet/ckpts/TrackNet_best.pt", map_location="cpu")
+    L, bg = ck["param_dict"]["seq_len"], ck["param_dict"]["bg_mode"]
+    if bg != "concat":
+        raise RuntimeError(f"unexpected TrackNet bg_mode {bg}")
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    net = TrackNet(in_dim=(L + 1) * 3, out_dim=L)
+    net.load_state_dict(ck["model"])
+    net = net.eval().to(dev)
+
+    # Background = median of the key frames (cheap to decode), as the model expects.
+    keys = list(_ffmpeg_frames(path, key_only=True))
+    if len(keys) < 3:
+        keys = [f for i, f in enumerate(_ffmpeg_frames(path)) if i % 30 == 0][:300]
+    if len(keys) > 300:
+        keys = keys[::math.ceil(len(keys) / 300)]
+    median = np.median(np.stack(keys), axis=0).astype(np.float32)
+    med = torch.from_numpy(np.moveaxis(median, -1, 0) / 255.0).to(dev)          # (3, H, W)
+
+    det, seqs, starts, buf, idx = [], [], [], [], 0
+    limit = int(t_max * fps) if t_max else None
+
+    def flush(n_frames):
+        if not seqs:
+            return
+        x = torch.from_numpy(np.stack(seqs)).to(dev).float() / 255.0            # (B, L, H, W, 3)
+        x = x.permute(0, 1, 4, 2, 3).reshape(len(seqs), L * 3, TN_H, TN_W)
+        x = torch.cat([med.unsqueeze(0).expand(len(seqs), -1, -1, -1), x], dim=1)
+        with torch.no_grad():
+            y = net(x)
+        hot = (y > 0.5)
+        any_hot = hot.flatten(2).any(dim=2).cpu().numpy()
+        hot = hot.cpu().numpy().astype(np.uint8)
+        for b in range(len(seqs)):
+            for j in range(L):
+                f = starts[b] + j
+                if not any_hot[b, j] or f >= n_frames:
+                    continue
+                n, _, stats, cent = cv2.connectedComponentsWithStats(hot[b, j], connectivity=8)
+                if n < 2:
+                    continue
+                k = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+                det.append((f / fps, float(cent[k][0]) * W / TN_W, float(cent[k][1]) * H / TN_H))
+        seqs.clear()
+        starts.clear()
+
+    for fr in _ffmpeg_frames(path):
+        if limit is not None and idx >= limit:
+            break
+        buf.append(fr)
+        idx += 1
+        if len(buf) == L:
+            seqs.append(np.stack(buf))
+            starts.append(idx - L)
+            buf = []
+            if len(seqs) == batch:
+                flush(idx)
+    if buf:                                             # pad the last, incomplete sequence
+        n_real = len(buf)
+        buf += [buf[-1]] * (L - n_real)
+        seqs.append(np.stack(buf))
+        starts.append(idx - n_real)
+    flush(idx)
+    det.sort()
+    return det
+
+
+def _shuttle_clean(det, H):
+    """Drop detections that sit on one spot for a long time (wall signs, lights, a shoe on a bench)."""
+    from collections import defaultdict
+    if not det:
+        return []
+    cell = max(4.0, 0.02 * H)
+    cells = defaultdict(list)
+    for t, x, y in det:
+        cells[(int(x // cell), int(y // cell))].append(t)
+    thr = max(12, int(0.02 * len(det)))
+    hot = {c for c, ts in cells.items() if len(ts) >= thr and max(ts) - min(ts) > 15.0}
+
+    def is_hot(x, y):
+        cx, cy = int(x // cell), int(y // cell)
+        return any((cx + dx, cy + dy) in hot for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+    return [d for d in det if not is_hot(d[1], d[2])]
+
+
+def _flights(det, H, gap=0.25, jump=0.2, min_s=0.2, min_path=0.25, min_peak=0.6):
+    """Group detections into flights: the shuttle actually travelling (not lying still or carried)."""
+    out, cur = [], []
+
+    def close():
+        if len(cur) >= 4:
+            path, peak = 0.0, 0.0
+            for a, b in zip(cur, cur[1:]):
+                d = math.hypot(b[1] - a[1], b[2] - a[2]) / H
+                path += d
+                peak = max(peak, d / max(b[0] - a[0], 1e-3))
+            if cur[-1][0] - cur[0][0] >= min_s and path >= min_path and peak >= min_peak:
+                out.append({"t0": cur[0][0], "t1": cur[-1][0], "pts": list(cur)})
+        cur.clear()
+
+    for d in det:
+        if cur:
+            dt = d[0] - cur[-1][0]
+            dist = math.hypot(d[1] - cur[-1][1], d[2] - cur[-1][2]) / H
+            if dt > gap or dist > jump * max(1.0, dt * 30.0):
+                close()
+        cur.append(d)
+    close()
+    return out
+
+
+def _rallies(flights, gap=RALLY_GAP, min_fly=0.6, pad=0.4):
+    """Merge flights into rallies -> [(start, end)]."""
+    out, cur, fly = [], None, 0.0
+    for f in flights:
+        if cur and f["t0"] - cur[1] <= gap:
+            cur[1] = f["t1"]
+            fly += f["t1"] - f["t0"]
+        else:
+            if cur and fly >= min_fly:
+                out.append((cur[0] - pad, cur[1] + pad))
+            cur, fly = [f["t0"], f["t1"]], f["t1"] - f["t0"]
+    if cur and fly >= min_fly:
+        out.append((cur[0] - pad, cur[1] + pad))
+    return out
+
+
+def _shuttle(path, meta, t_max=None):
+    det_raw = _shuttle_track(path, meta["fps"], meta["W"], meta["H"], t_max=t_max)
+    det = _shuttle_clean(det_raw, meta["H"])
+    flights = _flights(det, meta["H"])
+    rallies = _rallies(flights)
+    dur = min(meta["duration"], t_max) if t_max else meta["duration"]
+    fly = sum(f["t1"] - f["t0"] for f in flights)
+    # Enough real flight to trust the shuttle as the judge? Otherwise fall back to pose-only (no clips).
+    ok = len(flights) >= 3 and fly >= 0.03 * max(dur, 1.0)
+    return {"ok": ok, "det_raw": len(det_raw), "det": len(det), "flights": flights, "rallies": rallies,
+            "fly_s": round(fly, 1), "duration": round(dur, 1)}
+
+
+def _shuttle_filter(cand, slots, sh, diag=None):
+    """Keep a pose stroke only if it is inside a rally AND the shuttle flew close to that player then."""
+    import numpy as np
+    pts = np.array([p for f in sh["flights"] for p in f["pts"]]) if sh["flights"] else np.zeros((0, 3))
+    keep = {}
+    for slot, lst in cand.items():
+        items = slots.get(slot) or []
+        ts = np.array([t for t, _ in items]) if items else np.zeros(0)
+        keep[slot] = []
+        for t, info in lst:
+            rally = next((i for i, (a, b) in enumerate(sh["rallies"]) if a <= t <= b), None)
+            d = None
+            if rally is not None and len(ts) and len(pts):
+                p = items[int(np.argmin(np.abs(ts - t)))][1]
+                x1, y1, x2, y2 = p["bbox"]
+                cx, cy, bh = (x1 + x2) / 2, y1 + 0.3 * (y2 - y1), max(p["bh"], 1.0)
+                m = np.abs(pts[:, 0] - t) <= SH_WIN
+                if m.any():
+                    d = float(np.min(np.hypot(pts[m, 1] - cx, pts[m, 2] - cy)) / bh)
+            ok = d is not None and d <= SH_NEAR
+            if diag is not None:
+                diag.append({"slot": slot, "t": round(t, 2), "rally": rally,
+                             "d": None if d is None else round(d, 2), "kept": ok})
+            if ok:
+                tech = dict(info["tech"], shuttle=True, shuttle_d=round(d, 2))
+                keep[slot].append((t, {**info, "tech": tech, "rally": rally}))
+    return _one_hitter(keep, diag)
+
+
+def _one_hitter(keep, diag=None, win=0.5):
+    """A hit belongs to ONE player. When several players swing within `win` seconds (a partner's dummy
+    swing, both going for the same shuttle), keep only the one the shuttle passed closest to."""
+    flat = sorted((t, slot, info["tech"]["shuttle_d"]) for slot, lst in keep.items() for t, info in lst)
+    drop, i = set(), 0
+    while i < len(flat):
+        j = i + 1
+        while j < len(flat) and flat[j][0] - flat[i][0] <= win:
+            j += 1
+        group = flat[i:j]
+        best = min(group, key=lambda g: g[2])
+        drop.update((t, slot) for t, slot, _ in group if (t, slot) != (best[0], best[1]))
+        i = j
+    if diag is not None:
+        for d in diag:
+            if d["kept"] and any(abs(d["t"] - t) < 0.006 and d["slot"] == slot for t, slot in drop):
+                d["kept"], d["why"] = False, "partner was closer"
+    return {slot: [(t, info) for t, info in lst if (t, slot) not in drop] for slot, lst in keep.items()}
+
+
+def _mark_serves(strokes):
+    """The first confirmed stroke of each rally is the serve: never scored for base recovery."""
+    first = {}
+    for slot, lst in strokes.items():
+        for t, info in lst:
+            r = info.get("rally")
+            if r is not None and (r not in first or t < first[r][0]):
+                first[r] = (t, slot)
+    for slot, lst in strokes.items():
+        for t, info in lst:
+            if first.get(info.get("rally")) == (t, slot):
+                info["tech"].update({"serve": True, "off_base": False, "recovered": True,
+                                     "recovery_s": 0.0, "late_recovery": False})
+    return strokes
+
+
 # ---------------------------------------------------------------- simple metrics (camera-compensated)
 def _camera_offsets(slots):
     """Estimate handheld-camera pan as the median frame-to-frame shift of everyone visible."""
@@ -782,7 +1032,7 @@ def _analyze(video_id, run_id, URL, KEY, rest):
         return fail(f"{type(e).__name__}: {e}")
 
 
-@app.function(image=gpu_image, gpu="L4", timeout=1800, memory=8192, secrets=[secret])
+@app.function(image=gpu_image, gpu="L4", cpu=4, timeout=1800, memory=8192, secrets=[secret])
 def analyze_deep(video_id: str, run_id: str = None, user_id: str = None):
     import time
     URL, KEY, rest = _ctx()
@@ -790,7 +1040,7 @@ def analyze_deep(video_id: str, run_id: str = None, user_id: str = None):
     try:
         return _analyze_deep(video_id, run_id, user_id, URL, KEY, rest)
     finally:
-        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 0.125, 8.0, gpu="L4")
+        _record(rest, "deep_coaching", video_id, run_id, user_id, t0, 4.0, 8.0, gpu="L4")
 
 
 def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
@@ -813,7 +1063,18 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
         if not slots:
             return fail("no players detected")
         _save_people(rest, video_id, vid["storage_path"], slots, _crops(slots, kf, meta, events, frames, vid.get("game_type") or "singles"))
-        strokes = _rally_filter({s: _strokes(items) for s, items in slots.items()}, events)
+        cand = {s: _strokes(items) for s, items in slots.items()}
+        # Shuttle is the judge of what is a real stroke. If it can't be tracked well enough in this
+        # video, fall back to the pose-only rule and label the run so the app shows no mistake clips.
+        sh, engine = None, ENGINE
+        try:
+            sh = _shuttle(local, meta)
+        except Exception as e:  # noqa
+            print(f"shuttle tracking failed: {type(e).__name__}: {e}")
+        if sh and sh["ok"]:
+            strokes, engine = _shuttle_filter(cand, slots, sh), SHUTTLE_ENGINE
+        else:
+            strokes = _rally_filter(cand, events)
         off = _camera_offsets(slots)
         tag_by_side = {t.get("court_side"): t["id"] for t in tags}
         shot_rows, motion_rows = [], []
@@ -822,11 +1083,19 @@ def _analyze_deep(video_id, run_id, user_id, URL, KEY, rest):
             if not tag_id:
                 continue
             lst, motion = _footwork(slots.get(slot) or [], lst, off)
+            strokes[slot] = lst
             motion_rows.append({"video_id": video_id, "run_id": run_id, "tag_id": tag_id, "motion": motion})
+        if engine == SHUTTLE_ENGINE:
+            _mark_serves(strokes)
+        for slot, lst in strokes.items():
+            tag_id = tag_by_side.get(slot)
+            if not tag_id:
+                continue
             for i, (t, info) in enumerate(lst):
                 shot_rows.append({"video_id": video_id, "run_id": run_id, "tag_id": tag_id, "idx": i,
                                   "t_s": round(t, 2), "shot_type": info["type"], "confidence": info["conf"],
-                                  "technique": info["tech"], "meta": {"engine": ENGINE, "device": device},
+                                  "technique": info["tech"],
+                                  "meta": {"engine": engine, "device": device, "rally": info.get("rally")},
                                   "is_mock": False})
         shot_rows = _retag(rest, video_id, tags, shot_rows)
         motion_rows = _retag(rest, video_id, tags, motion_rows)
@@ -884,3 +1153,79 @@ def web(data: dict):
     else:
         analyze.spawn(video_id, run_id, user_id)
     return {"status": "queued", "video_id": video_id, "mode": mode, "run_id": run_id}
+
+
+@app.function(image=gpu_image, gpu="L4", cpu=4, timeout=1800, memory=8192, secrets=[secret])
+def shuttle_diag(video_id: str, t_max: float = 150.0):
+    """Calibration aid: run pose + shuttle on the first t_max seconds and report what was kept/dropped.
+    Returns numbers and a JPEG contact sheet. Writes nothing to the database."""
+    import time
+    import cv2
+    import numpy as np
+    import onnxruntime as ort
+    URL, KEY, rest = _ctx()
+    device = "cuda" if "CUDAExecutionProvider" in ort.get_available_providers() else "cpu"
+    vid, tags, events, local = _load_video(rest, video_id)
+    t0 = time.time()
+    frames, kf, meta = _pose_pass(local, _body(device), target_fps=15, max_frames=4000, t_max=t_max)
+    t_pose = time.time() - t0
+    slots = _assign_slots(frames, vid.get("game_type") or "singles", events, meta["W"])
+    cand = {s: _strokes(items) for s, items in slots.items()}
+    t0 = time.time()
+    sh = _shuttle(local, meta, t_max=t_max)
+    t_sh = time.time() - t0
+    diag = []
+    kept = _shuttle_filter(cand, slots, sh, diag)
+    old = _rally_filter(cand, events)
+    off = _camera_offsets(slots)
+    final = {slot: _footwork(slots.get(slot) or [], lst, off)[0] for slot, lst in kept.items()}
+    _mark_serves(final)
+    techs = [info["tech"] for lst in final.values() for _, info in lst]
+    summary = {"strokes": len(techs), "serves": sum(1 for t in techs if t.get("serve")),
+               "off_base": sum(1 for t in techs if t.get("off_base")),
+               "no_recovery": sum(1 for t in techs if t.get("off_base") and not t.get("recovered")),
+               "sample": techs[:2]}
+    pts = [p for f in sh["flights"] for p in f["pts"]]
+    cap = cv2.VideoCapture(local)
+    tiles = []
+    for d in sorted(diag, key=lambda x: x["t"])[:48]:
+        cap.set(cv2.CAP_PROP_POS_MSEC, d["t"] * 1000.0)
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        items = slots.get(d["slot"]) or []
+        if items:
+            p = min(items, key=lambda it: abs(it[0] - d["t"]))[1]
+            x1, y1, x2, y2 = (int(v) for v in p["bbox"])
+            cv2.rectangle(fr, (x1, y1), (x2, y2), (0, 255, 0) if d["kept"] else (0, 0, 255), max(2, int(meta["H"] / 240)))
+        for t, x, y in pts:
+            if abs(t - d["t"]) <= SH_WIN:
+                cv2.circle(fr, (int(x), int(y)), max(3, int(meta["H"] / 160)), (0, 255, 255), -1)
+        tile = cv2.resize(fr, (400, 225))
+        txt = f"{d['t']:.1f}s {d['slot']} {'KEPT' if d['kept'] else 'DROP'} d={d['d']} r={d['rally']}"
+        cv2.putText(tile, txt, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 3)
+        cv2.putText(tile, txt, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0) if d["kept"] else (0, 0, 255), 1)
+        tiles.append(tile)
+    cap.release()
+    sheet = b""
+    if tiles:
+        while len(tiles) % 4:
+            tiles.append(np.zeros_like(tiles[0]))
+        rows = [np.hstack(tiles[i:i + 4]) for i in range(0, len(tiles), 4)]
+        sheet = cv2.imencode(".jpg", np.vstack(rows), [cv2.IMWRITE_JPEG_QUALITY, 72])[1].tobytes()
+    return {"video": video_id, "res": f"{int(meta['W'])}x{int(meta['H'])}", "t_max": t_max,
+            "pose_s": round(t_pose, 1), "shuttle_s": round(t_sh, 1), "shuttle_ok": sh["ok"],
+            "det_raw": sh["det_raw"], "det_clean": sh["det"], "flights": len(sh["flights"]), "fly_s": sh["fly_s"],
+            "rallies": [(round(a, 1), round(b, 1)) for a, b in sh["rallies"]],
+            "cand": sum(len(v) for v in cand.values()), "old_rule_kept": sum(len(v) for v in old.values()),
+            "shuttle_kept": sum(len(v) for v in kept.values()), "final": summary, "diag": diag, "sheet": sheet}
+
+
+@app.local_entrypoint()
+def diag_main(video_id: str, t_max: float = 150.0, out: str = "."):
+    res = shuttle_diag.remote(video_id, t_max)
+    sheet = res.pop("sheet", b"")
+    if sheet:
+        with open(os.path.join(out, f"diag_{video_id[:8]}.jpg"), "wb") as f:
+            f.write(sheet)
+    print("RESULT " + json.dumps(res))

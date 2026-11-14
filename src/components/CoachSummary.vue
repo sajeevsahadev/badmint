@@ -8,7 +8,7 @@ import { HEADLINE_KEYS, LOCKED_KPIS, kpiDef, fmtKpi, kpiDelta, hasValue } from '
 import AiProgress from './AiProgress.vue'
 import FocusCoach from './FocusCoach.vue'
 import CoachFigure from './CoachFigure.vue'
-import { matchDrill, staminaCheck } from '../lib/coachMoves'
+import { matchDrill, staminaCheck, shuttleConfirmed } from '../lib/coachMoves'
 
 const props = defineProps({
   videoId:  { type: String, required: true },
@@ -62,7 +62,8 @@ onMounted(load)
 watch(() => props.runId, () => { stopAudio(); load() })
 watch(activeTag, () => { stopAudio(); focusIdx.value = 0; openDrill.value = 0 })
 
-const stamina = computed(() => p.value ? staminaCheck(shots.value, p.value.tag_id) : null)
+const verified = computed(() => shuttleConfirmed(shots.value))
+const stamina = computed(() => p.value && verified.value ? staminaCheck(shots.value, p.value.tag_id) : null)
 const drills = computed(() => (coach.value?.drills || []).map(d => ({ ...d, move: matchDrill(d) })))
 
 // "Done this week" ticks — a per-device reminder only (not synced), keyed by player + drill + ISO week.
@@ -223,6 +224,11 @@ async function hearCoach() {
       <div v-if="coach.focus?.length" class="card p-4">
         <div class="mb-1 font-display text-base font-bold text-slate-800">🎯 Your top {{ coach.focus.length }} focus areas</div>
         <p class="mb-3 text-[11px] text-slate-500">One at a time. See the mistake, see the right way, then watch yourself.</p>
+        <p v-if="shots.length && !verified" class="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Clips of your own strokes are hidden for this report: it was made without shuttle tracking, so we can't be
+          sure every stroke was a real one. Re-analyse the video to get verified clips.
+        </p>
+        <p v-if="verified" class="mb-3 text-[11px] font-semibold text-emerald-700">✓ Strokes in this report were confirmed by shuttle tracking.</p>
         <!-- step pills -->
         <div class="mb-2 flex gap-1.5">
           <button v-for="(f, i) in coach.focus" :key="i" @click="focusIdx = i"

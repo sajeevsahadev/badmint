@@ -231,9 +231,16 @@ export function matchDrill(drill) {
   return best
 }
 
+// Were this run's strokes confirmed by shuttle tracking (engine shuttle-v1)? Older runs, and videos where
+// the shuttle could not be followed, are pose-only: their numbers stand, but no clips are shown from them.
+export function shuttleConfirmed(shots) {
+  return (shots || []).some(s => s.technique?.shuttle === true)
+}
+
 // The player's own strokes for an issue: mistakes (to learn from) and ones done right (to copy).
+// Only strokes the shuttle confirmed, and never the serve.
 export function examplesFor(shots, tagId, issue) {
-  const mine = (shots || []).filter(s => s.tag_id === tagId && s.technique)
+  const mine = (shots || []).filter(s => s.tag_id === tagId && s.technique?.shuttle === true && !s.technique.serve)
   const pick = (fn) => mine.filter(s => fn(s.technique)).sort((a, b) => Number(a.t_s) - Number(b.t_s))
   return { mistakes: issue ? pick(issue.mistake) : [], rights: issue ? pick(issue.right) : [] }
 }

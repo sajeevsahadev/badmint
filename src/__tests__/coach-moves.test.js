@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { MOVES, ISSUES, fk, samplePose, moveDuration, matchIssue, matchDrill, examplesFor, clipWindow, repeatStatus, staminaCheck, READY } from '../lib/coachMoves'
+import { shuttleConfirmed, MOVES, ISSUES, fk, samplePose, moveDuration, matchIssue, matchDrill, examplesFor, clipWindow, repeatStatus, staminaCheck, READY } from '../lib/coachMoves'
 import { formScore, levelFor, badges, nextBadge, risingStreak } from '../lib/coachGame'
 
-const shot = (tag, t, tech) => ({ tag_id: tag, t_s: t, technique: tech })
+const shot = (tag, t, tech) => ({ tag_id: tag, t_s: t, technique: { shuttle: true, ...tech } })
 
 describe('movement library', () => {
   it('every move has frames with finite joints and a positive duration', () => {
@@ -82,6 +82,17 @@ describe('the player own examples', () => {
     expect(examplesFor(shots, 'a', ISSUES.drive).mistakes).toHaveLength(0)
     expect(examplesFor(shots, 'a', null).mistakes).toHaveLength(0)
     expect(examplesFor(null, 'a', ISSUES.lunge).mistakes).toHaveLength(0)
+  })
+  it('never uses strokes the shuttle did not confirm, or the serve', () => {
+    const raw = [
+      { tag_id: 'a', t_s: 66, technique: { off_base: true, recovered: false } },
+      shot('a', 70, { off_base: true, recovered: false, serve: true }),
+      shot('a', 80, { off_base: true, recovered: false }),
+    ]
+    expect(examplesFor(raw, 'a', ISSUES.recovery).mistakes.map(s => s.t_s)).toEqual([80])
+    expect(shuttleConfirmed(raw)).toBe(true)
+    expect(shuttleConfirmed([raw[0]])).toBe(false)
+    expect(shuttleConfirmed(null)).toBe(false)
   })
   it('clip windows are about 5 s and never negative', () => {
     expect(clipWindow(ISSUES.recovery, 10)).toEqual({ start: 9, end: 14 })
