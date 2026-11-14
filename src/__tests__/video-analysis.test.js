@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  expectedSides, flipSide, courtSideAt, slotComplete, slotsComplete, anySlotComplete, buildTags, resolveTagName,
+  expectedSides, flipSide, courtSideAt, slotComplete, slotsComplete, anySlotComplete, buildTags, videoTitle, isDefaultTitle, resolveTagName,
   versionLabel, tagThumbPath,
 } from '../lib/videoAnalysis'
 import { CONSENT_VERSION, CONSENT_POINTS, CONSENT_SUMMARY } from '../lib/consent'
@@ -144,5 +144,26 @@ describe('consent terms', () => {
     expect(joined).toContain('computer-vision')
     expect(joined).toContain('not a medical')
     expect(joined).toContain('withdraw consent')
+  })
+})
+
+describe('video title from tagged players', () => {
+  const names = { a: 'Sajeev', b: 'Aravind', c: 'Vishnu', d: 'Mathews' }
+  const tags = [
+    { player_id: 'c', court_side: 'far_left' }, { player_id: 'b', court_side: 'near_right' },
+    { player_id: 'a', court_side: 'near_left' }, { label: 'Opponent A', court_side: 'far_right' },
+  ]
+  it('names both sides, near side first', () => {
+    expect(videoTitle({ title: 'Uploaded match · 11/14/2026' }, tags, names)).toBe('Sajeev & Aravind vs Vishnu & Opponent A')
+    expect(videoTitle({ title: 'Match video · 11/8/2026' }, [{ player_id: 'a', court_side: 'near' }, { player_id: 'c', court_side: 'far' }], names)).toBe('Sajeev vs Vishnu')
+  })
+  it('one tagged player shows just that name', () => {
+    expect(videoTitle({ title: 'Uploaded match · 1/1/2026' }, [{ player_id: 'a', court_side: 'near_left' }], names)).toBe('Sajeev')
+  })
+  it('keeps a typed title and the default when nobody is named', () => {
+    expect(videoTitle({ title: 'Saj Aravind vs Vishnu Mathew' }, tags, names)).toBe('Saj Aravind vs Vishnu Mathew')
+    expect(videoTitle({ title: 'Uploaded match · 1/1/2026' }, [], names)).toBe('Uploaded match · 1/1/2026')
+    expect(videoTitle({ title: 'Uploaded match · 1/1/2026' }, [{ player_id: 'zz', court_side: 'near' }], names)).toBe('Uploaded match · 1/1/2026')
+    expect(isDefaultTitle('')).toBe(true); expect(isDefaultTitle('Final')).toBe(false)
   })
 })

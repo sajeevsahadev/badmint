@@ -7,6 +7,8 @@ import { supabase } from '../lib/supabase'
 import { useClub } from '../composables/useClub'
 import { useEntitlements } from '../composables/useEntitlements'
 import { getPlaybackUrl } from '../lib/videoStorage'
+import { buildNameMap } from '../lib/playerNames'
+import { videoTitle } from '../lib/videoAnalysis'
 import PageHeader from '../components/PageHeader.vue'
 import AiHeroGraphic from '../components/AiHeroGraphic.vue'
 
@@ -49,7 +51,16 @@ async function loadVideos() {
     .order('created_at', { ascending: false })
     .limit(20)
   videos.value = data ?? []
+  // Name each video after its tagged players (a title typed by hand is kept).
+  const ids = videos.value.map(v => v.id)
+  if (!ids.length) return
+  const { data: tags } = await supabase.from('video_player_tags')
+    .select('video_id, player_id, label, court_side').in('video_id', ids)
+  if (!tags?.length) return
+  const names = await buildNameMap([...new Set(tags.map(t => t.player_id).filter(Boolean))])
+  videos.value = videos.value.map(v => ({ ...v, shown: videoTitle(v, tags.filter(t => t.video_id === v.id), names) }))
 }
+const day = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 
 const statusLabel = computed(() => (s) => ({
   uploaded: '⏳ Awaiting analysis', analyzing: '⚙️ Analyzing', done: '✅ Report ready', failed: '⚠️ Failed',
@@ -95,8 +106,8 @@ function fmt(s) { const m = Math.floor((s || 0) / 60), x = (s || 0) % 60; return
         <button v-for="v in videos" :key="v.id" @click="router.push(`/coach/video/${v.id}`)"
           class="flex w-full items-center justify-between gap-2 border-b border-slate-100 py-2.5 text-left last:border-0 hover:bg-slate-50">
           <div class="min-w-0">
-            <div class="truncate text-sm font-semibold text-slate-800">{{ v.title }}</div>
-            <div class="text-xs text-slate-400">{{ v.game_type }} · {{ fmt(v.duration_s) }} ·
+            <div class="truncate text-sm font-semibold text-slate-800">{{ v.shown || v.title }}</div>
+            <div class="text-xs text-slate-400">{{ day(v.created_at) }} · {{ v.game_type }} · {{ fmt(v.duration_s) }} ·
               <span class="font-medium text-slate-500">{{ statusLabel(v.status) }}</span>
             </div>
           </div>

@@ -76,3 +76,25 @@ export function resolveTagName(tag, nameMap = {}) {
   if (tag.player_id && nameMap[tag.player_id]) return nameMap[tag.player_id]
   return tag.label || 'Player'
 }
+
+// The automatic titles given at upload/record time ("Uploaded match · 14/11/2026"). A title the
+// user typed themselves is anything else and is never replaced.
+export function isDefaultTitle(title) {
+  return !title || !String(title).trim() || /^(Uploaded match|Match video)\s*·/.test(String(title).trim())
+}
+
+// List/heading name for a video: the tagged players' names ("Sajeev & Aravind vs Vishnu & Mathews"),
+// near side first. Falls back to the stored title when nobody is tagged or the title was typed by hand.
+export function videoTitle(video, tags = [], nameMap = {}) {
+  const stored = video?.title || 'Match video'
+  if (!isDefaultTitle(video?.title)) return stored
+  const named = (tags || [])
+    .map(t => ({ side: String(t.court_side || ''), name: (t.player_id && nameMap[t.player_id]) || (t.label || '').trim() }))
+    .filter(t => t.name)
+    .sort((a, b) => a.side.localeCompare(b.side))
+  if (!named.length) return stored
+  const team = (pfx) => named.filter(t => t.side.startsWith(pfx)).map(t => t.name).join(' & ')
+  const near = team('near'), far = team('far')
+  if (near && far) return `${near} vs ${far}`
+  return near || far || named.map(t => t.name).join(' & ')
+}

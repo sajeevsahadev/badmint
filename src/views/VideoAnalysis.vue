@@ -9,7 +9,7 @@ import { useClub } from '../composables/useClub'
 import { useAuth } from '../composables/useAuth'
 import { withNicknames } from '../lib/playerNames'
 import { getPlaybackUrl } from '../lib/videoStorage'
-import { resolveTagName, versionLabel, tagThumbPath } from '../lib/videoAnalysis'
+import { resolveTagName, versionLabel, tagThumbPath, videoTitle } from '../lib/videoAnalysis'
 import { useEntitlements } from '../composables/useEntitlements'
 import PageHeader from '../components/PageHeader.vue'
 import PlayerTagger from '../components/PlayerTagger.vue'
@@ -211,7 +211,7 @@ function fmtClock(s) { const m = Math.floor(s / 60), x = Math.round(s % 60); ret
 <template>
   <div class="mx-auto max-w-2xl px-4 pb-28 pt-4">
     <button @click="router.back()" class="mb-2 text-sm text-slate-500">‹ Back</button>
-    <PageHeader icon="✨" :title="video?.title || 'Match analysis'"
+    <PageHeader icon="✨" :title="video ? videoTitle(video, tags, nameMap) : 'Match analysis'"
       :subtitle="video ? (video.game_type + ' · ' + (video.source === 'upload' ? 'uploaded' : 'recorded')) : ''" />
 
     <div v-if="loading" class="card p-8 text-center text-slate-400">Loading…</div>
